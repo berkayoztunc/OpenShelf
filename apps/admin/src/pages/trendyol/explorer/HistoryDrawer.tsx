@@ -38,7 +38,7 @@ export function HistoryDrawer({ open, onClose, byId, onRestore, isOwner }: { ope
                         <span className="flex items-center gap-2"><MethodChip method={i.method} /><span className="min-w-0 flex-1 truncate text-sm font-medium">{op ? loc(op.title, locale) : i.operationId}</span><Badge tone={TONE[statusTone(i.status)]}>{i.status}</Badge></span>
                         <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
                           <code className="font-mono">{i.operationId}</code>
-                          <span>{i.durationMs} ms</span>
+                          <span>{t("trendyol.resp.duration", { ms: i.durationMs })}</span>
                           <Badge tone={i.mock ? "danger" : "success"}>{t(i.mock ? "trendyol.resp.mock" : "trendyol.resp.live")}</Badge>
                           <span>{timeAgo(i.at)}</span>
                         </span>

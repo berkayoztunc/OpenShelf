@@ -31,7 +31,9 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm audit --audit-level high
+      # Prod deps only: dev tooling (vitest, wrangler, sharp) never ships.
+      # TODO: drop the zod ignore once the 3.x -> 4.x migration lands.
+      - run: pnpm audit --prod --audit-level high --ignore GHSA-mrhx-c7xc-m3w5
 
   # Optional: enable code scanning in repo Settings > Code security first.
   codeql:

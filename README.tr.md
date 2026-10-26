@@ -19,7 +19,43 @@ Tek bir Cloudflare Worker ve D1 üzerinde çalışan, açık kaynak, tek mağaza
 
 > **Deploy butonu hakkında.** Buton yalnızca depo **GitHub'da herkese açık (public)** ise çalışır. Buton adresindeki `<ORG>` yerine kendi GitHub organizasyonunuzu veya kullanıcı adınızı yazın (örneğin fork'unuzun sahibi). Ayrıntılar [Hızlı başlangıç](#hızlı-başlangıç) bölümünde.
 
-<!-- Ekran görüntüleri: henüz yok. Vitrin, yönetim paneli, Mock Inbox ve bildirim şablonu görselleri hazır olunca buraya eklenecek. -->
+<div align="center">
+
+<img src="docs/images/storefront.png" alt="OpenShelf vitrini" width="49%"> <img src="docs/images/admin-orders.png" alt="OpenShelf yönetim paneli: siparişler" width="49%">
+
+<sub>Vitrin (solda) ve yönetim paneli sipariş sayfası (sağda). Mock Modu'nda demo verisiyle alındı.</sub>
+
+</div>
+
+## Başlamadan önce gerekenler
+
+Yayına almak için yalnızca iki şey zorunlu. Gerisi isteğe bağlıdır ve sonradan yönetim panelinden eklenir.
+
+**1. Zorunlu Worker secret'ları** (Deploy butonu ve `pnpm run setup` ikisini de sorar):
+
+| Ad | Nasıl üretilir | Ne işe yarar |
+|---|---|---|
+| `APP_ENCRYPTION_KEY` | `openssl rand -base64 32` | D1'de saklanan entegrasyon bilgilerini şifreler. Bir kopyasını saklayın: kaybederseniz kayıtlı anahtarlar okunamaz. |
+| `SETUP_TOKEN` | `openssl rand -hex 24` | `/admin/setup` sayfasında sahip hesabını oluşturmak için tek seferlik anahtar. |
+
+Ayrıca ücretsiz bir [Cloudflare hesabı](https://dash.cloudflare.com/sign-up) ve Deploy butonu için **herkese açık** bir GitHub deposu gerekir.
+
+**2. Entegrasyon bilgileri** (isteğe bağlı; **Yönetim → Ayarlar → Entegrasyonlar** ekranından girilir, şifreli saklanır, Worker secret'ı değildir). Girmezseniz [Mock Modu](#mock-modu) ile çalışırsınız.
+
+| Entegrasyon | Sağlayıcıdan gerekenler |
+|---|---|
+| iyzico (ödeme) | API anahtarı, Secret anahtarı, ortam (sandbox veya üretim) |
+| Trendyol Marketplace | Satıcı (supplier) ID, API anahtarı, API secret, ortam (üretim veya stage); isteğe bağlı webhook kullanıcı adı ve şifresi |
+| Geliver (kargo) | API token, gönderici adres ID |
+| Trendyol e-Faturam | Servis URL, kullanıcı adı, şifre |
+| Netgsm (SMS) | Usercode, API şifresi, gönderici başlığı |
+| Twilio (SMS) | Account SID, Auth Token, From numarası veya Messaging Service SID |
+| Cloudflare E-posta | Account ID, API token, varsayılan gönderen adresi |
+| Google Analytics 4 | Measurement ID, Measurement Protocol API secret |
+| Meta Pixel / CAPI | Pixel ID, Conversions API erişim token'ı |
+
+Her anahtarın nereden alınacağı: [entegrasyon dokümanları](docs/integrations/). Önce her sağlayıcının sandbox ortamını kullanın; hiçbiri henüz canlı hesapta doğrulanmadı.
+
 
 ## OpenShelf nedir
 
@@ -32,7 +68,7 @@ Durum: erken geliştirme (v0.1). Nelerin doğrulandığı için [Entegrasyonlar]
 - **Katalog**: ürünler, varyantlar, kategoriler, medya, kuponlar, müşteriler.
 - **Stok defteri**: yalnızca eklemeli stok hareketleri; ödeme sırasında işlem bazlı rezervasyon (eşzamanlı alışverişte fazla satış olmaz).
 - **Barındırılan ödeme sayfası**: kart bilgisi OpenShelf'e hiç uğramaz; fiyat sunucuda hesaplanır; ödeme, doğrulanmış webhook ve sunucudan sunucuya yeniden sorgu ile onaylanır.
-- **Kanallar**: kendi vitriniz ve outbox üzerinden Trendyol pazaryeri senkronu.
+- **Kanallar**: kendi vitriniz ve outbox üzerinden Trendyol pazaryeri senkronu; yönetimde Trendyol API konsolu ([kılavuz](apps/admin/src/help/tr/15-trendyol.md)).
 - **Yönetim ayarları**: mağaza adı, logo, banner, marka renkleri, SEO, yasal metinler, ödeme kuralları, takip, bildirimler, entegrasyonlar.
 - **Güvenlik**: PBKDF2 parola özeti, isteğe bağlı TOTP MFA, `__Host-` oturum çerezi, CSRF + Origin kontrolü, rol tabanlı yetki, denetim kaydı, AES-256-GCM ile şifrelenmiş entegrasyon sırları, sabit dış istek (host) izin listesi, hız sınırları, isteğe bağlı Turnstile. Bkz. [docs/security.tr.md](docs/security.tr.md).
 - **Analitik**: GA4 ve Meta Pixel/Conversions API; consent mode ve tarayıcı/sunucu tekilleştirmesi için ortak `event_id`. Bkz. [docs/tracking.tr.md](docs/tracking.tr.md).

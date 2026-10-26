@@ -82,5 +82,13 @@ export const GLOSSARY: GlossaryEntry[] = [
   { id: "production", category: "platform" },
   { id: "encryption", category: "security" },
   { id: "turnstile", category: "security" },
+  { id: "batchrequest", category: "platform" },
+  { id: "buybox", category: "orders" },
+  { id: "claim", category: "orders" },
+  { id: "stage", category: "platform" },
+  { id: "shipmentpackage", category: "orders" },
+  { id: "commonlabel", category: "orders" },
+  { id: "settlement", category: "orders" },
+  { id: "sellerid", category: "platform" },
 ];
 export const GLOSSARY_IDS = GLOSSARY.map((g) => g.id);

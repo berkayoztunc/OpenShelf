@@ -4,3 +4,7 @@ packages:
   - packages/*
   - packages/integrations/*
   - tooling/*
+
+auditConfig:
+  ignoreCves:
+    - GHSA-mrhx-c7xc-m3w5

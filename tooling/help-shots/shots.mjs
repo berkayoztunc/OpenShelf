@@ -52,5 +52,20 @@ export const SHOTS = [
   { name: "security", full: true, maxHeight: 1000, path: "/security" },
   { name: "audit", full: true, maxHeight: 1000, path: "/audit" },
   { name: "data", full: true, maxHeight: 1000, path: "/data" },
+  { name: "trendyol-products", full: true, maxHeight: 1000, path: "/trendyol/products", wait: "table tbody tr" },
+  { name: "trendyol-wizard", maxHeight: 1000, path: "/trendyol/products", wait: "table tbody tr", run: async (p, c) => {
+    await p.getByRole("button", { name: c.locale === "tr" ? /Trendyol.a ürün ekle/ : /Add a product to Trendyol/ }).click();
+    await p.locator("input").nth(0).waitFor(); await p.waitForTimeout(600);
+  } },
+  { name: "trendyol-orders", maxHeight: 1000, path: "/trendyol/orders", wait: "table tbody tr", run: async (p) => {
+    await p.locator("table tbody tr button").first().click(); await p.waitForTimeout(900);
+  } },
+  { name: "trendyol-returns", full: true, maxHeight: 1000, path: "/trendyol/returns", wait: "table tbody tr" },
+  { name: "trendyol-questions", full: true, maxHeight: 1000, path: "/trendyol/questions", wait: "[data-testid=tdyv-question]" },
+  { name: "trendyol-finance", full: true, maxHeight: 1000, path: "/trendyol/finance", wait: "table tbody tr" },
+  { name: "trendyol-explorer", maxHeight: 1000, path: "/trendyol", wait: "[data-op], [data-group]", run: async (p) => {
+    await p.locator("main input").first().fill("getShipmentPackages"); await p.waitForTimeout(400);
+    await p.locator("[data-op]").first().click(); await p.addStyleTag({ content: "p[aria-live=polite]{visibility:hidden}" }); await p.waitForTimeout(700);
+  } },
   { name: "help-page", full: true, maxHeight: 1000, path: "/help" },
 ];

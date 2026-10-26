@@ -21,3 +21,7 @@ Trendyol provides a stage/test environment on request for some integrations; ava
 ## Caveats
 
 Trendyol Express or any Trendyol-specific shipping is NOT assumed or implemented; shipment info is updated only through supported APIs. Rate limits and category/attribute requirements are Trendyol's. Order import creates source=`trendyol` orders unique on external id. Stock drift is visible on the admin dashboard; use reconcile before trusting numbers. Adapter tested with mocks, not live accounts.
+
+## API console
+
+Admin → **Trendyol console** (owner/admin only) is a hands-on console for the whole public marketplace API (83 operations): task views for products (with a create-product wizard), recent sales, returns, questions and finance, plus an API explorer with risk levels, a `confirm` step for live writes and a 30-day call history (no personal data stored). Mock Mode runs it offline with demo data; stage needs Trendyol-side IP whitelisting and separate credentials. Like the adapter, it has not been verified against a live seller account. User guide: [EN](../../apps/admin/src/help/en/15-trendyol.md) · [TR](../../apps/admin/src/help/tr/15-trendyol.md) (also in the admin Help page). Contract: [api-contract.md](../api-contract.md).

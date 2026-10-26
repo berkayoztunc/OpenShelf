@@ -21,3 +21,7 @@ Trendyol bazı entegrasyonlar için talep üzerine stage/test ortamı sağlayabi
 ## Uyarılar
 
 Trendyol Express veya Trendyol'a özel kargo varsayılmaz ve uygulanmaz; kargo bilgisi yalnızca desteklenen API'lerle güncellenir. Oran limitleri ve kategori/özellik gereksinimleri Trendyol'a aittir. Sipariş içe aktarma, dış id'de tekil, source=`trendyol` siparişler oluşturur. Stok sapması admin panelinde görünür; sayılara güvenmeden önce mutabakat çalıştırın. Adaptör mock ile sınanmıştır, canlı hesapla değil.
+
+## API konsolu
+
+Yönetim paneli → **Trendyol konsolu** (yalnızca sahip/yönetici), tüm genel pazaryeri API'si (83 işlem) için uygulamalı bir konsoldur: ürünler (ürün oluşturma sihirbazıyla), son satışlar, iadeler, sorular ve finans için görev ekranları ile risk düzeyleri, canlı yazmalarda `confirm` adımı ve 30 günlük çağrı geçmişi (kişisel veri saklanmaz) olan bir API gezgini. Mock Modu bunu demo verisiyle çevrimdışı çalıştırır; test ortamı (stage) Trendyol tarafında IP izni ve ayrı anahtar ister. Adaptör gibi bu da gerçek bir satıcı hesabıyla doğrulanmamıştır. Kullanım kılavuzu: [TR](../../apps/admin/src/help/tr/15-trendyol.md) · [EN](../../apps/admin/src/help/en/15-trendyol.md) (yönetim panelindeki Yardım sayfasında da). Sözleşme: [api-contract.md](../api-contract.md).

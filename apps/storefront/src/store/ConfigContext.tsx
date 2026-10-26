@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { applyBrandTheme, initThemeMode } from "@openshelf/ui";
 import { api } from "../api/client";
@@ -21,14 +21,32 @@ function setFavicon(url: string) {
   link.href = url;
 }
 
+/** Fade out the HTML splash once the brand theme is applied and fonts are ready (max 1.2s wait). */
+function hideSplash() {
+  const el = document.getElementById("os-splash");
+  if (!el) return;
+  const done = () => { el.className = "os-hide"; setTimeout(() => el.remove(), 500); };
+  const fonts = (document as Document & { fonts?: { ready: Promise<unknown> } }).fonts;
+  if (!fonts) return done();
+  void Promise.race([fonts.ready, new Promise((r) => setTimeout(r, 1200))]).then(() => requestAnimationFrame(done));
+}
+
 export function ConfigProvider({ children }: { children: ReactNode }) {
   const q = useQuery({ queryKey: ["config"], queryFn: api.config, staleTime: 5 * 60_000 });
   const config = q.data;
 
-  useEffect(() => {
+  // Layout effect: the brand colors land before the first paint of the real UI (no colour flash).
+  useLayoutEffect(() => {
     if (!config) return;
     initThemeMode();
     applyBrandTheme(config.branding);
+    hideSplash();
+  }, [config]);
+
+  useEffect(() => { if (q.isError) hideSplash(); }, [q.isError]);
+
+  useEffect(() => {
+    if (!config) return;
     if (config.branding.faviconUrl) setFavicon(config.branding.faviconUrl);
     setConsentRequired(config.tracking.consentRequired);
     configureTracking({

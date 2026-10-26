@@ -19,7 +19,43 @@ Open-source, single-tenant e-commerce that runs as one Cloudflare Worker with D1
 
 > **About the Deploy button.** The button only works when the repository is **public on GitHub**. Replace `<ORG>` in the button URL with your GitHub organization or username (for example your fork). Details in [Quick start](#quick-start).
 
-<!-- Screenshots: none yet. Add storefront, admin dashboard, Mock Inbox and notification templates here once captured. -->
+<div align="center">
+
+<img src="docs/images/storefront.png" alt="OpenShelf storefront" width="49%"> <img src="docs/images/admin-orders.png" alt="OpenShelf admin: orders" width="49%">
+
+<sub>Storefront (left) and admin orders page (right), shown with demo data in Mock Mode.</sub>
+
+</div>
+
+## What you need before you start
+
+Only two things are required to deploy. Everything else is optional and can be added later from the admin panel.
+
+**1. Required Worker secrets** (the Deploy button and `pnpm run setup` both ask for them):
+
+| Name | How to create it | Purpose |
+|---|---|---|
+| `APP_ENCRYPTION_KEY` | `openssl rand -base64 32` | Encrypts integration credentials stored in D1. Keep a copy: losing it makes stored keys unreadable. |
+| `SETUP_TOKEN` | `openssl rand -hex 24` | One-time token to create the owner account at `/admin/setup`. |
+
+Also needed: a free [Cloudflare account](https://dash.cloudflare.com/sign-up) and, for the Deploy button, a **public** GitHub repository.
+
+**2. Integration credentials** (optional, entered in **Admin → Settings → Integrations**, stored encrypted, never Worker secrets). Skip them to run in [Mock Mode](#mock-mode).
+
+| Integration | You need from the vendor |
+|---|---|
+| iyzico (payments) | API key, Secret key, environment (sandbox or production) |
+| Trendyol Marketplace | Seller (supplier) ID, API key, API secret, environment (production or stage); optional webhook username and password |
+| Geliver (shipping) | API token, sender address ID |
+| Trendyol e-Faturam | Service URL, username, password |
+| Netgsm (SMS) | Usercode, API password, sender header |
+| Twilio (SMS) | Account SID, Auth Token, From number or Messaging Service SID |
+| Cloudflare Email Service | Account ID, API token, default From address |
+| Google Analytics 4 | Measurement ID, Measurement Protocol API secret |
+| Meta Pixel / CAPI | Pixel ID, Conversions API access token |
+
+Where to find each key: see the [integration docs](docs/integrations/). Use each vendor's sandbox first; nothing here has been verified against a live account yet.
+
 
 ## What is OpenShelf
 
@@ -32,7 +68,7 @@ Status: early development (v0.1). See [Integrations](#integrations) for what has
 - **Catalog**: products, variants, categories, media, coupons, customers.
 - **Inventory ledger**: append-only stock movements, transactional reservations at checkout (no overselling under concurrency).
 - **Hosted checkout**: card data never touches OpenShelf; server-side pricing; payment confirmed by verified webhook plus server-to-server re-check.
-- **Channels**: own storefront plus Trendyol marketplace sync through the outbox.
+- **Channels**: own storefront plus Trendyol marketplace sync through the outbox, and a Trendyol API console in the admin ([guide](apps/admin/src/help/en/15-trendyol.md)).
 - **Admin settings**: store name, logo, banner, brand colors, SEO, legal texts, checkout rules, tracking, notifications, integrations.
 - **Security**: PBKDF2 password hashes, optional TOTP MFA, `__Host-` session cookies, CSRF + Origin checks, RBAC, audit log, AES-256-GCM encrypted integration secrets, fixed outbound host allowlists, rate limits, optional Turnstile. See [docs/security.md](docs/security.md).
 - **Analytics**: GA4 and Meta Pixel/Conversions API with consent mode and shared `event_id` for browser/server deduplication. See [docs/tracking.md](docs/tracking.md).

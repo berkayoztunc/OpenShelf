@@ -31,5 +31,8 @@ export const nav = {
   "nav.crumb.notifications": "Bildirimler",
   "nav.crumb.system": "Sistem",
   "nav.trendyol": "Trendyol konsolu",
+  "nav.crumb.returns": "İadeler",
+  "nav.crumb.questions": "Sorular",
+  "nav.crumb.finance": "Finans",
   "nav.crumb.trendyol": "Trendyol",
 } satisfies Record<string, string>;

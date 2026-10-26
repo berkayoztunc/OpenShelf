@@ -6,8 +6,8 @@ import type {
 } from "@openshelf/integration-sdk";
 import type { TrendyolCallBody, TrendyolCallResult, TrendyolEnv, TrendyolOperation } from "@openshelf/shared";
 import {
-  MAX_INVENTORY_BATCH, MAX_ORDER_PAGE, MAX_ORDER_WINDOW_MS, MAX_QUANTITY, ORDER_PAGE_SIZE, alternativeDeliveryPath, assertAllowed,
-  batchResultPath, hostFor, inventoryUpdatePath, shipmentPackagesPath,
+  MAX_INVENTORY_BATCH, MAX_ORDER_WINDOW_MS, MAX_QUANTITY, ORDER_PAGE_SIZE, alternativeDeliveryPath, assertAllowed,
+  batchResultPath, hostFor, inventoryUpdatePath, shipmentPackagesPath, shipmentPackagesStreamPath,
 } from "./endpoints";
 import { mapTrendyolStatus } from "./status";
 import { basicAuth, runCall, userAgentFor } from "./console";
@@ -128,7 +128,7 @@ export class TrendyolProvider implements MarketplaceProvider {
   async healthCheck(): Promise<HealthResult> {
     try {
       const end = this.deps.now().getTime();
-      await this.call("GET", `${shipmentPackagesPath(this.sid)}?startDate=${end - 3600_000}&endDate=${end}&page=0&size=1`);
+      await this.call("GET", `${shipmentPackagesStreamPath(this.sid)}?lastModifiedStartDate=${end - 3600_000}&lastModifiedEndDate=${end}&size=1`);
       return { ok: true };
     } catch (e) { return { ok: false, detail: e instanceof Error ? e.message : "error" }; }
   }
@@ -168,21 +168,20 @@ export class TrendyolProvider implements MarketplaceProvider {
     return []; // still processing; batchId returned to caller for later inspection
   }
 
+  /**
+   * Reconciliation uses the cursor stream endpoint (getShipmentPackagesStream): the cursor is Trendyol's opaque nextCursor and is
+   * only valid together with the same filters, so the window is derived from `since` (capped at 2 weeks back from now).
+   * Order is lastModifiedDate DESC; the caller upserts idempotently so order does not matter.
+   */
   async fetchOrders(since: Date, cursor?: string) {
     const end = this.deps.now().getTime();
-    // docs: with startDate+endDate the window may be at most two weeks; only the last month is queryable.
     const start = Math.max(since.getTime(), end - MAX_ORDER_WINDOW_MS);
-    const page = cursor ? Number(cursor) : 0;
-    const q = new URLSearchParams({
-      startDate: String(start), endDate: String(end), page: String(page), size: String(ORDER_PAGE_SIZE),
-      orderByField: "PackageLastModifiedDate", orderByDirection: "ASC",
-    });
-    const r = await this.call("GET", `${shipmentPackagesPath(this.sid)}?${q}`);
-    const totalPages = Number(r.totalPages ?? 1);
+    const q = new URLSearchParams({ lastModifiedStartDate: String(start), lastModifiedEndDate: String(end), size: String(ORDER_PAGE_SIZE) });
+    if (cursor) q.set("nextCursor", cursor);
+    const r = await this.call("GET", `${shipmentPackagesStreamPath(this.sid)}?${q}`);
     // "Awaiting" packages are inventory-only (docs): never import them as orders.
     const content: any[] = (r.content ?? []).filter((p: any) => String(p.status ?? p.shipmentPackageStatus) !== "Awaiting");
-    // Offset pagination is capped at page 49 (10,000 packages); the 5-minute-overlap cursor keeps windows far below that.
-    return { orders: content.map(mapPackage) as MarketplaceOrder[], ...(page + 1 < totalPages && page < MAX_ORDER_PAGE ? { nextCursor: String(page + 1) } : {}) };
+    return { orders: content.map(mapPackage) as MarketplaceOrder[], ...(r.hasMore && r.nextCursor ? { nextCursor: String(r.nextCursor) } : {}) };
   }
 
   /**

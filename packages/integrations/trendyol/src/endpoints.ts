@@ -39,6 +39,9 @@ export const inventoryUpdatePath = (sid: string) => `${INTEGRATION_PREFIX}/inven
 export const batchResultPath = (sid: string, batchId: string) => `${INTEGRATION_PREFIX}/product/sellers/${sid}/products/batch-requests/${encodeURIComponent(batchId)}`;
 /** getShipmentPackages. The legacy `/orders` endpoint is deprecated and the Order V2 endpoint is mandatory from 2026-10-15. */
 export const shipmentPackagesPath = (sid: string) => `${INTEGRATION_PREFIX}/order/sellers/${sid}/v2/orders`;
+/** getShipmentPackagesStream: cursor-based (GET ?lastModifiedStartDate&lastModifiedEndDate&size<=200&nextCursor -> { content, size, hasMore, nextCursor }),
+ *  fixed order lastModifiedDate DESC, reaches further back than the offset endpoint. Used for reconciliation. */
+export const shipmentPackagesStreamPath = (sid: string) => `${INTEGRATION_PREFIX}/order/sellers/${sid}/orders/stream`;
 /** processAlternativeDelivery (self-integration cargo): PUT { isPhoneNumber, trackingInfo, params } -> package becomes "Shipped". */
 export const alternativeDeliveryPath = (sid: string, pkgId: string) => `${INTEGRATION_PREFIX}/order/sellers/${sid}/shipment-packages/${encodeURIComponent(pkgId)}/alternative-delivery`;
 /** updatePackage (Picking / Invoiced notifications): PUT { lines:[{lineId,quantity}], params:{invoiceNumber?}, status }. */

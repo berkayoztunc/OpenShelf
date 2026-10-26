@@ -17,6 +17,9 @@ import { adapterDeps, isIntegrationEnabled, isMockModeFresh, loadSecrets } from 
 import { scrub } from "../lib/log";
 import { resetMockTrendyol, runMock } from "../lib/trendyolMock";
 
+/** Groups whose responses contain customer data (names, addresses, phones, questions): the call log keeps only status + size for them. */
+const PII_GROUPS = new Set(["orders", "split", "shipping", "labels", "claims", "questions", "invoices", "seller", "finance", "cargoInvoice", "express", "test"]);
+
 export const adminTrendyol = new Hono<AppEnv>();
 // Orders/claims contain customer PII and writes hit a real marketplace account: owner/admin only.
 adminTrendyol.use("/trendyol/*", requireRole("admin"));
@@ -113,7 +116,9 @@ adminTrendyol.post("/trendyol/call", async (c) => {
   const [ins] = await db.insert(trendyolCalls).values({
     operationId: op.id, method: op.method, env, mock: st.mock, risk: op.risk, status: result.status, durationMs: result.durationMs, adminId: admin.id,
     requestSummary: { query: result.request.query, pathKeys: Object.keys(b.path), bodyBytes },
-    responseSummary: scrub(clip(respText, 200), secrets),
+    responseSummary: PII_GROUPS.has(op.group)
+      ? `HTTP ${result.status} · ${new TextEncoder().encode(respText).length} bytes${result.error ? ` · ${scrub(clip(result.error.message, 120), secrets)}` : ""}`
+      : scrub(clip(respText, 200), secrets),
   }).returning({ id: trendyolCalls.id });
   await audit(c, "trendyol.call", "trendyol_call", ins ? String(ins.id) : undefined, { operationId: op.id, risk: op.risk, env, status: result.status, mock: st.mock });
   return c.json(result);
@@ -125,7 +130,7 @@ adminTrendyol.get("/trendyol/history", async (c) => {
   const where = opId ? eq(trendyolCalls.operationId, opId) : undefined;
   const rows = await c.get("db").select().from(trendyolCalls).where(where).orderBy(desc(trendyolCalls.id)).limit(p.pageSize).offset(p.offset);
   const [t] = await c.get("db").select({ n: sql<number>`count(*)` }).from(trendyolCalls).where(where);
-  return c.json(paged(rows.map(({ createdAt, ...r }) => ({ ...r, at: createdAt })), t?.n ?? 0, p));
+  return c.json(paged(rows, t?.n ?? 0, p));
 });
 
 adminTrendyol.delete("/trendyol/history", requireRole("owner"), async (c) => {
@@ -170,7 +175,7 @@ adminTrendyol.post("/trendyol/mappings", async (c) => {
     .where(and(eq(productMappings.provider, "trendyol"), eq(productMappings.externalBarcode, b.barcode))).limit(1);
   if (taken && taken.v !== b.variantId) throw new ApiError(409, "barcode_taken", "This barcode is already mapped to another variant");
   const enabled = b.listingEnabled ?? true;
-  const values = { variantId: b.variantId, provider: "trendyol", externalSku: v.sku, externalBarcode: b.barcode, externalId: b.externalId ?? null };
+  const values = { id: crypto.randomUUID(), variantId: b.variantId, provider: "trendyol", externalSku: v.sku, externalBarcode: b.barcode, externalId: b.externalId ?? null };
   await db.batch([
     db.insert(productMappings).values(values).onConflictDoUpdate({ target: [productMappings.provider, productMappings.variantId], set: { externalSku: v.sku, externalBarcode: b.barcode, externalId: b.externalId ?? null } }),
     db.insert(channelListings).values({ variantId: b.variantId, channel: "trendyol", enabled, externalId: b.externalId ?? null })

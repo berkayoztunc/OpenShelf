@@ -288,7 +288,7 @@ export const operations: TrendyolOperation[] = [
       ],
     },
     risk: "write", rateLimit: RATE, docsUrl: ref("processalternativedeliverydigital"),
-    notes: t("Bilgiler müşteriye SMS ve e-posta ile iletilir (geri alınamaz). Resmi operationId processAlternativeDelivery ile aynı olduğundan burada Digital eki kullanıldı.", "The information is sent to the customer by SMS and e-mail (irreversible). The docs reuse the operationId processAlternativeDelivery; the Digital suffix is added here to keep ids unique."),
+    notes: t("Bilgiler müşteriye SMS ve e-posta ile iletilir (geri alınamaz). Resmi operationId processAlternativeDeliveryDigital'dir (başlıkta processAlternativeDelivery yazar). Başarı sonrası paketin hangi duruma geçtiği dokümanda belirtilmemiştir (UNVERIFIED; mock Shipped yapar).", "The information is sent to the customer by SMS and e-mail (irreversible). Official operationId is processAlternativeDeliveryDigital (the page title says processAlternativeDelivery). The resulting package status is not documented (UNVERIFIED; the mock sets Shipped)."),
   },
   {
     id: "manualDeliverByPackageId", group: "shipping", area: "orders",
@@ -446,13 +446,5 @@ export const operations: TrendyolOperation[] = [
     },
     risk: "write", rateLimit: RATE, docsUrl: ref("updatetestorderstatus"),
     notes: t(`${STAGE_NOTE.tr} Durumlar sırayla ilerler; Delivered olmuş paket tekrar AtCollectionPoint veya Shipped'a çekilemez. Yanıt: "200 OK".`, `${STAGE_NOTE.en} Statuses progress sequentially; a Delivered package cannot go back to AtCollectionPoint or Shipped. Response: "200 OK".`),
-  },
-  {
-    id: "updateTestClaimToWaitingInAction", group: "test", area: "tools", envs: ["stage"],
-    title: t("Test iadesini WaitingInAction yap", "Update return test orders to WaitingInAction"), summary: t("STAGE'de oluşturulan test iade talebini WaitingInAction durumuna geçirir.", "Moves a STAGE test return request to WaitingInAction."),
-    method: "PUT", path: "/integration/test/order/sellers/{sellerId}/claims/waiting-in-action", params: [],
-    body: { kind: "json", example: { shipmentPackageId: 56526451 }, fields: [f("shipmentPackageId", "integer", t("getClaims yanıtındaki orderShipmentPackageId değeri.", "The orderShipmentPackageId value returned by getClaims."), true)] },
-    risk: "write", rateLimit: RATE, docsUrl: ref("updatetestclaimtowaitinginaction"),
-    notes: t(`${STAGE_NOTE.tr} Yanıt: "200 OK".`, `${STAGE_NOTE.en} Response: "200 OK".`),
   },
 ];

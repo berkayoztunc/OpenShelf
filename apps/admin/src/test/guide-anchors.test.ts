@@ -18,9 +18,10 @@ export const REQUIRED_ANCHORS: Record<string, string[]> = {
   security: ["iki-adimli-dogrulama", "kullanicilar-ve-roller", "oturumlar", "denetim-kaydi", "kilitlenme", "gizli-anahtarlar"],
   data: ["disa-aktarma", "ice-aktarma", "yedekleme"],
   "going-live": ["yayin-kontrol-listesi", "alan-adi", "gizli-anahtarlar-ve-ortam", "mock-u-kapatma", "maliyetler"],
+  trendyol: ["baglanti-ve-mock", "stage-ve-canli", "urunler", "urun-olusturma-sihirbazi", "son-satislar", "iadeler", "sorular", "finans", "api-gezgini", "riskli-islemler", "cagri-gecmisi", "sik-hatalar"],
   troubleshooting: ["giris-sorunlari", "odeme-sorunlari", "fatura-sorunlari", "e-posta-ve-sms-sorunlari", "entegrasyon-hatalari", "sss"],
 };
-const SCREENSHOTS = new Set(["login", "dashboard", "products-list", "product-edit", "product-seo", "categories", "coupons", "customers", "orders-list", "order-detail", "order-print-label", "order-print-invoice", "invoices-list", "invoice-editor", "emails-compose", "emails-sent", "integrations-hub", "integration-drawer", "integration-events", "mock-inbox", "settings-general", "settings-branding", "settings-seo", "settings-legal", "settings-checkout", "settings-tracking", "settings-notifications", "settings-system", "security", "audit", "data", "help-page"]);
+const SCREENSHOTS = new Set(["login", "dashboard", "products-list", "product-edit", "product-seo", "categories", "coupons", "customers", "orders-list", "order-detail", "order-print-label", "order-print-invoice", "invoices-list", "invoice-editor", "emails-compose", "emails-sent", "integrations-hub", "integration-drawer", "integration-events", "mock-inbox", "settings-general", "settings-branding", "settings-seo", "settings-legal", "settings-checkout", "settings-tracking", "settings-notifications", "settings-system", "security", "audit", "data", "help-page", "trendyol-products", "trendyol-wizard", "trendyol-orders", "trendyol-returns", "trendyol-questions", "trendyol-finance", "trendyol-explorer"]);
 const GLOSSARY = new Set(GLOSSARY_IDS);
 const LOCALES: Locale[] = ["tr", "en"];
 

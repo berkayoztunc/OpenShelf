@@ -32,14 +32,17 @@ describe("trendyol provider", () => {
     expect(new URL((f.mock.calls[0] as any)[0]).hostname).toBe("stageapigw.trendyol.com");
     expect(factory.manifest.publicFields.find((x) => x.key === "environment")).toMatchObject({ type: "select" });
   });
-  it("order window: v2 path, <= 2 weeks, size 200, Awaiting skipped", async () => {
-    const f = vi.fn(async () => json({ totalPages: 1, content: [pkg(1), pkg(2, "Awaiting")] }));
-    const r = await provider(f).fetchOrders(new Date("2025-01-01T00:00:00Z"));
+  it("order window: stream path, <= 2 weeks, size 200, cursor passed, Awaiting skipped", async () => {
+    const f = vi.fn(async () => json({ hasMore: true, nextCursor: "CUR1", content: [pkg(1), pkg(2, "Awaiting")] }));
+    const p = provider(f);
+    const r = await p.fetchOrders(new Date("2025-01-01T00:00:00Z"), "PREV");
     const u = new URL((f.mock.calls[0] as any)[0]);
-    expect(u.pathname).toBe("/integration/order/sellers/12345/v2/orders");
-    expect(Number(u.searchParams.get("endDate")) - Number(u.searchParams.get("startDate"))).toBeLessThanOrEqual(14 * 24 * 3600 * 1000);
+    expect(u.pathname).toBe("/integration/order/sellers/12345/orders/stream");
+    expect(Number(u.searchParams.get("lastModifiedEndDate")) - Number(u.searchParams.get("lastModifiedStartDate"))).toBeLessThanOrEqual(14 * 24 * 3600 * 1000);
     expect(u.searchParams.get("size")).toBe("200");
+    expect(u.searchParams.get("nextCursor")).toBe("PREV");
     expect(r.orders.map((o) => o.externalId)).toEqual(["1"]);
+    expect(r.nextCursor).toBe("CUR1");
   });
   it("price/stock body + inventory path; 429 backs off using Retry-After then succeeds", async () => {
     const sleeps: number[] = [];
@@ -73,15 +76,15 @@ describe("trendyol provider", () => {
     expect(new URL(url).pathname).toBe("/integration/order/sellers/12345/shipment-packages/77/alternative-delivery");
     expect(JSON.parse(init.body)).toEqual({ isPhoneNumber: false, trackingInfo: "https://track.example/1", params: {} });
   });
-  it("fetchOrders paginates and maps to minor units", async () => {
-    const f = vi.fn(async (u: string) => new URL(u).searchParams.get("page") === "0"
-      ? json({ totalPages: 2, content: [pkg(1)] }) : json({ totalPages: 2, content: [pkg(2)] }));
+  it("fetchOrders follows the stream cursor and maps to minor units", async () => {
+    const f = vi.fn(async (u: string) => !new URL(u).searchParams.get("nextCursor")
+      ? json({ hasMore: true, nextCursor: "c1", content: [pkg(1)] }) : json({ hasMore: false, nextCursor: "", content: [pkg(2)] }));
     const p = provider(f);
     const a = await p.fetchOrders(new Date("2026-01-09T00:00:00Z"));
-    expect(a.nextCursor).toBe("1");
+    expect(a.nextCursor).toBe("c1");
     expect(a.orders[0]).toMatchObject({ externalId: "1", status: "paid", total: 20100 });
     expect(a.orders[0]!.lines[0]).toMatchObject({ unitPrice: 10050, quantity: 2 });
-    const b = await p.fetchOrders(new Date("2026-01-09T00:00:00Z"), "1");
+    const b = await p.fetchOrders(new Date("2026-01-09T00:00:00Z"), "c1");
     expect(b.nextCursor).toBeUndefined();
   });
   it("status mapping", () => {
@@ -120,7 +123,7 @@ describe("trendyol provider", () => {
 describe("trendyol.reconcile_orders", () => {
   it("imports idempotently and decrements inventory once", async () => {
     const { db, raw } = makeDb(); seedVariants(raw);
-    const f = vi.fn(async () => json({ totalPages: 1, content: [pkg(100), pkg(101, "Created", [{ merchantSku: "ZZZ", barcode: "NOPE", quantity: 1, price: 5 }])] }));
+    const f = vi.fn(async () => json({ hasMore: false, content: [pkg(100), pkg(101, "Created", [{ merchantSku: "ZZZ", barcode: "NOPE", quantity: 1, price: 5 }])] }));
     const ctx = ctxOf(db, provider(f));
     const job = { id: "j", kind: "trendyol.reconcile_orders", payload: {}, attempts: 0 };
     await jobHandlers["trendyol.reconcile_orders"]!(job, ctx);

@@ -110,7 +110,7 @@ function touch(p: Rec, now: number, status?: string) {
   p.packageHistories.push({ createdDate: now, status });
   for (const l of p.lines) if (!["Cancelled", "UnSupplied"].includes(l.orderLineItemStatusName)) l.orderLineItemStatusName = status;
 }
-const trackingLink = (n: number) => `https://tracking.trendyol.com/?id=${String(n).padStart(16, "0").replace(/(.{8})(.{4})(.{4})/, "$1-$2-$3-0000-")}000000000000`.slice(0, 66);
+const trackingLink = (n: number) => `https://tracking.trendyol.com/?id=${n}`;
 
 function buildLine(p: MockProduct, quantity: number, lineId: number, sellerId: number, status: string, discountPct = 0, tyPct = 0): Rec {
   const unit = p.listPrice; const gross = r2(unit * quantity);
@@ -318,7 +318,7 @@ const updatePackage: MockHandler = (req, state) => mutate(req, state, ({ pkg, no
   const b = bodyOf(req); const to = b.status;
   if (to !== "Picking" && to !== "Invoiced") return fail(400, "status must be Picking or Invoiced");
   const need = to === "Picking" ? "Created" : "Picking";
-  if (pkg.status !== need) return statusErr(pkg, to) && fail(400, `Package status ${pkg.status} cannot be updated to ${to}${to === "Invoiced" && pkg.status === "Created" ? " (notify Picking first)" : ""}`);
+  if (pkg.status !== need) return fail(400, `Package status ${pkg.status} cannot be updated to ${to}${to === "Invoiced" && pkg.status === "Created" ? " (notify Picking first)" : ""}`);
   if (b.lines !== undefined) {
     if (!Array.isArray(b.lines)) return fail(400, "lines must be an array");
     for (const l of b.lines) {
@@ -346,7 +346,7 @@ const cancelOrderPackageItem: MockHandler = (req, state) => mutate(req, state, a
     await spawn(c, pool, "cancel", prev);
   }
   pkg.lines = r.taken; recompute(pkg);
-  touch(pkg, c.now, pool.length ? "Cancelled" : "Cancelled");
+  touch(pkg, c.now, "Cancelled");
   return ok();
 });
 const updateBoxInfo: MockHandler = (req, state) => mutate(req, state, ({ pkg, now }) => {
@@ -540,7 +540,7 @@ const createTestOrder: MockHandler = async (req, state) => {
       company: a.company ?? "", postalCode: a.postalCode ?? "", neighborhood: a.neighborhood ?? "", neighborhoodId: nb?.id ?? 0, latitude: a.latitude, longitude: a.longitude };
   };
   const n = await state.nextId("ty:order"); const pid = await nextPkgId(state); const now = state.now();
-  const inv = mk(b.invoiceAddress, b.invoiceAddress.invoiceFirstName, b.invoiceAddress.invoiceLastName, 12000000 + n * 2 + 1);
+  const inv: Rec = mk(b.invoiceAddress, b.invoiceAddress.invoiceFirstName, b.invoiceAddress.invoiceLastName, 12000000 + n * 2 + 1);
   if (b.commercial) { inv.company = b.invoiceAddress.company; inv.taxNumber = b.invoiceAddress.invoiceTaxNumber; inv.taxOffice = b.invoiceAddress.invoiceTaxOffice; }
   const orderNumber = String(10751300000 + n);
   const pkg = buildPackage({
@@ -565,11 +565,6 @@ const updateTestOrderStatus: MockHandler = (req, state) => mutate(req, state, ({
   touch(pkg, now, to);
   return ok("200 OK");
 });
-const updateTestClaimToWaitingInAction: MockHandler = (req) => {
-  const id = bodyOf(req).shipmentPackageId;
-  if (!isInt(id)) return fail(400, "shipmentPackageId must be an integer (the orderShipmentPackageId returned by getClaims)");
-  return ok("200 OK");
-};
 
 export const mockHandlers: Record<string, MockHandler> = {
   getShipmentPackages, getShipmentPackagesStream, updatePackage, cancelOrderPackageItem, updateBoxInfo, deliveredByService, changeCargoProvider, updateWarehouse,
@@ -577,5 +572,5 @@ export const mockHandlers: Record<string, MockHandler> = {
   processAlternativeDelivery, processAlternativeDeliveryDigital, manualDeliverByPackageId: manualDeliver, manualDeliverByTrackingNumber: manualDeliverByTracking,
   manualReturnByTrackingNumber: manualReturnByTracking, manualReturnByPackageId: manualReturn,
   getCountries, getCitiesByCountry, getDistrictsByCity, getAzerbaijanCities, getAzerbaijanDistricts, getTurkeyCities, getTurkeyDistricts, getTurkeyNeighborhoods,
-  createCommonLabel, getCommonLabel, createTestOrder, updateTestOrderStatus, updateTestClaimToWaitingInAction,
+  createCommonLabel, getCommonLabel, createTestOrder, updateTestOrderStatus,
 };

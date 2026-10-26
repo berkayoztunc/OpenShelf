@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 const ROOT = join(__dirname, "..", "..");
 const PUBLIC_HELP = join(ROOT, "public", "help");
-const NAMES = ["login", "dashboard", "products-list", "product-edit", "product-seo", "categories", "coupons", "customers", "orders-list", "order-detail", "order-print-label", "order-print-invoice", "invoices-list", "invoice-editor", "emails-compose", "emails-sent", "integrations-hub", "integration-drawer", "integration-events", "mock-inbox", "settings-general", "settings-branding", "settings-seo", "settings-legal", "settings-checkout", "settings-tracking", "settings-notifications", "settings-system", "security", "audit", "data", "help-page"];
+const NAMES = ["login", "dashboard", "products-list", "product-edit", "product-seo", "categories", "coupons", "customers", "orders-list", "order-detail", "order-print-label", "order-print-invoice", "invoices-list", "invoice-editor", "emails-compose", "emails-sent", "integrations-hub", "integration-drawer", "integration-events", "mock-inbox", "settings-general", "settings-branding", "settings-seo", "settings-legal", "settings-checkout", "settings-tracking", "settings-notifications", "settings-system", "security", "audit", "data", "help-page", "trendyol-products", "trendyol-wizard", "trendyol-orders", "trendyol-returns", "trendyol-questions", "trendyol-finance", "trendyol-explorer"];
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
 function assertPng(file: string) {

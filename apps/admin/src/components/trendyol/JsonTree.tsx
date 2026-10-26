@@ -7,7 +7,7 @@ import { matchesDeep, prettyJson } from "../../lib/trendyol";
 const PAGE = 100;
 
 function Leaf({ v }: { v: unknown }) {
-  if (v === null) return <span className="text-faint">null</span>;
+  if (v === null) return <span className="text-faint">{String(v)}</span>;
   if (typeof v === "string") return <span className="break-all text-success">"{v.length > 400 ? `${v.slice(0, 400)}…` : v}"</span>;
   if (typeof v === "number") return <span className="text-info">{String(v)}</span>;
   return <span className="text-warn">{String(v)}</span>;

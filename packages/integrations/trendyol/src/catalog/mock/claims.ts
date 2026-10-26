@@ -286,13 +286,11 @@ async function seedQuestions(state: MockState): Promise<Obj[]> {
     }),
   ];
 }
-const loadQuestions = (state: MockState) => loadList<Obj>(state, QK, () => { throw new Error("unreachable"); }).catch(async () => undefined);
 async function questions(state: MockState): Promise<Obj[]> {
   let l = await state.get<Obj[]>(QK);
   if (!l) { l = await seedQuestions(state); await state.set(QK, l); }
   return l;
 }
-void loadQuestions;
 const lastModified = (q: Obj) => Math.max(q.creationDate, q.answer?.creationDate ?? 0, q.rejectedDate ?? 0, q.reportedDate ?? 0);
 
 const getQuestionFilter: MockHandler = async (req, state) => {
