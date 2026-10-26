@@ -1,0 +1,9 @@
+# Secrets for `wrangler dev` (copy to .dev.vars) and the Deploy to Cloudflare form.
+# REQUIRED. Base64 of exactly 32 random bytes (encrypts integration credentials). Generate:  openssl rand -base64 32
+APP_ENCRYPTION_KEY=
+# REQUIRED for first run. One-time token typed at /admin/setup to create the first owner. Generate:  openssl rand -hex 24
+SETUP_TOKEN=
+# Optional. Cloudflare Turnstile secret key (bot protection at checkout/login). Leave empty to disable.
+TURNSTILE_SECRET=
+# Local development only: allow Mock mode (offline fake payments/SMS/email). NEVER set on a production deployment.
+ALLOW_MOCK=true

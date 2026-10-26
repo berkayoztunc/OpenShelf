@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Store</title>
+    <!-- prerender:head -->
+    <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
+    <script>
+      // Apply stored theme before paint to avoid a flash.
+      try { var m = localStorage.getItem("os-theme"); if (m && m !== "system") document.documentElement.setAttribute("data-theme", m); } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"><!-- prerender:body --></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

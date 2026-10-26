@@ -1,0 +1,9 @@
+{
+  "name": "@openshelf/help-shots",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Repeatable admin help-guide screenshot capture (TR + EN).",
+  "scripts": { "capture": "node capture.mjs" },
+  "devDependencies": { "playwright-core": "^1.49.0", "sharp": "^0.33.5" }
+}

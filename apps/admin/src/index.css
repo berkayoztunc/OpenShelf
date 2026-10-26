@@ -1,0 +1,33 @@
+@import "tailwindcss";
+@import "@openshelf/ui/theme.css";
+
+@layer base {
+  html { -webkit-text-size-adjust: 100%; }
+  body { -webkit-font-smoothing: antialiased; font-size: 14px; font-feature-settings: "cv11", "ss01"; }
+  input:focus-visible, select:focus-visible, textarea:focus-visible { outline: none; }
+  button, [role="button"], a, summary { cursor: pointer; }
+  button:disabled { cursor: not-allowed; }
+  /* Grid/flex children default to min-width:auto, so a wide table inside a card would stretch the whole page on phones. */
+  .grid > * { min-width: 0; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; } }
+}
+@keyframes os-toast { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes os-drawer { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+.os-drawer[open] { animation: os-drawer .22s cubic-bezier(.2,.7,.2,1); }
+@keyframes os-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.page-in { animation: os-rise .35s cubic-bezier(.2,.7,.2,1) both; }
+.hero-mesh {
+  background: var(--os-hero-admin,
+    radial-gradient(70% 60% at 15% 10%, color-mix(in srgb, var(--color-accent-500) 45%, transparent), transparent 70%),
+    radial-gradient(60% 60% at 90% 90%, color-mix(in srgb, white 14%, transparent), transparent 70%),
+    var(--color-brand-600));
+}
+/* Read-only forms (issued invoices): keep values legible instead of fading them. */
+.ro input:disabled, .ro textarea:disabled, .ro select:disabled { opacity: 1; background: transparent; border-color: transparent; box-shadow: none; padding-left: 0; }
+
+/* Printing the guide / documents: hide app chrome, let content use the whole page. */
+@media print {
+  [data-app-chrome] { display: none !important; }
+  main#main { max-width: none !important; padding: 0 !important; }
+  .page-in { animation: none !important; }
+}

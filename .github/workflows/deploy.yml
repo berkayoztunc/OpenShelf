@@ -1,0 +1,47 @@
+name: Deploy (manual)
+
+# Manual deployment of the single OpenShelf Worker (storefront + admin + API) to YOUR Cloudflare account.
+# Required repo secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID.
+# Token scopes: Workers Scripts:Edit, D1:Edit (least privilege, scoped to your account).
+# The D1 database must exist with a database_id in wrangler.jsonc (run tooling/setup once, or use the Deploy to Cloudflare button).
+# Secrets APP_ENCRYPTION_KEY / SETUP_TOKEN are NOT handled here; see docs/deploy-cloudflare.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply_migrations:
+        description: Apply D1 migrations to remote before deploy
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # turbo build of all packages/apps + assemble dist-site/ (storefront at /, admin at /admin/)
+      - run: pnpm build
+
+      - name: Apply D1 migrations (remote)
+        if: ${{ inputs.apply_migrations }}
+        run: pnpm exec wrangler d1 migrations apply DB --remote
+
+      - name: Deploy Worker (API + static site)
+        run: pnpm exec wrangler deploy

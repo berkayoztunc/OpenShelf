@@ -1,0 +1,12 @@
+# Cloudflare Pages response headers for the storefront SPA.
+# Replace https://api.example.com (connect-src) with your API origin (API_ORIGIN) before deploying.
+# script-src 'sha256-...' is the inline theme bootstrap in index.html; regenerate it if that script changes
+# (the storefront test suite fails when they drift).
+# NOTE: the iyzico checkout form is rendered in a sandboxed srcDoc iframe; srcDoc documents INHERIT this CSP.
+# If iyzico's inline init script is blocked, add 'unsafe-inline' to script-src (trade-off: weaker XSS protection).
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-O+ur2uFn2Rjt7+240URfyMwGRytOkmvuT/lo4MS1TeI=' https://www.googletagmanager.com https://www.google-analytics.com https://connect.facebook.net https://challenges.cloudflare.com https://*.iyzipay.com https://*.iyzico.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:; connect-src 'self' https://api.example.com https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.facebook.com https://connect.facebook.net; frame-src https://challenges.cloudflare.com https://*.iyzipay.com https://*.iyzico.com; frame-ancestors 'self'; base-uri 'self'; object-src 'none'; form-action 'self' https://*.iyzipay.com https://*.iyzico.com

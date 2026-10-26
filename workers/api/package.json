@@ -1,0 +1,40 @@
+{
+  "name": "@openshelf/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "hono": "^4.6.0",
+    "zod": "^3.23.8",
+    "drizzle-orm": "^0.36.0",
+    "@openshelf/shared": "workspace:*",
+    "@openshelf/db": "workspace:*",
+    "@openshelf/core": "workspace:*",
+    "@openshelf/integration-sdk": "workspace:*",
+    "@openshelf/integration-iyzico": "workspace:*",
+    "@openshelf/integration-trendyol": "workspace:*",
+    "@openshelf/integration-geliver": "workspace:*",
+    "@openshelf/integration-efaturam": "workspace:*",
+    "@openshelf/integration-meta": "workspace:*",
+    "@openshelf/integration-ga4": "workspace:*",
+    "@openshelf/integration-netgsm": "workspace:*",
+    "@openshelf/integration-twilio": "workspace:*",
+    "@openshelf/integration-cf-email": "workspace:*",
+    "@openshelf/integration-mock": "workspace:*"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0",
+    "@cloudflare/workers-types": "^4.20241112.0",
+    "vitest": "~2.1.0",
+    "@cloudflare/vitest-pool-workers": "^0.5.0",
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
+  }
+}

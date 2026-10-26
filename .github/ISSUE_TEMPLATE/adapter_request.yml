@@ -1,0 +1,23 @@
+name: Integration adapter proposal
+description: Propose a new payment, shipping, invoicing, marketplace or analytics adapter
+labels: [adapter]
+body:
+  - type: input
+    id: provider
+    attributes: { label: Provider and link to API docs }
+    validations: { required: true }
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Adapter type
+      options: [Payment, Shipping, Invoicing, Marketplace, Analytics/Ads, Other]
+    validations: { required: true }
+  - type: textarea
+    id: sandbox
+    attributes: { label: Sandbox availability and auth model }
+  - type: checkboxes
+    id: volunteer
+    attributes:
+      label: Contribution
+      options:
+        - label: I can implement this (see docs/adapter-guide.md)

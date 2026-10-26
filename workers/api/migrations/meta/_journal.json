@@ -1,0 +1,55 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1792940517607,
+      "tag": "0000_acoustic_shard",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1792941899460,
+      "tag": "0001_tense_the_enforcers",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1792946873277,
+      "tag": "0002_cuddly_deathstrike",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1792947960477,
+      "tag": "0003_rapid_unus",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1792949797033,
+      "tag": "0004_tricky_whiplash",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1792949911646,
+      "tag": "0005_graceful_silver_sable",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1792977458415,
+      "tag": "0006_eager_sentry",
+      "breakpoints": true
+    }
+  ]
+}

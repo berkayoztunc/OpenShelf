@@ -1,0 +1,140 @@
+/*
+ * OpenShelf theme — Tailwind v4. Import after `@import "tailwindcss";`
+ *
+ * Light = "warm minimal" (stone neutrals, indigo brand, amber accent).
+ * Dark  = "ink" (cool blue-black neutrals, translucent hairline borders, lifted indigo, tuned amber).
+ *
+ * `dark:` follows the manual toggle (data-theme) first, then the system preference.
+ * Every colour is a token: components should use bg-surface / text-ink / text-muted / border-line and the
+ * semantic families (success | warn | danger | info) x (text | -soft | -line) instead of palette colours.
+ */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) { @slot; }
+  @media (prefers-color-scheme: dark) { &:where(:root:not([data-theme="light"]), :root:not([data-theme="light"]) *) { @slot; } }
+}
+@theme {
+  --font-sans: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Fraunces Variable", "Fraunces", Georgia, serif;
+  --radius-xl: 12px;
+
+  /* surfaces + text */
+  --color-canvas: var(--os-canvas); --color-surface: var(--os-surface); --color-raised: var(--os-raised);
+  --color-hover: var(--os-hover); --color-ink: var(--os-ink); --color-muted: var(--os-muted); --color-faint: var(--os-faint);
+  --color-line: var(--os-line); --color-line-strong: var(--os-line-strong);
+
+  /* brand / accent */
+  --color-brand-50: var(--os-brand-50); --color-brand-100: var(--os-brand-100); --color-brand-200: var(--os-brand-200);
+  --color-brand-500: var(--os-brand-500); --color-brand-600: var(--os-brand); --color-brand-700: var(--os-brand-hover); --color-brand-900: var(--os-brand-900);
+  --color-brand-ink: var(--os-brand-ink);
+  --color-accent-400: var(--os-accent-400); --color-accent-500: var(--os-accent-eff); --color-accent-600: var(--os-accent-600);
+
+  /* semantic: text, soft tinted background, hairline */
+  --color-success: var(--os-success); --color-success-soft: var(--os-success-soft); --color-success-line: var(--os-success-line);
+  --color-warn: var(--os-warn); --color-warn-soft: var(--os-warn-soft); --color-warn-line: var(--os-warn-line);
+  --color-danger: var(--os-danger); --color-danger-soft: var(--os-danger-soft); --color-danger-line: var(--os-danger-line);
+  --color-info: var(--os-info); --color-info-soft: var(--os-info-soft); --color-info-line: var(--os-info-line);
+  /* solid data colours (charts, meters, dots) */
+  --color-data-ok: var(--os-data-ok); --color-data-warn: var(--os-data-warn); --color-data-bad: var(--os-data-bad); --color-data-info: var(--os-data-info); --color-data-muted: var(--os-data-muted);
+
+  --shadow-lift: var(--os-shadow-lift);
+  --shadow-soft: var(--os-shadow-soft);
+}
+
+/* ---------- Light ---------- */
+:root {
+  --os-canvas: #faf8f5; --os-surface: #ffffff; --os-raised: #ffffff; --os-hover: rgb(28 25 23 / .05);
+  --os-ink: #1c1917; --os-muted: #78716c; --os-faint: #a8a29e; --os-line: #e7e5e4; --os-line-strong: #d6d3d1;
+
+  --os-brand: var(--os-primary, #3b3f8f); --os-brand-hover: #2f3275; --os-brand-500: #5a5fb3;
+  --os-brand-50: #eef0fb; --os-brand-100: #dfe2f6; --os-brand-200: #c1c6ee; --os-brand-900: #1d1f4a;
+  --os-brand-ink: var(--os-primary, #3b3f8f);
+  --os-accent-400: #f0b95f; --os-accent-eff: var(--os-accent, #e8a33d); --os-accent-600: #c98a28;
+
+  --os-success: #047857; --os-success-soft: #ecfdf5; --os-success-line: rgb(5 150 105 / .28);
+  --os-warn: #92400e; --os-warn-soft: #fffbeb; --os-warn-line: rgb(217 119 6 / .32);
+  --os-danger: #b91c1c; --os-danger-soft: #fef2f2; --os-danger-line: rgb(220 38 38 / .28);
+  --os-info: #4338ca; --os-info-soft: #eef2ff; --os-info-line: rgb(79 70 229 / .26);
+  --os-data-ok: #10b981; --os-data-warn: #f59e0b; --os-data-bad: #ef4444; --os-data-info: #6366f1; --os-data-muted: #a8a29e;
+
+  --os-shadow-lift: 0 2px 4px rgb(28 25 23 / .04), 0 18px 40px -12px rgb(28 25 23 / .22);
+  --os-shadow-soft: 0 1px 2px rgb(28 25 23 / .04), 0 8px 24px -8px rgb(28 25 23 / .08);
+  --os-ring: var(--os-brand);
+  --os-scrim: rgb(20 17 15 / .5);
+  --os-glass: rgb(250 248 245 / .85);
+  --os-shimmer: rgb(255 255 255 / .45);
+  --os-skeleton: #e7e5e4;
+  color-scheme: light;
+}
+
+/* ---------- Dark ("ink") — declared twice: manual toggle, and system preference without a manual light override ---------- */
+:root.dark, :root[data-theme="dark"] {
+  --os-canvas: #0b0d12; --os-surface: #12151c; --os-raised: #1a1e28; --os-hover: rgb(255 255 255 / .06);
+  --os-ink: #e8eaf0; --os-muted: #9aa2b1; --os-faint: #6b7385; --os-line: rgb(255 255 255 / .08); --os-line-strong: rgb(255 255 255 / .15);
+
+  --os-brand: color-mix(in oklab, var(--os-primary, #3b3f8f) 40%, #5a60e6); --os-brand-hover: color-mix(in oklab, var(--os-brand) 84%, white); --os-brand-500: color-mix(in oklab, var(--os-brand) 80%, white);
+  --os-brand-50: color-mix(in srgb, var(--os-brand) 15%, transparent); --os-brand-100: color-mix(in srgb, var(--os-brand) 24%, transparent);
+  --os-brand-200: color-mix(in srgb, var(--os-brand) 38%, transparent); --os-brand-900: color-mix(in srgb, var(--os-brand) 30%, transparent);
+  --os-brand-ink: color-mix(in oklab, var(--os-primary, #3b3f8f) 25%, #b4b8ff);
+  --os-accent-400: #f2b75b; --os-accent-eff: color-mix(in oklab, var(--os-accent, #e8a33d) 55%, #f2b75b); --os-accent-600: #e0a449;
+
+  --os-success: #6ee7b7; --os-success-soft: rgb(16 185 129 / .13); --os-success-line: rgb(52 211 153 / .26);
+  --os-warn: #f6c56f; --os-warn-soft: rgb(245 158 11 / .13); --os-warn-line: rgb(245 176 60 / .28);
+  --os-danger: #fda4af; --os-danger-soft: rgb(244 63 94 / .14); --os-danger-line: rgb(251 113 133 / .3);
+  --os-info: #b4bbfd; --os-info-soft: rgb(129 140 248 / .15); --os-info-line: rgb(129 140 248 / .3);
+  --os-data-ok: #34d399; --os-data-warn: #f2b75b; --os-data-bad: #fb7185; --os-data-info: #8e93f5; --os-data-muted: #4b5365;
+
+  --os-shadow-lift: 0 0 0 1px rgb(255 255 255 / .07), 0 1px 0 rgb(255 255 255 / .06) inset, 0 16px 40px -12px rgb(0 0 0 / .65);
+  --os-shadow-soft: 0 0 0 1px rgb(255 255 255 / .02), 0 1px 0 rgb(255 255 255 / .04) inset, 0 6px 18px -8px rgb(0 0 0 / .55);
+  --os-ring: #8e93f5;
+  --os-scrim: rgb(3 5 10 / .62);
+  --os-glass: rgb(11 13 18 / .78);
+  --os-shimmer: rgb(255 255 255 / .06);
+  --os-skeleton: #1a1e28;
+  --os-hero-admin: radial-gradient(60% 55% at 18% 6%, rgb(99 102 241 / .40), transparent 70%), radial-gradient(55% 60% at 90% 95%, rgb(139 92 246 / .26), transparent 70%), #0b0d12;
+  --os-hero-store: radial-gradient(60% 80% at 12% 0%, rgb(99 102 241 / .22), transparent 70%), radial-gradient(50% 70% at 92% 4%, rgb(139 92 246 / .16), transparent 70%), radial-gradient(60% 60% at 70% 100%, rgb(79 70 229 / .12), transparent 70%), #0b0d12;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --os-canvas: #0b0d12; --os-surface: #12151c; --os-raised: #1a1e28; --os-hover: rgb(255 255 255 / .06);
+    --os-ink: #e8eaf0; --os-muted: #9aa2b1; --os-faint: #6b7385; --os-line: rgb(255 255 255 / .08); --os-line-strong: rgb(255 255 255 / .15);
+
+    --os-brand: color-mix(in oklab, var(--os-primary, #3b3f8f) 40%, #5a60e6); --os-brand-hover: color-mix(in oklab, var(--os-brand) 84%, white); --os-brand-500: color-mix(in oklab, var(--os-brand) 80%, white);
+    --os-brand-50: color-mix(in srgb, var(--os-brand) 15%, transparent); --os-brand-100: color-mix(in srgb, var(--os-brand) 24%, transparent);
+    --os-brand-200: color-mix(in srgb, var(--os-brand) 38%, transparent); --os-brand-900: color-mix(in srgb, var(--os-brand) 30%, transparent);
+    --os-brand-ink: color-mix(in oklab, var(--os-primary, #3b3f8f) 25%, #b4b8ff);
+    --os-accent-400: #f2b75b; --os-accent-eff: color-mix(in oklab, var(--os-accent, #e8a33d) 55%, #f2b75b); --os-accent-600: #e0a449;
+
+    --os-success: #6ee7b7; --os-success-soft: rgb(16 185 129 / .13); --os-success-line: rgb(52 211 153 / .26);
+    --os-warn: #f6c56f; --os-warn-soft: rgb(245 158 11 / .13); --os-warn-line: rgb(245 176 60 / .28);
+    --os-danger: #fda4af; --os-danger-soft: rgb(244 63 94 / .14); --os-danger-line: rgb(251 113 133 / .3);
+    --os-info: #b4bbfd; --os-info-soft: rgb(129 140 248 / .15); --os-info-line: rgb(129 140 248 / .3);
+    --os-data-ok: #34d399; --os-data-warn: #f2b75b; --os-data-bad: #fb7185; --os-data-info: #8e93f5; --os-data-muted: #4b5365;
+
+    --os-shadow-lift: 0 0 0 1px rgb(255 255 255 / .07), 0 1px 0 rgb(255 255 255 / .06) inset, 0 16px 40px -12px rgb(0 0 0 / .65);
+    --os-shadow-soft: 0 0 0 1px rgb(255 255 255 / .02), 0 1px 0 rgb(255 255 255 / .04) inset, 0 6px 18px -8px rgb(0 0 0 / .55);
+    --os-ring: #8e93f5;
+    --os-scrim: rgb(3 5 10 / .62);
+    --os-glass: rgb(11 13 18 / .78);
+    --os-shimmer: rgb(255 255 255 / .06);
+    --os-skeleton: #1a1e28;
+    --os-hero-admin: radial-gradient(60% 55% at 18% 6%, rgb(99 102 241 / .40), transparent 70%), radial-gradient(55% 60% at 90% 95%, rgb(139 92 246 / .26), transparent 70%), #0b0d12;
+    --os-hero-store: radial-gradient(60% 80% at 12% 0%, rgb(99 102 241 / .22), transparent 70%), radial-gradient(50% 70% at 92% 4%, rgb(139 92 246 / .16), transparent 70%), radial-gradient(60% 60% at 70% 100%, rgb(79 70 229 / .12), transparent 70%), #0b0d12;
+    color-scheme: dark;
+  }
+}
+
+body { background: var(--color-canvas); color: var(--color-ink); font-family: var(--font-sans); }
+
+@layer base {
+  :focus-visible { outline: 2px solid var(--os-ring); outline-offset: 2px; border-radius: 6px; }
+  ::selection { background: color-mix(in srgb, var(--os-brand) 32%, transparent); }
+  ::placeholder { color: var(--os-faint); opacity: 1; }
+  dialog { color: inherit; }
+  dialog::backdrop { background: var(--os-scrim); backdrop-filter: blur(4px); }
+  * { scrollbar-color: var(--os-line-strong) transparent; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--os-line-strong); border-radius: 999px; border: 2px solid transparent; background-clip: content-box; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--os-faint); background-clip: content-box; border: 2px solid transparent; }
+  ::-webkit-scrollbar-track { background: transparent; }
+}

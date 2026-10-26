@@ -1,0 +1,55 @@
+{
+  "name": "openshelf",
+  "private": true,
+  "version": "0.1.0",
+  "license": "MIT",
+  "packageManager": "pnpm@10.23.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "turbo run build && node tooling/deploy/assemble-site.mjs",
+    "build:packages": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "dev:site": "pnpm build && wrangler dev -c wrangler.jsonc --local",
+    "preview": "wrangler dev -c wrangler.jsonc --local",
+    "deploy": "wrangler d1 migrations apply DB --remote && wrangler deploy",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "db:generate": "pnpm --filter @openshelf/db generate",
+    "db:migrate:local": "pnpm --filter @openshelf/api exec wrangler d1 migrations apply openshelf --local",
+    "seed": "pnpm --filter @openshelf/seed seed",
+    "setup": "node tooling/setup/setup.mjs",
+    "setup:local": "node tooling/setup/setup.mjs --local",
+    "format": "prettier -w ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.15.0",
+    "eslint": "^9.15.0",
+    "prettier": "^3.3.0",
+    "turbo": "^2.3.0",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.15.0",
+    "wrangler": "^4.152.0"
+  },
+  "cloudflare": {
+    "bindings": {
+      "APP_ENCRYPTION_KEY": {
+        "description": "Required secret. Base64 of exactly 32 random bytes; encrypts stored integration credentials. Generate with: openssl rand -base64 32"
+      },
+      "SETUP_TOKEN": {
+        "description": "Required secret. One-time token you type at /admin/setup to create the first owner account. Generate with: openssl rand -hex 24"
+      },
+      "TURNSTILE_SECRET": {
+        "description": "Optional. Cloudflare Turnstile secret key for bot protection. Leave empty to disable."
+      },
+      "ALLOW_MOCK": {
+        "description": "Optional. Leave empty/unset on production. Set to \"true\" only on staging/demo to let the owner enable Mock mode (fake payments/SMS/email); it is still refused while a real payment provider is enabled."
+      },
+      "DB": {
+        "description": "D1 database for products, orders and settings (created automatically)."
+      }
+    }
+  }
+}

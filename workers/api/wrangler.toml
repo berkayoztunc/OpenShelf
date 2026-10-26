@@ -1,0 +1,26 @@
+name = "openshelf-api"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "openshelf"
+database_id = "REPLACE_WITH_D1_ID"
+migrations_dir = "migrations"
+
+# Optional: uncomment after enabling R2 (media falls back to D1 blobs if absent)
+# [[r2_buckets]]
+# binding = "MEDIA"
+# bucket_name = "openshelf-media"
+
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+STOREFRONT_ORIGIN = "http://localhost:5173"
+ADMIN_ORIGIN = "http://localhost:5174"
+API_ORIGIN = "http://localhost:8787"
+# Local dev only: allows enabling mock mode. Deployed Workers must set ALLOW_MOCK=true explicitly to allow it.
+ENVIRONMENT = "development"
+# Secrets (wrangler secret put): APP_ENCRYPTION_KEY (base64 32 bytes), SETUP_TOKEN, TURNSTILE_SECRET (optional)

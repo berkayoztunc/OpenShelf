@@ -1,0 +1,18 @@
+{
+  "name": "@openshelf/seed",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Demo data for OpenShelf (SQL + loader for local D1)",
+  "scripts": {
+    "generate": "node generate.mjs",
+    "seed": "node load.mjs",
+    "seed:dry-run": "node load.mjs --dry-run",
+    "typecheck": "node --check generate.mjs && node --check load.mjs && node --check generate-orders.mjs",
+    "lint": "node --check generate.mjs && node --check load.mjs && node --check generate-orders.mjs",
+    "test": "node generate.mjs --check",
+    "build": "echo 'nothing to build'",
+    "generate:orders": "node generate-orders.mjs",
+    "seed:orders": "node generate-orders.mjs && node load.mjs --file=orders.sql"
+  }
+}

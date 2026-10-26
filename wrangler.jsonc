@@ -1,0 +1,48 @@
+// OpenShelf: single-Worker deployment (canonical config used by "Deploy to Cloudflare", `pnpm deploy`, CI).
+// One Worker serves everything: storefront at "/", admin at "/admin/", API under /api/*, /webhooks/*, /media/*, /feeds/*.
+// workers/api/wrangler.toml is ONLY for local API-only development (`pnpm dev`).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "openshelf",
+  "main": "workers/api/src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Built by `pnpm build` (storefront at the root, admin under admin/).
+  "assets": {
+    "directory": "./dist-site",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    // These paths always hit the Worker first; everything else is served straight from static assets.
+    "run_worker_first": [
+      "/api/*", "/webhooks/*", "/media/*", "/feeds/*", "/mock/*",
+      "/sitemap.xml", "/sitemap-*", "/robots.txt", "/health", "/admin", "/admin/*",
+      // Storefront HTML routes: the Worker injects SEO head tags + a crawler snapshot into the SPA shell (workers/api/src/routes/storefront.ts).
+      // Listed explicitly (no negation patterns) so /assets/* and every other static file stay on the static fast path.
+      "/", "/products", "/products/*", "/product/*", "/category/*", "/legal/*", "/cart", "/checkout", "/order/*"
+    ]
+  },
+
+  // No database_id: Deploy to Cloudflare / Workers Builds provisions it automatically from this binding.
+  // (For manual deploys run `pnpm setup` or `wrangler d1 create openshelf`.)
+  "d1_databases": [
+    { "binding": "DB", "database_name": "openshelf", "migrations_dir": "workers/api/migrations" }
+  ],
+
+  "triggers": { "crons": ["* * * * *"] },
+
+  // Origins default to the origin of each request (single-domain deployment). Set them only to pin a strict allowlist,
+  // e.g. when you serve the storefront from a different domain than the API.
+  // "vars": { "STOREFRONT_ORIGIN": "https://shop.example.com", "ADMIN_ORIGIN": "https://shop.example.com", "API_ORIGIN": "https://shop.example.com" },
+
+  // Mock mode (offline fake payments/SMS/email) is DISABLED on deployed Workers by default. Never enable it on a live store.
+  // To allow the owner to switch it on (staging/demo only) add ALLOW_MOCK=true as a var or secret, e.g.
+  //   "vars": { "ALLOW_MOCK": "true" }   (merge with the origin vars above if you use both)
+  // Even then it is refused while a real payment provider is enabled or real paid orders are in flight.
+
+  // Optional media storage. R2 is an OPT-IN paid add-on on your account (it needs R2 enabled and a payment method).
+  // Without it, uploaded media is stored in D1. Uncomment to use R2:
+  // "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "openshelf-media" }],
+
+  "observability": { "enabled": true }
+}

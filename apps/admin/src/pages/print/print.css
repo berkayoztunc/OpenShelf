@@ -1,0 +1,64 @@
+/* Printable documents: light, black on white, independent of the admin theme. */
+.pr-stage { background: var(--color-canvas); min-height: 100vh; padding: 0 0 48px; }
+.pr-toolbar { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 16px; background: var(--color-surface); border-bottom: 1px solid var(--color-line); color: var(--color-ink); }
+.pr-notice { margin: 12px auto; max-width: 210mm; padding: 10px 14px; border-radius: 8px; font-size: 13px; background: var(--color-warn-soft); border: 1px solid var(--color-warn-line); color: var(--color-warn); }
+.pr-doc-wrap { display: flex; flex-direction: column; align-items: center; gap: 20px; padding: 20px 12px; }
+
+.pr-page { position: relative; box-sizing: border-box; background: #fff; color: #000; font-family: inherit; font-size: 10.5pt; line-height: 1.35; box-shadow: 0 2px 18px rgb(0 0 0 / .25); overflow: hidden; color-scheme: light; }
+.pr-page * { color: inherit; }
+.pr-a4 { width: 210mm; min-height: 297mm; padding: 14mm 14mm 16mm; }
+.pr-label { width: 100mm; height: 150mm; padding: 5mm; display: flex; flex-direction: column; gap: 3mm; font-size: 9pt; }
+.pr-screen-only { margin-top: 10mm; font-size: 10pt; }
+.pr-screen-only a { color: #0645ad; text-decoration: underline; }
+
+.pr-head { display: flex; justify-content: space-between; gap: 12mm; border-bottom: 1.5pt solid #000; padding-bottom: 4mm; margin-bottom: 5mm; }
+.pr-head h1 { font-size: 17pt; font-weight: 700; margin: 0; }
+.pr-head p { margin: 1mm 0 0; font-size: 10pt; }
+.pr-meta { display: flex; flex-direction: column; align-items: flex-end; font-size: 10pt; }
+.pr-meta strong { font-size: 14pt; }
+.pr-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 8mm; margin-bottom: 6mm; }
+.pr-cols-3 { grid-template-columns: repeat(3, 1fr); font-size: 9.5pt; }
+.pr-cols-3 ul { margin: 0; padding-left: 4mm; }
+.pr-page h2 { font-size: 8.5pt; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; margin: 0 0 1.5mm; border-bottom: .5pt solid #000; padding-bottom: 1mm; }
+.pr-addr { font-style: normal; display: flex; flex-direction: column; }
+.pr-table { width: 100%; border-collapse: collapse; margin-bottom: 5mm; }
+.pr-table th { text-align: left; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1pt solid #000; padding: 1.5mm 2mm; }
+.pr-table td { border-bottom: .5pt solid #888; padding: 2mm; vertical-align: top; }
+.pr-table .r, .pr-sum .r { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pr-table small, .pr-sum small { color: #444; }
+.pr-table td small { display: block; font-size: 8pt; }
+.pr-sum { display: flex; justify-content: flex-end; margin-bottom: 6mm; }
+.pr-sum table { width: 90mm; border-collapse: collapse; }
+.pr-sum td { padding: 1mm 2mm; }
+.pr-grand td { border-top: 1.5pt solid #000; font-weight: 700; font-size: 12pt; padding-top: 2mm; }
+.pr-total { text-align: right; font-size: 12pt; }
+.pr-note { margin: 4mm 0; font-size: 10pt; white-space: pre-wrap; }
+.pr-note p { margin: 0; }
+.pr-foot { margin-top: 12mm; text-align: center; font-size: 11pt; font-weight: 600; }
+.pr-disclaimer { margin-top: 8mm; padding: 3mm; border: .75pt dashed #000; font-size: 8.5pt; }
+.pr-watermark { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; font-size: 46pt; font-weight: 800; line-height: 1.15; letter-spacing: .04em; text-transform: uppercase; color: rgb(0 0 0 / .08) !important; transform: rotate(-30deg); pointer-events: none; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+
+/* 100 x 150 mm shipping label */
+.pr-label small { display: block; font-size: 6.5pt; text-transform: uppercase; letter-spacing: .08em; color: #333; }
+.pr-label-from { border-bottom: .75pt solid #000; padding-bottom: 2mm; font-size: 8pt; }
+.pr-label-from strong { display: block; font-size: 9.5pt; }
+.pr-label-to { flex: 1; border: 1.5pt solid #000; border-radius: 2mm; padding: 3mm; display: flex; flex-direction: column; gap: 1mm; overflow: hidden; }
+.pr-label-name { font-size: 16pt; font-weight: 800; line-height: 1.15; }
+.pr-label-phone { font-size: 11pt; font-weight: 600; }
+.pr-label-street { font-size: 11.5pt; line-height: 1.25; }
+.pr-label-city { font-size: 13pt; font-weight: 700; margin-top: auto; }
+.pr-label-carrier { display: flex; justify-content: space-between; font-size: 8pt; font-weight: 700; margin-bottom: 1mm; }
+.pr-label-codetext { margin-top: 1.5mm; text-align: center; font: 700 11pt ui-monospace, "SFMono-Regular", Menlo, monospace; letter-spacing: .12em; }
+.pr-label-foot { display: grid; grid-template-columns: 1.3fr .9fr 1fr; gap: 2mm; border-top: .75pt solid #000; padding-top: 2mm; }
+.pr-label-foot strong { font-size: 11pt; }
+
+@media print {
+  html, body { background: #fff !important; color: #000 !important; margin: 0 !important; padding: 0 !important; }
+  .pr-stage { background: #fff; padding: 0; min-height: 0; }
+  .pr-doc-wrap { display: block; padding: 0; }
+  .pr-page { box-shadow: none; break-after: page; page-break-after: always; margin: 0; }
+  .pr-page:last-child { break-after: auto; page-break-after: auto; }
+  .pr-a4 { width: auto; min-height: 0; padding: 0; }
+  .pr-screen-only, .pr-notice, .pr-toolbar { display: none !important; }
+  * { box-shadow: none !important; text-shadow: none !important; }
+}

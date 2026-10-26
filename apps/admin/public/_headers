@@ -1,0 +1,10 @@
+# Cloudflare Pages response headers for the admin SPA.
+# Replace https://api.example.com (connect-src) with your API origin (API_ORIGIN) before deploying.
+# The admin intentionally allows NO third-party/tracking scripts.
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+  X-Frame-Options: DENY
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://api.example.com; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'

@@ -1,0 +1,18 @@
+{
+  "name": "@openshelf/setup",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "OpenShelf guided Cloudflare setup (future create-openshelf entry point)",
+  "bin": { "openshelf-setup": "./setup.mjs" },
+  "scripts": {
+    "setup": "node setup.mjs",
+    "setup:local": "node setup.mjs --local",
+    "dry-run": "node setup.mjs --dry-run",
+    "typecheck": "node --check setup.mjs",
+    "lint": "node --check setup.mjs",
+    "test": "node setup.mjs --dry-run --yes > /dev/null",
+    "build": "echo 'nothing to build'"
+  },
+  "engines": { "node": ">=20" }
+}

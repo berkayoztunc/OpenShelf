@@ -1,0 +1,1 @@
+ALTER TABLE `payments` ADD `is_mock` integer DEFAULT false NOT NULL;

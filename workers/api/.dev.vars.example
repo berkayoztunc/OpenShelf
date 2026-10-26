@@ -1,0 +1,7 @@
+# base64 of 32 random bytes:  openssl rand -base64 32
+APP_ENCRYPTION_KEY=
+# one-time token required for first-admin creation: openssl rand -hex 24
+SETUP_TOKEN=
+TURNSTILE_SECRET=
+# Local development only: allow Mock mode (offline fake payments/SMS/email). NEVER set on a production deployment.
+ALLOW_MOCK=true

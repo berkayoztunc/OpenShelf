@@ -1,0 +1,6 @@
+packages:
+  - apps/*
+  - workers/*
+  - packages/*
+  - packages/integrations/*
+  - tooling/*

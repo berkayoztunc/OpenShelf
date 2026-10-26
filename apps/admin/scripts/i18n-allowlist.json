@@ -1,0 +1,6 @@
+[
+  "src/components/ui.tsx::success",
+  "src/components/ui.tsx::error",
+  "src/components/ui.tsx::info",
+  "src/pages/Login.tsx::OpenShelf"
+]
