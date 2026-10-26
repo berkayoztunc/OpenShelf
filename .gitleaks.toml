@@ -1,0 +1,10 @@
+title = "OpenShelf gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fake credentials used as test fixtures"
+paths = [
+  '''(^|/)test/.*\.test\.tsx?$''',
+]
