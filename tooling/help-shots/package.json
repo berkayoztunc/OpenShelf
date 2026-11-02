@@ -5,5 +5,5 @@
   "type": "module",
   "description": "Repeatable admin help-guide screenshot capture (TR + EN).",
   "scripts": { "capture": "node capture.mjs" },
-  "devDependencies": { "playwright-core": "^1.49.0", "sharp": "^0.33.5" }
+  "devDependencies": { "playwright-core": "^1.49.0", "sharp": "^0.35.5" }
 }
