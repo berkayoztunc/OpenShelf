@@ -5,7 +5,7 @@ import type { z } from "zod";
 import { api, errMsg } from "../../lib/api";
 import { useAdmin } from "../../lib/auth";
 import { useSettings, type AllSettings } from "../../lib/settings";
-import { Badge, Card, ConfirmDialog, ErrorState, Loading, cx, useToast } from "../../components/ui";
+import { Badge, Button, Card, ConfirmDialog, ErrorState, Loading, Modal, TextField, cx, useToast } from "../../components/ui";
 import { HelpText, HelpTip } from "../../components/help/HelpTip";
 import { useT } from "../../i18n";
 import { TermStrip } from "./TermStrip";
@@ -39,6 +39,7 @@ export default function System() {
   const canToggle = isOwner && (on || !blockedByConfig);
 
   return (
+    <div className="space-y-6">
     <Card title={t("settings.system.card.title")}>
       <div className="flex items-start justify-between gap-4">
         <div className="max-w-prose">
@@ -65,6 +66,35 @@ export default function System() {
         message={confirm ? t("settings.system.mock.enableMessage") : t("settings.system.mock.disableMessage")}
         confirmLabel={confirm ? t("settings.system.mock.enableAction") : t("settings.system.mock.disableAction")}
         onConfirm={() => confirm !== null && save.mutate(confirm)} onClose={() => setConfirm(null)} />
+    </Card>
+    {isOwner && <DangerZone />}
+    </div>
+  );
+}
+
+/** Owner-only factory reset: needs the typed word and the owner's password; the server wipes commercial data + configuration. */
+function DangerZone() {
+  const { t } = useT();
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [word, setWord] = useState(""); const [pw, setPw] = useState("");
+  const reset = useMutation({
+    mutationFn: () => api.post("/api/admin/system/reset", { confirm: word, password: pw }),
+    onSuccess: () => { toast.success(t("settings.system.reset.done")); setOpen(false); setTimeout(() => window.location.reload(), 800); },
+    onError: (e) => toast.error(errMsg(e)),
+  });
+  const ready = word === "SIFIRLA" && pw.length > 0;
+  return (
+    <Card title={t("settings.system.reset.title")}>
+      <p className="max-w-prose text-sm text-muted">{t("settings.system.reset.body")}</p>
+      <p className="mt-2 max-w-prose text-xs text-muted">{t("settings.system.reset.keeps")}</p>
+      <div className="mt-4"><Button variant="danger" onClick={() => { setWord(""); setPw(""); setOpen(true); }}>{t("settings.system.reset.action")}</Button></div>
+      <Modal open={open} onClose={() => setOpen(false)} title={t("settings.system.reset.confirmTitle")}
+        footer={<><Button variant="ghost" onClick={() => setOpen(false)}>{t("common.cancel")}</Button><Button variant="danger" loading={reset.isPending} disabled={!ready} onClick={() => ready && reset.mutate()}>{t("settings.system.reset.confirm")}</Button></>}>
+        <div className="space-y-3"><p className="text-sm text-muted">{t("settings.system.reset.confirmBody")}</p>
+          <TextField label={t("settings.system.reset.typeLabel")} value={word} onChange={(e) => setWord(e.target.value)} autoComplete="off" />
+          <TextField label={t("settings.system.reset.passwordLabel")} type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="current-password" /></div>
+      </Modal>
     </Card>
   );
 }

@@ -1,14 +1,16 @@
 import { Hono } from "hono";
-import { desc, eq } from "drizzle-orm";
-import { categories, customers, integrationConfigs, orders, products } from "@openshelf/db";
+import { desc, eq, sql } from "drizzle-orm";
+import { z } from "zod";
+import { admins, categories, customers, integrationConfigs, orders, products } from "@openshelf/db";
 import type { ProductInput } from "@openshelf/shared";
 import type { AppEnv } from "../env";
-import { ApiError, notFound } from "../lib/http";
+import { ApiError, body, notFound } from "../lib/http";
+import { verifyPassword } from "../lib/crypto";
 import { audit } from "../lib/audit";
 import { requireRole } from "../middleware/auth";
 import { hydrateProducts } from "../lib/catalog";
 import { parseCsv, toCsv } from "../lib/csv";
-import { getAllSettings, getSettings } from "../lib/settings";
+import { clearSettingsCache, getAllSettings, getSettings } from "../lib/settings";
 import { writeProduct } from "./admin-catalog";
 import { ProductInput as ProductInputSchema } from "@openshelf/shared";
 
@@ -94,4 +96,32 @@ adminData.post("/import/products", requireRole("admin"), async (c) => {
   }
   await audit(c, "import.products", "product", undefined, { created: result.created, updated: result.updated, errors: result.errors.length });
   return c.json(result);
+});
+
+/**
+ * Tables wiped by the factory reset. NOT wiped: admins + sessions (so the owner stays in), login/rate-limit state, setup tokens,
+ * audit log (the reset itself is recorded there) and the single `stores` row.
+ */
+export const RESET_TABLES = [
+  "store_settings", "integration_configs", "media", "customers", "addresses", "customer_consents", "categories", "products", "product_variants", "product_images",
+  "inventory", "inventory_movements", "inventory_reservations", "channel_prices", "channel_listings", "product_mappings", "carts", "cart_items", "coupons",
+  "orders", "order_items", "payments", "payment_events", "refunds", "shipments", "shipment_events", "invoices", "invoice_events", "integration_events", "outbox_jobs",
+  "sync_cursors", "webhook_receipts", "marketing_events", "utm_attributions", "mock_messages", "notification_log", "slug_redirects", "manual_invoices",
+  "outbound_emails", "trendyol_calls", "mock_state",
+] as const;
+
+const ResetBody = z.object({ confirm: z.literal("SIFIRLA"), password: z.string().min(1).max(200) });
+
+/** Owner-only factory reset of commercial data and configuration. Irreversible: needs the typed word AND the owner's password. */
+adminData.post("/system/reset", requireRole("owner"), async (c) => {
+  const b = await body(c, ResetBody); const db = c.get("db"); const a = c.get("admin")!;
+  const [row] = await db.select().from(admins).where(eq(admins.id, a.id)).limit(1);
+  if (!row || !(await verifyPassword(b.password, row.passwordHash))) throw new ApiError(400, "invalid_password", "Password is incorrect");
+  const counts: Record<string, number> = {};
+  for (const t of RESET_TABLES) counts[t] = ((await db.all(sql.raw(`SELECT COUNT(*) AS n FROM ${t}`))) as { n: number }[])[0]?.n ?? 0;
+  // FKs exist between these tables: defer the check to commit so delete order does not matter (everything referenced is wiped together)
+  await db.batch([db.run(sql`PRAGMA defer_foreign_keys = ON`), ...RESET_TABLES.map((t) => db.run(sql.raw(`DELETE FROM ${t}`)))] as unknown as [any, ...any[]]);
+  clearSettingsCache();
+  await audit(c, "system.reset", "system", "factory", { deleted: Object.fromEntries(Object.entries(counts).filter(([, n]) => n > 0)) });
+  return c.json({ ok: true, deleted: counts });
 });
