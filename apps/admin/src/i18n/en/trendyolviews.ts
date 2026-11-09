@@ -590,5 +590,5 @@ export const trendyolviews = {
   "trendyolviews.import.state.error": "Failed",
   "trendyolviews.import.dryTag": "preview, nothing written",
   "trendyolviews.import.truth": "Source of truth: Trendyol",
-  "trendyolviews.import.stats": "{pages} page(s) · {variants} variant(s) · {linked} linked · {created} created · {updated} updated · {skipped} skipped · {stockChanged} stock change(s)",
+  "trendyolviews.import.stats": "{pages} page(s) · {variants} variant(s) · {linked} linked · {created} created · {updated} updated · {skipped} skipped · {stockChanged} stock change(s) · {categories} categorie(s) created",
 } satisfies Record<string, string>;

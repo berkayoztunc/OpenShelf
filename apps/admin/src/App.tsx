@@ -28,6 +28,7 @@ const Audit = lazy(() => import("./pages/Audit"));
 const DataPage = lazy(() => import("./pages/Data"));
 const Help = lazy(() => import("./pages/Help"));
 const Trendyol = lazy(() => import("./pages/trendyol/Trendyol"));
+const Geliver = lazy(() => import("./pages/Geliver"));
 
 export function App() {
   return (
@@ -61,6 +62,7 @@ export function App() {
           <Route path="audit" element={<Audit />} />
           <Route path="data" element={<DataPage />} />
           <Route path="trendyol/*" element={<Trendyol />} />
+          <Route path="geliver" element={<Geliver />} />
           <Route path="help" element={<Help />} />
           <Route path="help/:section" element={<Help />} />
           <Route path="*" element={<Navigate to="/" replace />} />

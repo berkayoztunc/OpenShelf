@@ -3,7 +3,7 @@ import {
   categories, channelListings, channelPrices, inventory, inventoryMovements, orderItems, orders, outboxJobs, productImages, productMappings,
   productVariants, products, syncCursors,
 } from "@openshelf/db";
-import type { MarketplaceOrder, MarketplaceProduct, MarketplaceProductVariant, MarketplaceProvider, MarketplaceStockUpdate } from "@openshelf/integration-sdk";
+import type { MarketplaceCategory, MarketplaceOrder, MarketplaceProduct, MarketplaceProductVariant, MarketplaceProvider, MarketplaceStockUpdate } from "@openshelf/integration-sdk";
 import { MAX_INVENTORY_BATCH } from "./endpoints";
 import { computeStockDrift } from "./drift";
 
@@ -173,9 +173,9 @@ const CHUNK = 90; // D1 allows 100 bound parameters per statement
 const BATCH_SIZE = 100;
 
 export interface ImportTotals {
-  pages: number; contents: number; variants: number; linked: number; created: number; updated: number; skipped: number; stockChanged: number;
+  pages: number; contents: number; variants: number; linked: number; created: number; updated: number; skipped: number; stockChanged: number; categories: number;
 }
-export const emptyTotals = (): ImportTotals => ({ pages: 0, contents: 0, variants: 0, linked: 0, created: 0, updated: 0, skipped: 0, stockChanged: 0 });
+export const emptyTotals = (): ImportTotals => ({ pages: 0, contents: 0, variants: 0, linked: 0, created: 0, updated: 0, skipped: 0, stockChanged: 0, categories: 0 });
 export interface ImportStatus {
   runId: string; state: "queued" | "running" | "done" | "error"; dryRun: boolean; createMissing: boolean; sourceOfTruth: "local" | "trendyol";
   startedAt: string; finishedAt?: string; totals: ImportTotals; error?: string;
@@ -201,6 +201,56 @@ export async function loadImportStatus(db: any): Promise<ImportStatus | null> {
 const optionsTitle = (o?: Record<string, string>) => (o && Object.keys(o).length ? Object.values(o).join(" / ") : null);
 
 /**
+ * Maps each remote product to a local category id (product externalId -> category id), creating what is missing:
+ *  1. local category `ty-cat-<trendyolId>` (created by an earlier import) is reused,
+ *  2. else a local category with the same name is reused (so your own categories are not duplicated),
+ *  3. else the category and ALL its ancestors are created from Trendyol's category tree (fetched once, only when needed).
+ * If the tree cannot be fetched, a flat category (no parent) is created from the product's category name instead.
+ */
+async function resolveCategories(
+  db: any, remote: MarketplaceProduct[], stmts: unknown[], fetchTree: (() => Promise<MarketplaceCategory[]>) | undefined, t: { categories: number },
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const wanted = remote.filter((p) => p.categoryId || p.category);
+  if (!wanted.length) return out;
+  const existing: any[] = await db.select().from(categories);
+  const ids = new Set<string>(existing.map((c) => c.id));
+  const byName = new Map<string, string>(existing.map((c) => [String(c.nameTr).toLowerCase(), c.id as string]));
+  const localId = (extId: string) => `ty-cat-${extId}`;
+  const missing: MarketplaceProduct[] = [];
+  for (const p of wanted) {
+    if (p.categoryId && ids.has(localId(p.categoryId))) out.set(p.externalId, localId(p.categoryId));
+    else if (p.category && byName.has(p.category.toLowerCase())) out.set(p.externalId, byName.get(p.category.toLowerCase())!);
+    else missing.push(p);
+  }
+  if (!missing.length) return out;
+
+  let tree = new Map<string, MarketplaceCategory>();
+  if (fetchTree && missing.some((p) => p.categoryId)) {
+    try { tree = new Map((await fetchTree()).map((c) => [c.externalId, c])); } catch { /* flat fallback below */ }
+  }
+  const add = (id: string, name: string, parent: string | null) => {
+    if (ids.has(id)) return;
+    ids.add(id); byName.set(name.toLowerCase(), id); t.categories++;
+    stmts.push(db.insert(categories).values({ id, slug: `${slugify(name)}-${id.replace(/^ty-cat-/, "")}`.slice(0, 100), nameTr: name, parentId: parent }).onConflictDoNothing());
+  };
+  for (const p of missing) {
+    const leaf = p.categoryId ? tree.get(p.categoryId) : undefined;
+    if (p.categoryId && leaf) {
+      const chain: MarketplaceCategory[] = [];
+      for (let n: MarketplaceCategory | undefined = leaf, guard = 0; n && guard < 20; n = n.parentId ? tree.get(n.parentId) : undefined, guard++) chain.unshift(n);
+      chain.forEach((n, i) => add(localId(n.externalId), n.name, i > 0 ? localId(chain[i - 1]!.externalId) : null)); // parents first
+      out.set(p.externalId, localId(p.categoryId));
+    } else if (p.category) {
+      const id = p.categoryId ? localId(p.categoryId) : `ty-cat-n-${slugify(p.category)}`;
+      add(id, p.category, null);
+      out.set(p.externalId, byName.get(p.category.toLowerCase()) ?? id);
+    }
+  }
+  return out;
+}
+
+/**
  * Applies ONE page of Trendyol products to the local catalog. Idempotent: ids of created rows are derived from Trendyol ids, so a
  * re-run (retry, overlapping schedules) updates instead of duplicating.
  *  - match order: existing trendyol mapping (barcode) -> local variant barcode -> local sku == stockCode/barcode
@@ -209,9 +259,9 @@ const optionsTitle = (o?: Record<string, string>) => (o && Object.keys(o).length
  */
 export async function applyTrendyolProducts(
   db: any, remote: MarketplaceProduct[],
-  opts: { sourceOfTruth: "local" | "trendyol"; createMissing: boolean; dryRun: boolean; now?: Date },
+  opts: { sourceOfTruth: "local" | "trendyol"; createMissing: boolean; dryRun: boolean; now?: Date; fetchCategories?: () => Promise<MarketplaceCategory[]> },
 ): Promise<Omit<ImportTotals, "pages">> {
-  const t: Omit<ImportTotals, "pages"> = { contents: remote.length, variants: 0, linked: 0, created: 0, updated: 0, skipped: 0, stockChanged: 0 };
+  const t: Omit<ImportTotals, "pages"> = { contents: remote.length, variants: 0, linked: 0, created: 0, updated: 0, skipped: 0, stockChanged: 0, categories: 0 };
   const truth = opts.sourceOfTruth === "trendyol";
   const now = opts.now ?? new Date();
   const all = remote.flatMap((p) => p.variants.map((v) => ({ p, v })));
@@ -236,10 +286,8 @@ export async function applyTrendyolProducts(
   const matchedIds = uniq([...variantsById.keys()]);
   const invRows: any[] = (await Promise.all(chunks(matchedIds, CHUNK).map((c) => db.select().from(inventory).where(inArray(inventory.variantId, c))))).flat();
   const invBy = new Map<string, any>(invRows.map((r) => [r.variantId, r]));
-  const existingCats: any[] = opts.createMissing ? await db.select().from(categories) : [];
-  const catBy = new Map<string, string>(existingCats.map((c) => [String(c.nameTr).toLowerCase(), c.id as string]));
-
   const stmts: unknown[] = [];
+  const catOf = opts.dryRun || !(opts.createMissing || truth) ? new Map<string, string>() : await resolveCategories(db, remote, stmts, opts.fetchCategories, t);
   const usedSkus = new Set<string>(); const contentDone = new Set<string>(); const newProducts = new Set<string>();
 
   const setStockAndPrice = (variantId: string, v: MarketplaceProductVariant, current: any | undefined) => {
@@ -261,7 +309,8 @@ export async function applyTrendyolProducts(
       .onConflictDoUpdate({ target: [channelListings.variantId, channelListings.channel], set: { externalId: p.externalId, lastError: null, ...(truth ? { lastSyncedStock: v.quantity, lastSyncedAt: now } : {}) } }));
   };
   const writeContent = (productId: string, p: MarketplaceProduct) => {
-    stmts.push(db.update(products).set({ nameTr: p.title || "Untitled", descriptionTr: p.description ?? null, brand: p.brand ?? null, updatedAt: now }).where(eq(products.id, productId)));
+    const categoryId = catOf.get(p.externalId);
+    stmts.push(db.update(products).set({ nameTr: p.title || "Untitled", descriptionTr: p.description ?? null, brand: p.brand ?? null, ...(categoryId ? { categoryId } : {}), updatedAt: now }).where(eq(products.id, productId)));
     stmts.push(db.delete(productImages).where(eq(productImages.productId, productId)));
     p.images.forEach((url, i) => stmts.push(db.insert(productImages).values({ id: `${productId}:${i}`, productId, url, alt: p.title.slice(0, 200), position: i })));
   };
@@ -290,15 +339,7 @@ export async function applyTrendyolProducts(
     const productId = `ty-${p.externalId}`;
     if (!newProducts.has(productId)) {
       newProducts.add(productId);
-      let categoryId: string | null = null;
-      if (p.category) {
-        const key = p.category.toLowerCase();
-        categoryId = catBy.get(key) ?? null;
-        if (!categoryId) {
-          categoryId = `ty-cat-${slugify(p.category)}`; catBy.set(key, categoryId);
-          stmts.push(db.insert(categories).values({ id: categoryId, slug: `${slugify(p.category)}-ty`, nameTr: p.category }).onConflictDoNothing());
-        }
-      }
+      const categoryId = catOf.get(p.externalId) ?? null;
       stmts.push(db.insert(products).values({ id: productId, slug: `${slugify(p.title)}-${p.externalId}`, categoryId, nameTr: p.title || "Untitled", descriptionTr: p.description ?? null, brand: p.brand ?? null, status: "draft" }).onConflictDoNothing());
       p.images.forEach((url, i) => stmts.push(db.insert(productImages).values({ id: `${productId}:${i}`, productId, url, alt: p.title.slice(0, 200), position: i }).onConflictDoNothing()));
     }
@@ -332,7 +373,7 @@ export const importProducts: JobHandler = async (job, ctx) => {
   };
   try {
     const page = await provider.fetchProducts(job.payload?.cursor);
-    const r = await applyTrendyolProducts(ctx.db, page.products, { sourceOfTruth, createMissing, dryRun });
+    const r = await applyTrendyolProducts(ctx.db, page.products, { sourceOfTruth, createMissing, dryRun, fetchCategories: provider.fetchCategories?.bind(provider) });
     totals.pages++;
     for (const k of Object.keys(r) as (keyof typeof r)[]) totals[k] += r[k];
     if (page.nextCursor) {

@@ -2,11 +2,11 @@ import { z } from "zod";
 import type { OrderStatus } from "@openshelf/shared";
 import type {
   AdapterDeps, AdapterFactory, HealthResult, IntegrationCredentials, IntegrationManifest,
-  MarketplaceOrder, MarketplaceProduct, MarketplaceProvider, MarketplaceStockUpdate,
+  MarketplaceCategory, MarketplaceOrder, MarketplaceProduct, MarketplaceProvider, MarketplaceStockUpdate,
 } from "@openshelf/integration-sdk";
 import type { TrendyolCallBody, TrendyolCallResult, TrendyolEnv, TrendyolOperation } from "@openshelf/shared";
 import {
-  MAX_INVENTORY_BATCH, MAX_ORDER_WINDOW_MS, MAX_QUANTITY, ORDER_PAGE_SIZE, PRODUCT_PAGE_SIZE, alternativeDeliveryPath, approvedProductsPath, assertAllowed,
+  MAX_INVENTORY_BATCH, MAX_ORDER_WINDOW_MS, MAX_QUANTITY, ORDER_PAGE_SIZE, CATEGORY_TREE_PATH, PRODUCT_PAGE_SIZE, alternativeDeliveryPath, approvedProductsPath, assertAllowed,
   batchResultPath, hostFor, inventoryUpdatePath, shipmentPackagesPath, shipmentPackagesStreamPath,
 } from "./endpoints";
 import { mapTrendyolStatus } from "./status";
@@ -109,6 +109,7 @@ export function mapContent(c: any): MarketplaceProduct {
     externalId: String(c.contentId), mainId: c.productMainId ? String(c.productMainId) : undefined,
     title: String(c.title ?? ""), description: c.description ? String(c.description) : undefined,
     brand: c.brand?.name ? String(c.brand.name) : undefined, category: c.category?.name ? String(c.category.name) : undefined,
+    categoryId: c.category?.id != null ? String(c.category.id) : undefined,
     images: (c.images ?? []).map((i: any) => i?.url).filter((u: unknown): u is string => typeof u === "string" && /^https:\/\//.test(u)),
     variants: (c.variants ?? []).filter((v: any) => v?.barcode).map((v: any) => {
       const sale = toMinor(v.price?.salePrice ?? v.salePrice);
@@ -121,6 +122,21 @@ export function mapContent(c: any): MarketplaceProduct {
       };
     }),
   };
+}
+
+/** Flattens getCategoryTree (array, or { categories: [...] }) into parent-linked nodes. */
+export function flattenCategoryTree(body: any): MarketplaceCategory[] {
+  const out: MarketplaceCategory[] = [];
+  const walk = (nodes: any[], parent: string | null) => {
+    for (const n of nodes ?? []) {
+      if (n?.id == null) continue;
+      const id = String(n.id);
+      out.push({ externalId: id, parentId: n.parentId != null ? String(n.parentId) : parent, name: String(n.name ?? id) });
+      walk(n.subCategories ?? [], id);
+    }
+  };
+  walk(Array.isArray(body) ? body : body?.categories ?? [], null);
+  return out;
 }
 
 export class TrendyolProvider implements MarketplaceProvider {
@@ -188,6 +204,8 @@ export class TrendyolProvider implements MarketplaceProvider {
     }
     return { ok: errors.length === 0, batchId: lastBatch, ...(errors.length ? { errors } : {}) };
   }
+
+  async fetchCategories(): Promise<MarketplaceCategory[]> { return flattenCategoryTree(await this.call("GET", CATEGORY_TREE_PATH)); }
 
   /** Pages through approved products. Cursor = next page number (Trendyol caps page x size at 10,000 contents). */
   async fetchProducts(cursor?: string) {

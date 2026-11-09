@@ -86,9 +86,15 @@ export interface MarketplaceProductVariant {
 /** A marketplace product ("content"): shared title/description/images plus its variants. */
 export interface MarketplaceProduct {
   externalId: string; mainId?: string; title: string; description?: string; brand?: string; category?: string;
+  /** marketplace category id (leaf); resolve its ancestors with fetchCategories */
+  categoryId?: string;
   images: string[]; variants: MarketplaceProductVariant[];
 }
+/** One node of the marketplace category tree, flattened. */
+export interface MarketplaceCategory { externalId: string; parentId: string | null; name: string }
 export interface MarketplaceProvider extends OpenShelfIntegration {
+  /** Whole category tree, flattened (parents may appear after children). */
+  fetchCategories?(): Promise<MarketplaceCategory[]>;
   /** Which side owns stock/price/content. "trendyol" turns push off and pulls products on a schedule. */
   readonly sourceOfTruth?: "local" | "trendyol";
   /** Pages through the seller's catalog (approved products). Cursor is opaque. */

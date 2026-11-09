@@ -590,5 +590,5 @@ export const trendyolviews = {
   "trendyolviews.import.state.error": "Başarısız",
   "trendyolviews.import.dryTag": "önizleme, hiçbir şey yazılmadı",
   "trendyolviews.import.truth": "Doğruluk kaynağı: Trendyol",
-  "trendyolviews.import.stats": "{pages} sayfa · {variants} varyant · {linked} bağlandı · {created} oluşturuldu · {updated} güncellendi · {skipped} atlandı · {stockChanged} stok değişimi",
+  "trendyolviews.import.stats": "{pages} sayfa · {variants} varyant · {linked} bağlandı · {created} oluşturuldu · {updated} güncellendi · {skipped} atlandı · {stockChanged} stok değişimi · {categories} kategori oluşturuldu",
 } satisfies Record<string, string>;

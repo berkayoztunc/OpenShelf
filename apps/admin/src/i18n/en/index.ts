@@ -16,6 +16,7 @@ import { integrations } from "./integrations";
 import { errors } from "./errors";
 import { trendyol } from "./trendyol";
 import { trendyolviews } from "./trendyolviews";
+import { geliver } from "./geliver";
 
 /** Merged dictionary. Each namespace file is owned by one area (see docs/admin-i18n.md). */
-export const en = { ...common, ...nav, ...enums, ...glossary, ...helpui, ...shell, ...dashboard, ...orders, ...invoices, ...emails, ...print, ...catalog, ...settings, ...security, ...integrations, ...errors, ...trendyol, ...trendyolviews, };
+export const en = { ...common, ...nav, ...enums, ...glossary, ...helpui, ...shell, ...dashboard, ...orders, ...invoices, ...emails, ...print, ...catalog, ...settings, ...security, ...integrations, ...errors, ...trendyol, ...trendyolviews, ...geliver, };

@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { payments } from "@openshelf/db";
 import type {
   AdapterDeps, CheckoutInput, CheckoutSession, EmailMessage, EmailProvider, IntegrationCredentials, IntegrationManifest, InvoiceInput, InvoiceResult,
-  InvoicingProvider, MarketplaceOrder, MarketplaceProduct, MarketplaceProvider, MarketplaceStockUpdate, OpenShelfIntegration, PaymentEvent, PaymentProvider,
+  InvoicingProvider, MarketplaceCategory, MarketplaceOrder, MarketplaceProduct, MarketplaceProvider, MarketplaceStockUpdate, OpenShelfIntegration, PaymentEvent, PaymentProvider,
   RefundInput, RefundResult, ServerEventContext, ServerEventSink, ShipmentInput, ShipmentResult, ShippingProvider, ShippingQuote, SmsMessage, SmsProvider, TrackingStatus,
 } from "@openshelf/integration-sdk";
 import { type ProviderId, type TrackEvent } from "@openshelf/shared";
@@ -100,10 +100,13 @@ class MockTrendyol implements MarketplaceProvider {
     await recordMock(this.d.db, { channel: "event", to: "trendyol", subject: "trendyol.stock_push", body: `${updates.length} item(s)`, meta: { provider: "trendyol", batchId, updates: updates.slice(0, 50) } });
     return { ok: true, batchId };
   }
+  async fetchCategories(): Promise<MarketplaceCategory[]> {
+    return [{ externalId: "1", parentId: null, name: "Giyim" }, { externalId: "2", parentId: "1", name: "Erkek Giyim" }, { externalId: "411", parentId: "2", name: "Tişört" }];
+  }
   async fetchProducts(cursor?: string): Promise<{ products: MarketplaceProduct[]; nextCursor?: string }> {
     if (cursor) return { products: [] };
     return { products: [{
-      externalId: "900001", mainId: "MOCK-MAIN-1", title: "Mock Trendyol Tişört", description: "Mock mode demo product pulled from Trendyol.", brand: "MockBrand", category: "Giyim",
+      externalId: "900001", mainId: "MOCK-MAIN-1", title: "Mock Trendyol Tişört", description: "Mock mode demo product pulled from Trendyol.", brand: "MockBrand", category: "Tişört", categoryId: "411",
       images: ["https://cdn.dsmcdn.com/mock/openshelf/1.jpg"],
       variants: [
         { barcode: "MOCKTY-1-S", stockCode: "MOCKTY-1-S", quantity: 12, salePrice: 19990, listPrice: 24990, options: { Beden: "S" }, vatRate: 20, active: true },

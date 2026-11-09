@@ -3,7 +3,13 @@ import type {
   AdapterDeps, AdapterFactory, HealthResult, IntegrationCredentials, IntegrationManifest, ShipmentInput, ShipmentResult,
   ShippingProvider, ShippingQuote, TrackingStatus,
 } from "@openshelf/integration-sdk";
+import type { GeliverCallBody, GeliverCallResult, GeliverOperation } from "@openshelf/shared";
 import { ALLOWED_HOSTS, BASE_URL, paths } from "./endpoints";
+import { runGeliverCall } from "./console";
+
+export { GELIVER_OPERATIONS, getGeliverOperation } from "./catalog";
+export { buildGeliverRequest, runGeliverCall, GeliverConsoleError, MAX_BODY_BYTES, MAX_RESPONSE_BYTES } from "./console";
+export { BASE_URL as GELIVER_BASE_URL } from "./endpoints";
 
 export { jobHandlers, createShipmentHandler, drizzleShipmentRepo } from "./jobs";
 export type { JobHandler, ShipmentRepo } from "./jobs";
@@ -58,6 +64,14 @@ export class GeliverAdapter implements ShippingProvider {
     if (!res.ok || j?.result === false) throw new GeliverError(`geliver error: ${j?.additionalMessage ?? j?.message ?? res.status}`, j?.code);
     return j;
   }
+
+  /** API console: runs one catalog operation with this adapter's token. */
+  consoleCall(op: GeliverOperation, call: Pick<GeliverCallBody, "path" | "query" | "body">): Promise<GeliverCallResult> {
+    return runGeliverCall({ fetch: this.deps.fetch }, this.p.secrets.apiToken, op, call);
+  }
+
+  get testMode() { return this.p.config.test; }
+  get senderAddressId() { return this.p.config.senderAddressId; }
 
   async healthCheck(): Promise<HealthResult> {
     try { await this.call("GET", paths.address(this.p.config.senderAddressId)); return { ok: true }; }

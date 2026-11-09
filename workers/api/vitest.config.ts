@@ -6,8 +6,8 @@ const root = path.resolve(__dirname, "../..");
 // Integration packages are built by other agents: alias missing ones to an empty stub so tests never depend on them.
 const stub = path.resolve(__dirname, "test/stubs/empty.ts");
 const alias: Record<string, string> = {};
-// trendyol is NOT stubbed: the API console route imports its catalog/console code from the real package.
-for (const id of ["iyzico", "geliver", "efaturam", "meta", "ga4"]) {
+// trendyol and geliver are NOT stubbed: their API console routes import the catalog/console code from the real package.
+for (const id of ["iyzico", "efaturam", "meta", "ga4"]) {
   // Tests inject fakes via registerFactory(); always stub to keep the suite hermetic.
   if (!existsSync(path.join(root, `packages/integrations/${id}/src/index.ts`)) || process.env.OS_TEST_STUB_ADAPTERS !== "0") alias[`@openshelf/integration-${id}`] = stub;
 }

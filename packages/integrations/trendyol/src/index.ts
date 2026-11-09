@@ -1,4 +1,4 @@
-export { factory, manifest, TrendyolProvider, TrendyolError, trendyolConfigSchema, mapPackage, mapContent } from "./adapter";
+export { factory, manifest, TrendyolProvider, TrendyolError, trendyolConfigSchema, mapPackage, mapContent, flattenCategoryTree } from "./adapter";
 export { mapTrendyolStatus, TRENDYOL_PACKAGE_STATUSES, isImportableStatus } from "./status";
 export {
   buildRequest, execute, mapError, runCall, ConsoleError, opAvailableOn, userAgentFor, basicAuth, MAX_BODY_BYTES, MAX_RESPONSE_BYTES, CALL_TIMEOUT_MS,

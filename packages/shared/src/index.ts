@@ -5,3 +5,4 @@ export * from "./api";
 export * from "./notifications";
 export * from "./manual";
 export * from "./trendyol";
+export * from "./geliver";

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { eq } from "drizzle-orm";
-import { channelListings, channelPrices, inventory, inventoryMovements, outboxJobs, productImages, productMappings, productVariants, products, syncCursors } from "@openshelf/db";
+import { categories, channelListings, channelPrices, inventory, inventoryMovements, outboxJobs, productImages, productMappings, productVariants, products, syncCursors } from "@openshelf/db";
 import { applyTrendyolProducts, factory, jobHandlers, loadImportStatus, mapContent, PRODUCTS_STATUS_KEY } from "../src";
 import { makeDb, seedProduct, seedVariants } from "./db";
 
@@ -127,6 +127,54 @@ describe("applyTrendyolProducts", () => {
     a.variants[0]!.stockCode = "DUP"; b.variants[0]!.stockCode = "DUP";
     const r = await applyTrendyolProducts(db, [a, b], { sourceOfTruth: "local", createMissing: true, dryRun: false });
     expect(r).toMatchObject({ created: 1, skipped: 1 });
+  });
+});
+
+describe("categories", () => {
+  const tree = [{ externalId: "1", parentId: null, name: "Giyim" }, { externalId: "2", parentId: "1", name: "Erkek Giyim" }, { externalId: "411", parentId: "2", name: "Tişört" }, { externalId: "9", parentId: "1", name: "Kadın Giyim" }];
+  const prod = (cid = 411, name = "Tişört") => mapContent(content(5, [variant("CAT1", 1)], { category: { id: cid, name } }));
+  const opts = (fetchCategories: any) => ({ sourceOfTruth: "local" as const, createMissing: true, dryRun: false, fetchCategories });
+
+  it("creates the leaf and ALL ancestors (parents first), only the ones needed, and assigns the leaf", async () => {
+    const { db } = makeDb(); const fetchCategories = vi.fn(async () => tree);
+    const r = await applyTrendyolProducts(db, [prod()], opts(fetchCategories));
+    expect(r.categories).toBe(3);
+    const rows = await db.select().from(categories);
+    expect(Object.fromEntries(rows.map((c) => [c.id, c.parentId]))).toEqual({ "ty-cat-1": null, "ty-cat-2": "ty-cat-1", "ty-cat-411": "ty-cat-2" });
+    expect(rows.find((c) => c.id === "ty-cat-411")!.slug).toBe("tisort-411");
+    expect((await db.select().from(products))[0]!.categoryId).toBe("ty-cat-411");
+  });
+
+  it("does not refetch the tree once the categories exist", async () => {
+    const { db } = makeDb(); const fetchCategories = vi.fn(async () => tree);
+    await applyTrendyolProducts(db, [prod()], opts(fetchCategories));
+    const r = await applyTrendyolProducts(db, [prod()], opts(fetchCategories));
+    expect(fetchCategories).toHaveBeenCalledTimes(1);
+    expect(r.categories).toBe(0);
+  });
+
+  it("reuses a local category with the same name instead of creating one", async () => {
+    const { db, raw } = makeDb();
+    raw.prepare("INSERT INTO categories (id, slug, name_tr) VALUES ('mine','tisortler','tişört')").run();
+    const fetchCategories = vi.fn(async () => tree);
+    const r = await applyTrendyolProducts(db, [prod()], opts(fetchCategories));
+    expect(r.categories).toBe(0); expect(fetchCategories).not.toHaveBeenCalled();
+    expect((await db.select().from(products))[0]!.categoryId).toBe("mine");
+  });
+
+  it("falls back to a flat category when the tree cannot be fetched", async () => {
+    const { db } = makeDb();
+    const r = await applyTrendyolProducts(db, [prod()], opts(vi.fn(async () => { throw new Error("boom"); })));
+    expect(r.categories).toBe(1);
+    expect((await db.select().from(categories))[0]).toMatchObject({ id: "ty-cat-411", parentId: null, nameTr: "Tişört" });
+  });
+
+  it("source trendyol moves linked products to the Trendyol category", async () => {
+    const { db, raw } = makeDb(); seedProduct(raw); seedVariants(raw);
+    const m = mapContent(content(1, [variant("BC1", 5)], { category: { id: 9, name: "Kadın Giyim" } }));
+    await applyTrendyolProducts(db, [m], { sourceOfTruth: "trendyol", createMissing: false, dryRun: false, fetchCategories: async () => tree });
+    expect((await db.select().from(products))[0]!.categoryId).toBe("ty-cat-9");
+    expect((await db.select().from(categories)).map((c) => c.id).sort()).toEqual(["ty-cat-1", "ty-cat-9"]);
   });
 });
 

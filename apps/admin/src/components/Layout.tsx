@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { applyBrandTheme } from "@openshelf/ui";
-import { ShoppingBag, BookOpen, BarChart3, ChevronRight, ClipboardList, Database, LayoutDashboard, LogOut, Menu, Package, Plug, Settings, ShieldCheck, Store, Tags, Ticket, Users, X, Zap, Inbox, FileText, Mail } from "lucide-react";
+import { Truck, ShoppingBag, BookOpen, BarChart3, ChevronRight, ClipboardList, Database, LayoutDashboard, LogOut, Menu, Package, Plug, Settings, ShieldCheck, Store, Tags, Ticket, Users, X, Zap, Inbox, FileText, Mail } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { api } from "../lib/api";
 import { useAdmin } from "../lib/auth";
@@ -32,6 +32,7 @@ export const NAV_GROUPS: { titleKey: MessageKey; items: NavItem[] }[] = [
   { titleKey: "nav.group.configuration", items: [
     { to: "/integrations", labelKey: "nav.integrations", icon: Plug, badge: "integrations" },
     { to: "/trendyol", labelKey: "nav.trendyol", icon: ShoppingBag },
+    { to: "/geliver", labelKey: "nav.geliver", icon: Truck },
     { to: "/settings", labelKey: "nav.settings", icon: Settings },
     { to: "/mock-inbox", labelKey: "nav.mockInbox", icon: Inbox, mockOnly: true },
     { to: "/integration-events", labelKey: "nav.integrationEvents", icon: Zap },

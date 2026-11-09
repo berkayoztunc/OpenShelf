@@ -85,7 +85,7 @@ export function MappingsTab() {
 
 interface ImportStatus {
   runId: string; state: "queued" | "running" | "done" | "error"; dryRun: boolean; createMissing: boolean; sourceOfTruth: "local" | "trendyol"; error?: string;
-  totals: { pages: number; variants: number; linked: number; created: number; updated: number; skipped: number; stockChanged: number };
+  totals: { pages: number; variants: number; linked: number; created: number; updated: number; skipped: number; stockChanged: number; categories?: number };
 }
 const IMPORT_KEY = ["trendyol", "import"] as const;
 
@@ -120,7 +120,7 @@ export function ImportCard() {
             {s.dryRun && <span className="text-muted">{t("trendyolviews.import.dryTag")}</span>}
             {s.sourceOfTruth === "trendyol" && <Badge tone="neutral">{t("trendyolviews.import.truth")}</Badge>}
           </div>
-          <p className="text-muted">{t("trendyolviews.import.stats", { ...s.totals })}</p>
+          <p className="text-muted">{t("trendyolviews.import.stats", { categories: 0, ...s.totals })}</p>
           {s.error && <InlineError text={s.error} />}
         </div>
       )}

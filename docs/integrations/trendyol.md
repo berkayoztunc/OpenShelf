@@ -33,7 +33,9 @@ Admin → **Trendyol console → Products → Mappings → Import from Trendyol*
 
 **Source of truth.** In Settings → Integrations → Trendyol set *Source of truth* to **Trendyol**. Then, every 15 minutes (cron), the import also overwrites title, description, brand, images, active flag, prices (`trendyol` and `website`; list price becomes the compare-at price) and stock of linked products, and creates missing ones as drafts. Stock is written through the ledger as `trendyol_sync` movements so that `available = total - reserved - safety_stock` equals the Trendyol quantity. In this mode OpenShelf **stops pushing** stock and price to Trendyol (`trendyol.stock_push` is a no-op); orders are still imported and decrement stock, and the next import restores Trendyol's number. Website sales therefore do not reach Trendyol: use this mode only when Trendyol is where you manage inventory.
 
-Not imported: unapproved/rejected products, product attributes beyond variant options, Trendyol categories (matched by name only). Like the rest of the adapter, this was tested against mocks and the documented response shape, not a live seller account.
+**Categories.** Imported products get their Trendyol category with its full parent chain (`ty-cat-<id>`, e.g. Giyim → Erkek Giyim → Tişört), created parents-first from Trendyol's category tree. The tree is fetched only when a needed category does not exist locally yet, so normal syncs do not download it. A local category with the same name is reused instead of creating a duplicate. If the tree cannot be fetched, a flat category without a parent is created. With *Source of truth: Trendyol*, linked products are moved to their Trendyol category too.
+
+Not imported: unapproved/rejected products, product attributes beyond variant options, Like the rest of the adapter, this was tested against mocks and the documented response shape, not a live seller account.
 
 ## API console
 

@@ -33,7 +33,9 @@ Admin → **Trendyol konsolu → Ürünler → Eşleştirmeler → Trendyol'dan 
 
 **Doğruluk kaynağı.** Ayarlar → Entegrasyonlar → Trendyol'da *Doğruluk kaynağı* = **Trendyol** seçin. Bu durumda her 15 dakikada (cron) içe aktarma ayrıca bağlı ürünlerin başlık, açıklama, marka, görsel, aktif durumu, fiyat (`trendyol` ve `website`; liste fiyatı üstü çizili fiyat olur) ve stoğunu Trendyol'dan yeniden yazar, eksik ürünleri taslak olarak oluşturur. Stok, defter üzerinden `trendyol_sync` hareketi olarak yazılır; böylece `available = total - reserved - safety_stock` Trendyol miktarına eşit olur. Bu modda OpenShelf Trendyol'a stok/fiyat **göndermez** (`trendyol.stock_push` işlem yapmaz); siparişler yine içe aktarılıp stoktan düşer, sonraki içe aktarma Trendyol'un değerini geri yazar. Dolayısıyla web sitesi satışları Trendyol'a yansımaz: bu modu yalnızca envanteri Trendyol'da yönetiyorsanız kullanın.
 
-İçe aktarılmaz: onaysız/reddedilen ürünler, varyant seçeneklerinin ötesindeki ürün özellikleri, Trendyol kategorileri (yalnızca ada göre eşleşir). Adaptörün geri kalanı gibi bu da canlı satıcı hesabında değil, mock'larla ve dokümante edilmiş yanıt şemasıyla test edildi.
+**Kategoriler.** İçe aktarılan ürünler Trendyol kategorisini tüm üst zinciriyle alır (`ty-cat-<id>`, örn. Giyim → Erkek Giyim → Tişört); Trendyol kategori ağacından üstten alta oluşturulur. Ağaç yalnızca gereken kategori yerelde yoksa çekilir, normal senkronlarda indirilmez. Aynı adlı yerel kategori varsa kopyası oluşturulmaz, o kullanılır. Ağaç çekilemezse üst kategorisiz düz bir kategori oluşturulur. *Doğruluk kaynağı: Trendyol* ise bağlı ürünler de Trendyol kategorisine taşınır.
+
+İçe aktarılmaz: onaysız/reddedilen ürünler, varyant seçeneklerinin ötesindeki ürün özellikleri, Adaptörün geri kalanı gibi bu da canlı satıcı hesabında değil, mock'larla ve dokümante edilmiş yanıt şemasıyla test edildi.
 
 ## API konsolu
 
