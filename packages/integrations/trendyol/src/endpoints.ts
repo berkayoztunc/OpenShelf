@@ -36,6 +36,8 @@ export const RATE_LIMIT = { requests: 50, windowSec: 10 } as const;
 export const inventoryUpdatePath = (sid: string) => `${INTEGRATION_PREFIX}/inventory/sellers/${sid}/products/price-and-inventory`;
 /** getBatchRequestResult: GET -> { status, items: [{ status: "SUCCESS"|"FAILED", failureReasons: string[], requestItem }] }.
  *  For stock/price batches the doc says the batch-level status is not returned: check item statuses. */
+export const approvedProductsPath = (sid: string) => `${INTEGRATION_PREFIX}/product/sellers/${sid}/products/approved`;
+export const PRODUCT_PAGE_SIZE = 100;
 export const batchResultPath = (sid: string, batchId: string) => `${INTEGRATION_PREFIX}/product/sellers/${sid}/products/batch-requests/${encodeURIComponent(batchId)}`;
 /** getShipmentPackages. The legacy `/orders` endpoint is deprecated and the Order V2 endpoint is mandatory from 2026-10-15. */
 export const shipmentPackagesPath = (sid: string) => `${INTEGRATION_PREFIX}/order/sellers/${sid}/v2/orders`;

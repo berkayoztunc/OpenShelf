@@ -2,11 +2,11 @@ import { z } from "zod";
 import type { OrderStatus } from "@openshelf/shared";
 import type {
   AdapterDeps, AdapterFactory, HealthResult, IntegrationCredentials, IntegrationManifest,
-  MarketplaceOrder, MarketplaceProvider, MarketplaceStockUpdate,
+  MarketplaceOrder, MarketplaceProduct, MarketplaceProvider, MarketplaceStockUpdate,
 } from "@openshelf/integration-sdk";
 import type { TrendyolCallBody, TrendyolCallResult, TrendyolEnv, TrendyolOperation } from "@openshelf/shared";
 import {
-  MAX_INVENTORY_BATCH, MAX_ORDER_WINDOW_MS, MAX_QUANTITY, ORDER_PAGE_SIZE, alternativeDeliveryPath, assertAllowed,
+  MAX_INVENTORY_BATCH, MAX_ORDER_WINDOW_MS, MAX_QUANTITY, ORDER_PAGE_SIZE, PRODUCT_PAGE_SIZE, alternativeDeliveryPath, approvedProductsPath, assertAllowed,
   batchResultPath, hostFor, inventoryUpdatePath, shipmentPackagesPath, shipmentPackagesStreamPath,
 } from "./endpoints";
 import { mapTrendyolStatus } from "./status";
@@ -17,6 +17,8 @@ export const trendyolConfigSchema = z.object({
     supplierId: z.string().regex(/^\d{3,12}$/, "Numeric Supplier/Seller ID"),
     /** docs/3-prod-stage-environments-1: stage = stageapigw.trendyol.com, needs IP whitelisting + different credentials. */
     environment: z.enum(["production", "stage"]).default("production"),
+    /** "trendyol": Trendyol owns stock, price and content; OpenShelf pulls them on a schedule and stops pushing stock/price. */
+    sourceOfTruth: z.enum(["local", "trendyol"]).default("local"),
   }),
   secrets: z.object({
     apiKey: z.string().min(4), apiSecret: z.string().min(4),
@@ -36,6 +38,11 @@ export const manifest: IntegrationManifest = {
       key: "environment", label: "Environment", type: "select",
       options: [{ value: "production", label: "Production" }, { value: "stage", label: "Stage (test)" }],
       help: "Default production. Stage needs Trendyol-side IP whitelisting (503 = not whitelisted) and uses DIFFERENT API credentials than production.",
+    },
+    {
+      key: "sourceOfTruth", label: "Source of truth", type: "select",
+      options: [{ value: "local", label: "OpenShelf (push stock/price to Trendyol)" }, { value: "trendyol", label: "Trendyol (pull products, stock and price into OpenShelf)" }],
+      help: "With Trendyol as the source, a scheduled import overwrites local title, description, images, stock and prices of linked products, and OpenShelf stops pushing stock/price.",
     },
   ],
   secretFields: [
@@ -89,6 +96,33 @@ export function mapPackage(p: any): MarketplaceOrder {
   };
 }
 
+const toMinor = (n: unknown) => Math.round(Number(n ?? 0) * 100);
+
+/** Maps one approved-products "content" (docs: filterApprovedProducts) to a marketplace product. */
+export function mapContent(c: any): MarketplaceProduct {
+  const attrsOf = (v: any): Record<string, string> => {
+    const out: Record<string, string> = {};
+    for (const a of v?.attributes ?? []) { const k = a.attributeName ?? a.name; const val = a.attributeValue ?? a.value; if (k && val != null) out[String(k)] = String(val); }
+    return out;
+  };
+  return {
+    externalId: String(c.contentId), mainId: c.productMainId ? String(c.productMainId) : undefined,
+    title: String(c.title ?? ""), description: c.description ? String(c.description) : undefined,
+    brand: c.brand?.name ? String(c.brand.name) : undefined, category: c.category?.name ? String(c.category.name) : undefined,
+    images: (c.images ?? []).map((i: any) => i?.url).filter((u: unknown): u is string => typeof u === "string" && /^https:\/\//.test(u)),
+    variants: (c.variants ?? []).filter((v: any) => v?.barcode).map((v: any) => {
+      const sale = toMinor(v.price?.salePrice ?? v.salePrice);
+      return {
+        barcode: String(v.barcode), stockCode: v.stockCode ? String(v.stockCode) : undefined,
+        quantity: Math.max(0, Math.floor(Number(v.stock?.quantity ?? v.quantity ?? 0))),
+        salePrice: sale, listPrice: Math.max(sale, toMinor(v.price?.listPrice ?? v.listPrice)),
+        options: attrsOf(v), vatRate: v.vatRate != null ? Number(v.vatRate) : undefined,
+        active: !v.archived && !v.blacklisted,
+      };
+    }),
+  };
+}
+
 export class TrendyolProvider implements MarketplaceProvider {
   readonly id = "trendyol" as const;
   private sid: string; private auth: string; private ua: string; private env: TrendyolEnv;
@@ -102,6 +136,7 @@ export class TrendyolProvider implements MarketplaceProvider {
     this.ua = userAgentFor(this.sid); // docs/authorization: "<sellerId> - SelfIntegration"; missing User-Agent => 403
     this.sleep = deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
   }
+  get sourceOfTruth() { return this.creds.config.sourceOfTruth; }
   async validateConfig(): Promise<void> {}
 
   private async call(method: string, path: string, body?: unknown): Promise<any> {
@@ -152,6 +187,17 @@ export class TrendyolProvider implements MarketplaceProvider {
       errors.push(...(await this.pollBatch(batchId)));
     }
     return { ok: errors.length === 0, batchId: lastBatch, ...(errors.length ? { errors } : {}) };
+  }
+
+  /** Pages through approved products. Cursor = next page number (Trendyol caps page x size at 10,000 contents). */
+  async fetchProducts(cursor?: string) {
+    const page = cursor ? Math.max(0, Number(cursor) || 0) : 0;
+    const q = new URLSearchParams({ page: String(page), size: String(PRODUCT_PAGE_SIZE) });
+    const r = await this.call("GET", `${approvedProductsPath(this.sid)}?${q}`);
+    const content: any[] = r.content ?? [];
+    const totalPages = Number(r.totalPages ?? 0);
+    const more = content.length > 0 && page + 1 < totalPages && (page + 1) * PRODUCT_PAGE_SIZE < 10_000;
+    return { products: content.map(mapContent), ...(more ? { nextCursor: String(page + 1) } : {}) };
   }
 
   private async pollBatch(batchId: string): Promise<string[]> {

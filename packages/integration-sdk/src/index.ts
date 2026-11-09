@@ -77,7 +77,22 @@ export interface InvoicingProvider extends OpenShelfIntegration {
 // ---------- Marketplace ----------
 export interface MarketplaceStockUpdate { sku: string; barcode?: string; quantity: number; price?: number }
 export interface MarketplaceOrder { externalId: string; status: string; placedAt: string; total: number; currency: string; customer: { name: string; email?: string; phone?: string; address: string; city: string }; lines: { sku: string; barcode?: string; quantity: number; unitPrice: number }[] }
+/** One sellable variant of a marketplace product. Prices are minor units (kuruş), same as the rest of OpenShelf. */
+export interface MarketplaceProductVariant {
+  barcode: string; stockCode?: string; quantity: number; salePrice: number; listPrice: number;
+  /** e.g. { Beden: "M" } built from the variant attributes */
+  options?: Record<string, string>; vatRate?: number; active: boolean;
+}
+/** A marketplace product ("content"): shared title/description/images plus its variants. */
+export interface MarketplaceProduct {
+  externalId: string; mainId?: string; title: string; description?: string; brand?: string; category?: string;
+  images: string[]; variants: MarketplaceProductVariant[];
+}
 export interface MarketplaceProvider extends OpenShelfIntegration {
+  /** Which side owns stock/price/content. "trendyol" turns push off and pulls products on a schedule. */
+  readonly sourceOfTruth?: "local" | "trendyol";
+  /** Pages through the seller's catalog (approved products). Cursor is opaque. */
+  fetchProducts?(cursor?: string): Promise<{ products: MarketplaceProduct[]; nextCursor?: string }>;
   pushStockAndPrice(updates: MarketplaceStockUpdate[]): Promise<{ ok: boolean; batchId?: string; errors?: string[] }>;
   fetchOrders(since: Date, cursor?: string): Promise<{ orders: MarketplaceOrder[]; nextCursor?: string }>;
   updateShipment?(externalId: string, tracking: { carrier: string; trackingNumber: string }): Promise<{ ok: boolean }>;

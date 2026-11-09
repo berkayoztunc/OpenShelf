@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
-import { Button, Card, ConfirmDialog, EmptyState, Modal, Table, Td, TextField, useToast } from "../../../../components/ui";
+import { Badge, Button, Card, ConfirmDialog, EmptyState, Modal, Table, Td, TextField, Toggle, useToast } from "../../../../components/ui";
 import { Term } from "../../../../components/help/Term";
 import { Typeahead } from "../../../../components/Typeahead";
 import { InlineError, TableSkeleton, TyErrorBox } from "../../../../components/trendyol/views/shared";
@@ -60,7 +60,7 @@ export function MappingsTab() {
   const [adding, setAdding] = useState(false);
   const [bc, setBc] = useState("");
   const items = q.data?.items ?? [];
-  return (
+  return (<div className="space-y-5"><ImportCard />
     <Card title={<>{t("trendyolviews.mappings.title")}</>} actions={<Button size="sm" onClick={() => setAdding(true)}>{t("trendyolviews.mappings.add")}</Button>}>
       <p className="mb-3 text-sm text-muted">{t("trendyolviews.mappings.body")}</p>
       {q.isPending ? <TableSkeleton rows={3} /> : q.error ? <TyErrorBox error={q.error} retry={() => void q.refetch()} />
@@ -79,6 +79,51 @@ export function MappingsTab() {
             <Button type="submit">{t("trendyolviews.common.next")}</Button>
           </form>
         </Modal>))}
+    </Card></div>
+  );
+}
+
+interface ImportStatus {
+  runId: string; state: "queued" | "running" | "done" | "error"; dryRun: boolean; createMissing: boolean; sourceOfTruth: "local" | "trendyol"; error?: string;
+  totals: { pages: number; variants: number; linked: number; created: number; updated: number; skipped: number; stockChanged: number };
+}
+const IMPORT_KEY = ["trendyol", "import"] as const;
+
+/** Pulls approved Trendyol products into the local catalog (POST /api/admin/trendyol/import, outbox job, polled status). */
+export function ImportCard() {
+  const { t } = useT();
+  const qc = useQueryClient(); const toast = useToast();
+  const [create, setCreate] = useState(false);
+  const q = useQuery({
+    queryKey: IMPORT_KEY, queryFn: () => api.get<{ status: ImportStatus | null }>("/api/admin/trendyol/import"),
+    refetchInterval: (query) => { const s = query.state.data?.status?.state; return s === "queued" || s === "running" ? 4000 : false; },
+  });
+  const start = useMutation({
+    mutationFn: (dryRun: boolean) => api.post("/api/admin/trendyol/import", { createMissing: create, dryRun }),
+    onSuccess: () => { toast.success(t("trendyolviews.import.queued")); void qc.invalidateQueries({ queryKey: IMPORT_KEY }); },
+    onError: (e) => toast.error(errMsg(e)),
+  });
+  const s = q.data?.status;
+  const busy = s?.state === "queued" || s?.state === "running";
+  return (
+    <Card title={t("trendyolviews.import.title")}>
+      <p className="mb-3 text-sm text-muted">{t("trendyolviews.import.body")}</p>
+      <Toggle checked={create} onChange={setCreate} label={t("trendyolviews.import.create")} hint={t("trendyolviews.import.create.hint")} />
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button variant="secondary" disabled={busy} loading={start.isPending && start.variables === true} onClick={() => start.mutate(true)}>{t("trendyolviews.import.dry")}</Button>
+        <Button disabled={busy} loading={start.isPending && start.variables === false} onClick={() => start.mutate(false)}>{t("trendyolviews.import.run")}</Button>
+      </div>
+      {s && (
+        <div className="mt-4 space-y-1 text-sm" data-testid="tdyv-import-status">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone={s.state === "done" ? "success" : s.state === "error" ? "danger" : "info"}>{t(`trendyolviews.import.state.${s.state}`)}</Badge>
+            {s.dryRun && <span className="text-muted">{t("trendyolviews.import.dryTag")}</span>}
+            {s.sourceOfTruth === "trendyol" && <Badge tone="neutral">{t("trendyolviews.import.truth")}</Badge>}
+          </div>
+          <p className="text-muted">{t("trendyolviews.import.stats", { ...s.totals })}</p>
+          {s.error && <InlineError text={s.error} />}
+        </div>
+      )}
     </Card>
   );
 }

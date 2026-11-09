@@ -24,8 +24,15 @@ CREATE TABLE channel_prices (variant_id TEXT NOT NULL, channel TEXT NOT NULL, pr
 CREATE TABLE channel_listings (variant_id TEXT NOT NULL, channel TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, external_id TEXT, last_synced_stock INTEGER, last_synced_at INTEGER, last_error TEXT, PRIMARY KEY (variant_id, channel));
 CREATE TABLE product_mappings (id TEXT PRIMARY KEY, variant_id TEXT NOT NULL, provider TEXT NOT NULL, external_sku TEXT, external_barcode TEXT, external_id TEXT);
 CREATE TABLE sync_cursors (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at INTEGER NOT NULL DEFAULT (unixepoch()));
+CREATE TABLE categories (id TEXT PRIMARY KEY, parent_id TEXT, slug TEXT NOT NULL UNIQUE, name_tr TEXT NOT NULL, name_en TEXT, description_tr TEXT, description_en TEXT, position INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1, seo_title TEXT, seo_description TEXT, seo_og_image_url TEXT, seo_noindex INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE products (id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, category_id TEXT, name_tr TEXT NOT NULL, name_en TEXT, description_tr TEXT, description_en TEXT, brand TEXT, status TEXT NOT NULL DEFAULT 'draft', seo_title TEXT, seo_description TEXT, seo_og_media_id TEXT, seo_og_image_url TEXT, seo_noindex INTEGER NOT NULL DEFAULT 0, seo_canonical TEXT, tax_rate INTEGER, created_at INTEGER NOT NULL DEFAULT (unixepoch()), updated_at INTEGER NOT NULL DEFAULT (unixepoch()));
+CREATE TABLE product_images (id TEXT PRIMARY KEY, product_id TEXT NOT NULL, media_id TEXT, url TEXT, alt TEXT, position INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE outbox_jobs (id TEXT PRIMARY KEY, kind TEXT NOT NULL, payload TEXT NOT NULL, dedupe_key TEXT UNIQUE, status TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0, max_attempts INTEGER NOT NULL DEFAULT 8, next_run_at INTEGER NOT NULL DEFAULT (unixepoch()), last_error TEXT, created_at INTEGER NOT NULL DEFAULT (unixepoch()), updated_at INTEGER NOT NULL DEFAULT (unixepoch()));
+CREATE UNIQUE INDEX mapping_u ON product_mappings (provider, variant_id);
 CREATE UNIQUE INDEX marketing_events_u ON marketing_events (event_id, name, destination);
 `;
+
+export function seedProduct(raw: DatabaseSync) { raw.prepare("INSERT INTO products (id, slug, name_tr, status) VALUES ('p1','local-p1','Local P1','active')").run(); }
 
 /** Real drizzle (sqlite-proxy) over node:sqlite in memory. */
 export function makeDb() {

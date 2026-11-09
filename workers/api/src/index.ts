@@ -87,7 +87,12 @@ export async function runScheduled(env: Env, now = new Date()) {
   try { out.reservations = await expireReservations(db, now); } catch (e) { log("error", "expireReservations failed", { error: String(e) }); }
   const minute = Math.floor(now.getTime() / 60000);
   try {
-    if (await getAdapter(env, db, "trendyol")) await enqueueJob(db, { kind: "trendyol.reconcile_orders", payload: {}, dedupeKey: `trendyol.reconcile_orders:${Math.floor(minute / 5)}` }, now);
+    const ty = await getAdapter(env, db, "trendyol");
+    if (ty) await enqueueJob(db, { kind: "trendyol.reconcile_orders", payload: {}, dedupeKey: `trendyol.reconcile_orders:${Math.floor(minute / 5)}` }, now);
+    // Trendyol as source of truth: pull catalog, stock and prices every 15 minutes.
+    if (ty && (ty.adapter as { sourceOfTruth?: string }).sourceOfTruth === "trendyol") {
+      await enqueueJob(db, { kind: "trendyol.import_products", payload: { createMissing: true }, dedupeKey: `trendyol.import_products:cron:${Math.floor(minute / 15)}` }, now);
+    }
   } catch (e) { log("warn", "trendyol reconcile enqueue failed", { error: String(e) }); }
   try { out.outbox = await runOutbox(env, { now, limit: 20 }); } catch (e) { log("error", "outbox failed", { error: String(e) }); }
   if (minute % 60 === 0) {

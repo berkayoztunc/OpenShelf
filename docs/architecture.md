@@ -62,7 +62,7 @@ Browser and server send the same `event_id` (UUID) for the same action, so Meta 
 
 ## Marketplace sync
 
-Trendyol: stock/price pushes through the outbox; orders pulled by cron reconciliation (and webhook if configured), inserted with `orders (source, external_order_id)` uniqueness; stock decrements recorded as `trendyol_sale` movements.
+Trendyol: stock/price pushes through the outbox (or, with source of truth = Trendyol, a 15-minute `trendyol.import_products` job pulls catalog, stock and prices instead); orders pulled by cron reconciliation (and webhook if configured), inserted with `orders (source, external_order_id)` uniqueness; stock decrements recorded as `trendyol_sale` movements.
 
 ## Security boundaries
 

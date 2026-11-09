@@ -1,11 +1,11 @@
 import { Hono } from "hono";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { channelListings, integrationConfigs, productMappings, productVariants, products, trendyolCalls } from "@openshelf/db";
+import { channelListings, integrationConfigs, outboxJobs, productMappings, productVariants, products, trendyolCalls } from "@openshelf/db";
 import {
   TrendyolCallBody, type MockHandler, type TrendyolCatalogResponse, type TrendyolEnv, type TrendyolOperation,
 } from "@openshelf/shared";
 import {
-  ConsoleError, MAX_BODY_BYTES, MAX_RESPONSE_BYTES, TRENDYOL_MOCKS, TRENDYOL_OPERATIONS, opAvailableOn, runCall,
+  ConsoleError, MAX_BODY_BYTES, MAX_RESPONSE_BYTES, TRENDYOL_MOCKS, TRENDYOL_OPERATIONS, loadImportStatus, opAvailableOn, runCall,
 } from "@openshelf/integration-trendyol";
 import { z } from "zod";
 import type { AppEnv } from "../env";
@@ -199,3 +199,31 @@ adminTrendyol.delete("/trendyol/mappings", async (c) => {
   await audit(c, "trendyol.mapping.delete", "variant", variantId);
   return c.body(null, 204);
 });
+
+// ---------- product import (Trendyol -> OpenShelf) ----------
+const ImportBody = z.object({
+  /** create local DRAFT products for Trendyol variants that match nothing local (default false: only link matches) */
+  createMissing: z.boolean().optional(),
+  /** count what would happen without writing */
+  dryRun: z.boolean().optional(),
+});
+
+adminTrendyol.post("/trendyol/import", async (c) => {
+  const b = await body(c, ImportBody); const db = c.get("db");
+  const st = await resolveState(c);
+  if (st.mode === "disabled") throw new ApiError(409, "integration_unavailable", st.reason === "integration_disabled" ? "Trendyol integration is disabled" : "Trendyol integration is not configured");
+  const running = await loadImportStatus(db);
+  if (running && (running.state === "queued" || running.state === "running") && Date.now() - Date.parse(running.startedAt) < 30 * 60_000) {
+    throw new ApiError(409, "import_running", "A Trendyol product import is already running");
+  }
+  const runId = crypto.randomUUID();
+  const createMissing = b.createMissing ?? false; const dryRun = b.dryRun ?? false;
+  await db.insert(outboxJobs).values({ id: crypto.randomUUID(), kind: "trendyol.import_products", dedupeKey: `trendyol.import_products:${runId}:first`, payload: { runId, createMissing, dryRun } });
+  const initial = { runId, state: "queued", dryRun, createMissing, sourceOfTruth: "local", startedAt: new Date().toISOString(), totals: { pages: 0, contents: 0, variants: 0, linked: 0, created: 0, updated: 0, skipped: 0, stockChanged: 0 } };
+  await db.run(sql`INSERT INTO sync_cursors (key, value) VALUES ('trendyol:products:last', ${JSON.stringify(initial)})
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = unixepoch()`);
+  await audit(c, "trendyol.import.start", "trendyol_import", runId, { createMissing, dryRun });
+  return c.json({ queued: true, runId }, 202);
+});
+
+adminTrendyol.get("/trendyol/import", async (c) => c.json({ status: await loadImportStatus(c.get("db")) }));
