@@ -5,6 +5,7 @@ import type { GeliverCallResult, GeliverCatalogResponse } from "@openshelf/share
 import { GELIVER_OPERATIONS } from "../../../../packages/integrations/geliver/src/catalog";
 import { mockApi, renderRoutes } from "./helpers";
 import Geliver from "../pages/Geliver";
+import { fmtDate, offersOf, statusTone } from "../lib/geliver";
 
 const cat = (mode: GeliverCatalogResponse["mode"] = "mock", extra: Partial<GeliverCatalogResponse> = {}): GeliverCatalogResponse =>
   ({ mode, test: true, senderAddressId: "SENDER-1", operations: GELIVER_OPERATIONS, ...extra });
@@ -12,6 +13,26 @@ const res = (id: string, body: unknown, o: Partial<GeliverCallResult> = {}): Gel
   ok: true, status: 200, durationMs: 7, mock: true, operationId: id, risk: GELIVER_OPERATIONS.find((x) => x.id === id)!.risk,
   request: { method: "GET", url: "https://api.geliver.io/api/v1/x", query: {} }, response: { body }, ...o,
 });
+
+/** Real Geliver getShipment shape (anonymised): amounts are strings, `offers` is an object { cheapest, fastest, list }. */
+const REAL = {
+  id: "shp-real-1", createdAt: "2026-11-09T11:57:08.419546+03:00", amount: "90.75", currency: "TL", amountVat: "18.58", totalAmount: "111.46", bonusBalance: "2.25", discountRate: "0",
+  length: "10", width: "10", height: "10", desi: "1", weight: "0", massUnit: "kg", distanceUnit: "",
+  trackingStatus: { trackingStatusCode: "TRANSIT", trackingSubStatusCode: "package_accepted", statusDetails: "Gönderi Alındı Mersin Dağıtım Merkezi", statusDate: "2026-11-09T13:15:28+03:00", locationName: "Mersin Dağıtım Merkezi" },
+  trackingNumber: "GLV0000000001", trackingUrl: "https://carrier.example/track/GLV0000000001", labelURL: "https://labels.example/l.pdf", responsiveLabelURL: "https://api.example/r/1",
+  order: { orderNumber: "WEB-9", sourceCode: "GLV", notes: "" },
+  senderAddress: { name: "Mağaza", phone: "+900000000000", address1: "Depo Cad. 1", cityName: "Mersin", districtName: "Akdeniz", zip: "33000" },
+  recipientAddress: { name: "Test Alıcı", email: "a@example.invalid", phone: "+900000000001", address1: "Örnek Mah.\nNo:1", cityName: "Bursa", districtName: "Nilüfer", zip: "16000" },
+  statusCode: "SHIPPED", providerCode: "HEPSIJET", providerServiceCode: "HEPSIJET_STANDART", hasError: false, isReturned: false, cancelDate: "0001-01-01T00:00:00Z", acceptedOfferID: "o-hepsi",
+  offers: {
+    cheapest: { id: "o-surat" }, fastest: { id: "o-yurtici" },
+    list: [
+      { id: "o-surat", amount: "90.25", totalAmount: "110.85", currency: "TL", providerCode: "SURAT", providerServiceCode: "SURAT_STANDART", averageEstimatedTimeHumanReadible: "1 gün 18 saat", rating: 90.9, isAccepted: false, hasPickupSupport: false },
+      { id: "o-hepsi", amount: "90.75", totalAmount: "111.46", currency: "TL", providerCode: "HEPSIJET", providerServiceCode: "HEPSIJET_STANDART", averageEstimatedTimeHumanReadible: "1 gün 14 saat", rating: 95, isAccepted: true, hasPickupSupport: true },
+      { id: "o-yurtici", amount: "160.25", totalAmount: "196.82", currency: "TL", providerCode: "YURTICI", providerServiceCode: "YURTICI_STANDART", averageEstimatedTimeHumanReadible: "1 gün 6 saat", rating: 96.1, isAccepted: false },
+    ],
+  },
+};
 
 type Call = { operationId: string; path?: Record<string, unknown>; query?: Record<string, unknown>; body?: any; confirm?: string };
 function setup(handlers: Record<string, (c: Call) => GeliverCallResult>, mode: GeliverCatalogResponse["mode"] = "mock", extra: Partial<GeliverCatalogResponse> = {}) {
@@ -64,7 +85,7 @@ describe("Geliver console", () => {
 
   it("end-to-end test shipment: create -> accept -> label/tracking -> cancel", async () => {
     const calls = setup({
-      createShipment: () => res("createShipment", { result: true, data: { id: "shp-1", offers: [{ id: "off-1", providerCode: "PTT", providerServiceCode: "PTT_STANDART", totalAmount: "80", currency: "TL" }] } }),
+      createShipment: () => res("createShipment", { result: true, data: { id: "shp-1", offers: { cheapest: { id: "off-1" }, list: [{ id: "off-1", providerCode: "PTT", providerServiceCode: "PTT_STANDART", totalAmount: "80", currency: "TL" }] } } }),
       acceptOffer: () => res("acceptOffer", { result: true, data: { shipment: { trackingNumber: "TRK123", labelURL: "https://example.invalid/l.pdf" } } }),
       getShipment: () => res("getShipment", { result: true, data: { trackingStatus: { trackingStatusCode: "TRANSIT" } } }),
       cancelShipment: () => res("cancelShipment", { result: true }),
@@ -118,5 +139,62 @@ describe("Geliver console", () => {
     await userEvent.click(screen.getByRole("button", { name: /send request/i }));
     expect(await screen.findByText(/not valid json/i)).toBeInTheDocument();
     expect(calls).toHaveLength(1);
+  });
+
+  it("shipments tab: rich rows, filters, and a structured detail view (summary, offers, JSON)", async () => {
+    const calls = setup({
+      listShipments: () => res("listShipments", { result: true, data: [REAL], totalRows: 1, totalPages: 1 }),
+      getShipment: () => res("getShipment", { result: true, data: REAL }),
+    });
+    renderRoutes({ "/*": <Geliver /> }, "/");
+    await userEvent.click(await screen.findByRole("tab", { name: /^shipments$/i }));
+    await userEvent.selectOptions(await screen.findByLabelText(/^status$/i), "TRANSIT");
+    await userEvent.click(screen.getByRole("button", { name: /load shipments/i }));
+    const list = await screen.findByTestId("gl-ships");
+    expect(calls[0]).toMatchObject({ operationId: "listShipments", query: { limit: 10, page: 1, statusFilter: "TRANSIT" } });
+    expect(list).toHaveTextContent("HEPSIJET"); expect(list).toHaveTextContent("GLV0000000001"); expect(list).toHaveTextContent("Test Alıcı"); expect(list).toHaveTextContent("Nilüfer, Bursa"); expect(list).toHaveTextContent("111.46 TL");
+    await userEvent.click(screen.getByRole("button", { name: /^details$/i }));
+    const d = await screen.findByTestId("gl-detail");
+    expect(d).toHaveTextContent("Gönderi Alındı Mersin Dağıtım Merkezi"); expect(d).toHaveTextContent("Mersin Dağıtım Merkezi");
+    expect(d).toHaveTextContent("90.75 TL"); expect(d).toHaveTextContent("18.58 TL"); expect(d).toHaveTextContent("10 × 10 × 10 cm");
+    expect(d).toHaveTextContent("Mağaza"); expect(d).toHaveTextContent("Test Alıcı");
+    expect(screen.getByRole("link", { name: /tracking page/i })).toHaveAttribute("href", "https://carrier.example/track/GLV0000000001");
+    await userEvent.click(screen.getByRole("tab", { name: /offers \(3\)/i }));
+    expect(d).toHaveTextContent("Cheapest"); expect(d).toHaveTextContent("Fastest"); expect(d).toHaveTextContent("Accepted"); expect(d).toHaveTextContent("1 gün 14 saat");
+    await userEvent.click(screen.getByRole("tab", { name: /^json$/i }));
+    expect(await screen.findByTestId("gl-json")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /^raw$/i }));
+    expect(screen.getByTestId("gl-json")).toHaveTextContent('"trackingNumber": "GLV0000000001"');
+  });
+
+  it("explorer shows getShipment as the structured view and others in the JSON panel", async () => {
+    setup({ getShipment: () => res("getShipment", { result: true, data: REAL }), listCities: () => res("listCities", { result: true, data: [{ cityCode: "34", name: "İstanbul" }] }) });
+    renderRoutes({ "/*": <Geliver /> }, "/");
+    await userEvent.click(await screen.findByRole("tab", { name: /api explorer/i }));
+    const select = await screen.findByLabelText(/^operation$/i);
+    await userEvent.selectOptions(select, "getShipment");
+    fireEvent.change(screen.getByLabelText(/^id \(required\)/i), { target: { value: "shp-real-1" } });
+    await userEvent.click(screen.getByRole("button", { name: /send request/i }));
+    expect(await screen.findByTestId("gl-detail")).toHaveTextContent("GLV0000000001");
+    await userEvent.selectOptions(select, "listCities");
+    await userEvent.click(screen.getByRole("button", { name: /send request/i }));
+    await waitFor(() => expect(screen.queryByTestId("gl-detail")).not.toBeInTheDocument());
+    expect(screen.getByTestId("gl-json")).toBeInTheDocument();
+  });
+});
+
+describe("geliver data helpers", () => {
+  it("offersOf reads the real shape (offers.list + tags + accepted) and the priceList/array shapes", () => {
+    const o = offersOf(REAL);
+    expect(o.map((x) => x.providerCode)).toEqual(["SURAT", "HEPSIJET", "YURTICI"]);
+    expect(o[0]!.tags).toEqual(["cheapest"]); expect(o[2]!.tags).toEqual(["fastest"]);
+    expect(o[1]).toMatchObject({ accepted: true, pickup: true, total: "111.46", eta: "1 gün 14 saat", rating: 95 });
+    expect(offersOf({ desi: "1", offers: [{ id: "x", providerCode: "PTT", totalAmount: "5", currency: "TL" }] })).toHaveLength(1);
+    expect(offersOf(null)).toEqual([]); expect(offersOf({ offers: null })).toEqual([]);
+  });
+  it("statusTone and fmtDate", () => {
+    expect(statusTone("DELIVERED")).toBe("success"); expect(statusTone("CANCELED")).toBe("danger"); expect(statusTone("TRANSIT")).toBe("info"); expect(statusTone("PRE_TRANSIT")).toBe("neutral");
+    expect(fmtDate("0001-01-01T00:00:00Z", "en")).toBe(""); expect(fmtDate(null, "en")).toBe(""); expect(fmtDate("garbage", "en")).toBe("");
+    expect(fmtDate("2026-11-09T13:15:28+03:00", "en")).toMatch(/2026/);
   });
 });

@@ -63,9 +63,12 @@ describe("geliver console", () => {
     expect(q).toMatchObject({ ok: true, mock: true, status: 200 });
     expect(q.response.body.priceList[0].offers.length).toBeGreaterThan(1);
     const created = await j<any>(await call(owner, { operationId: "createShipment", body: { weight: "2" } }));
-    expect(created.response.body.data.offers.length).toBeGreaterThan(0);
-    const accepted = await j<any>(await call(owner, { operationId: "acceptOffer", body: { offerID: created.response.body.data.offers[0].id } }));
+    expect(created.response.body.data.offers.list.length).toBeGreaterThan(1); // real shape: offers is { cheapest, fastest, list }
+    expect(created.response.body.data.offers.cheapest.id).toBeTruthy();
+    const accepted = await j<any>(await call(owner, { operationId: "acceptOffer", body: { offerID: created.response.body.data.offers.list[0].id } }));
     expect(accepted.response.body.data.shipment.labelURL).toContain("mock-label");
+    expect(accepted.response.body.data.shipment.acceptedOffer.providerCode).toBeTruthy();
+    expect(accepted.response.body.data.shipment.trackingStatus.trackingStatusCode).toBe("PRE_TRANSIT");
     expect((await call(owner, { operationId: "getShipment" })).status).toBe(400); // missing path param
     expect((await call(owner, { operationId: "priceList", query: { length: 1 } })).status).toBe(400); // missing required query
     expect((await call(owner, { operationId: "nope" })).status).toBe(404);

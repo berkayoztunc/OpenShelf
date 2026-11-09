@@ -3,15 +3,16 @@ import { Link } from "react-router-dom";
 import { Check, ExternalLink, RefreshCw, X } from "lucide-react";
 import type { GeliverCallResult, GeliverOperation } from "@openshelf/shared";
 import { Badge, Button, Card, EmptyState, ErrorState, Modal, PageHeader, Skeleton, SelectField, Table, Tabs, Td, TextArea, TextField } from "../components/ui";
-import { gloc, rowsOf, useGeliverCall, type GeliverInput } from "../lib/geliver";
+import { fmtDate, gloc, moneyStr, offersOf, place, rowsOf, statusTone, useGeliverCall, type GeliverInput, type OfferView } from "../lib/geliver";
+import { JsonPanel } from "../components/geliver/JsonPanel";
+import { OffersTable } from "../components/geliver/Offers";
+import { ShipmentDetail } from "../components/geliver/ShipmentDetail";
 import { useAdmin } from "../lib/auth";
 import { useT } from "../i18n";
 
+const pretty = (v: unknown) => { try { return JSON.stringify(v, null, 2); } catch { return String(v); } };
 const TABS = ["check", "shipments", "explorer"] as const;
 type TabId = (typeof TABS)[number];
-const pretty = (v: unknown) => { try { return JSON.stringify(v, null, 2); } catch { return String(v); } };
-const money = (o: any) => `${o.totalAmount ?? o.amount ?? "?"} ${o.currency ?? ""}`.trim();
-
 function StatusBar({ cat }: { cat: ReturnType<typeof useGeliverCall>["cat"] }) {
   const { t } = useT(); const admin = useAdmin(); const owner = admin?.role === "owner";
   if (cat.isPending) return <Skeleton className="mb-5 h-14" />;
@@ -42,18 +43,6 @@ function StatusBar({ cat }: { cat: ReturnType<typeof useGeliverCall>["cat"] }) {
 
 /* ------------------------------------------------------------------ Try it */
 
-function OffersTable({ offers, onPick, pickLabel, busy }: { offers: any[]; onPick?: (o: any) => void; pickLabel?: string; busy?: boolean }) {
-  const { t } = useT();
-  return (
-    <Table caption={t("geliver.quote.title")} head={[t("geliver.col.carrier"), t("geliver.col.service"), t("geliver.col.price"), ...(onPick ? [<span key="a" className="sr-only">{t("geliver.col.actions")}</span>] : [])]}>
-      {offers.map((o, i) => (
-        <tr key={o.id ?? i}><Td className="font-medium">{o.providerCode}</Td><Td className="font-mono text-[13px]">{o.providerServiceCode}</Td><Td className="tabular-nums">{money(o)}</Td>
-          {onPick && <Td className="text-right"><Button size="sm" loading={busy} onClick={() => onPick(o)}>{pickLabel}</Button></Td>}</tr>
-      ))}
-    </Table>
-  );
-}
-
 function ConnectionCard({ call }: { call: ReturnType<typeof useGeliverCall> }) {
   const { t } = useT();
   const [res, setRes] = useState<GeliverCallResult | null>(null);
@@ -79,7 +68,7 @@ function QuoteCard({ call }: { call: ReturnType<typeof useGeliverCall> }) {
   const [res, setRes] = useState<GeliverCallResult | null>(null);
   const [busy, setBusy] = useState(false);
   const run = async () => { setBusy(true); setRes(await call.run("priceList", { query: { paramType: "parcel", ...v } })); setBusy(false); };
-  const offers = ((res?.response.body as any)?.priceList ?? []).flatMap((r: any) => r.offers ?? []);
+  const offers = ((res?.response.body as any)?.priceList ?? []).flatMap((r: any) => offersOf(r));
   const f = (k: keyof typeof v, label: string) => <TextField key={k} label={label} type="number" min="0" step="any" value={v[k]} onChange={(e) => setV({ ...v, [k]: e.target.value })} />;
   return (
     <Card title={t("geliver.quote.title")}>
@@ -87,7 +76,7 @@ function QuoteCard({ call }: { call: ReturnType<typeof useGeliverCall> }) {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{f("length", t("geliver.quote.length"))}{f("width", t("geliver.quote.width"))}{f("height", t("geliver.quote.height"))}{f("weight", t("geliver.quote.weight"))}</div>
       <div className="mt-3"><Button loading={busy} disabled={!call.cat.canSend} onClick={() => void run()}>{t("geliver.quote.run")}</Button></div>
       {res && !res.ok && <p className="mt-3 text-sm text-danger">{res.error?.message}</p>}
-      {res?.ok && <div className="mt-4" data-testid="gl-offers">{offers.length ? <OffersTable offers={offers} /> : <p className="text-sm text-muted">{t("geliver.quote.empty")}</p>}</div>}
+      {res?.ok && <div className="mt-4" data-testid="gl-offers">{offers.length ? <OffersTable offers={offers} caption={t("geliver.quote.title")} /> : <p className="text-sm text-muted">{t("geliver.quote.empty")}</p>}</div>}
     </Card>
   );
 }
@@ -98,7 +87,7 @@ function FlowCard({ call }: { call: ReturnType<typeof useGeliverCall> }) {
   const { t } = useT();
   const cat = call.cat;
   const allowed = cat.canSend && (cat.mode === "mock" || cat.test);
-  const [shipment, setShipment] = useState<{ id: string; offers: any[] } | null>(null);
+  const [shipment, setShipment] = useState<{ id: string; offers: OfferView[] } | null>(null);
   const [accepted, setAccepted] = useState<any | null>(null);
   const [tracking, setTracking] = useState<any | null>(null);
   const [cancelled, setCancelled] = useState(false);
@@ -108,9 +97,9 @@ function FlowCard({ call }: { call: ReturnType<typeof useGeliverCall> }) {
   const create = () => wrap("create", async () => {
     const r = await call.run("createShipment", { body: { test: true, senderAddressID: cat.senderAddressId ?? "SENDER", recipientAddress: DEMO_RECIPIENT, length: "10", width: "10", height: "10", distanceUnit: "cm", weight: "1", massUnit: "kg", order: { sourceCode: "API", sourceIdentifier: "https://openshelf.local", orderNumber: `TEST-${Date.now()}`, totalAmount: "0", totalAmountCurrency: "TL" } } });
     const d = (r?.response.body as any)?.data;
-    if (r?.ok && d?.id) { setShipment({ id: d.id, offers: d.offers ?? [] }); setAccepted(null); setTracking(null); setCancelled(false); }
+    if (r?.ok && d?.id) { setShipment({ id: d.id, offers: offersOf(d) }); setAccepted(null); setTracking(null); setCancelled(false); }
   });
-  const accept = (o: any) => wrap("accept", async () => { const r = await call.run("acceptOffer", { body: { offerID: o.id } }); if (r?.ok) setAccepted((r.response.body as any)?.data?.shipment ?? {}); });
+  const accept = (o: OfferView) => wrap("accept", async () => { const r = await call.run("acceptOffer", { body: { offerID: o.id } }); if (r?.ok) setAccepted((r.response.body as any)?.data?.shipment ?? {}); });
   const track = () => wrap("track", async () => { if (!shipment) return; const r = await call.run("getShipment", { path: { id: shipment.id } }); if (r?.ok) setTracking((r.response.body as any)?.data ?? {}); });
   const cancel = () => wrap("cancel", async () => { if (!shipment) return; const r = await call.run("cancelShipment", { path: { id: shipment.id } }); if (r?.ok) setCancelled(true); });
   const reset = () => { setShipment(null); setAccepted(null); setTracking(null); setCancelled(false); };
@@ -122,7 +111,7 @@ function FlowCard({ call }: { call: ReturnType<typeof useGeliverCall> }) {
       {!shipment ? <Button loading={busy === "create"} disabled={!allowed} onClick={() => void create()}>{t("geliver.flow.create")}</Button> : (
         <div className="space-y-4" data-testid="gl-flow">
           <p className="text-sm">ID: <span className="font-mono">{shipment.id}</span></p>
-          {!accepted && !cancelled && (shipment.offers.length ? <div><p className="mb-2 text-sm font-medium">{t("geliver.flow.offers")}</p><OffersTable offers={shipment.offers} onPick={(o) => void accept(o)} pickLabel={t("geliver.flow.accept")} busy={busy === "accept"} /></div> : <p className="text-sm text-muted">{t("geliver.flow.noOffers")}</p>)}
+          {!accepted && !cancelled && (shipment.offers.length ? <div><p className="mb-2 text-sm font-medium">{t("geliver.flow.offers")}</p><OffersTable offers={shipment.offers} caption={t("geliver.flow.offers")} onPick={(o) => void accept(o)} pickLabel={t("geliver.flow.accept")} busy={busy === "accept"} /></div> : <p className="text-sm text-muted">{t("geliver.flow.noOffers")}</p>)}
           {accepted && (
             <div className="space-y-1 rounded-lg bg-canvas p-3 text-sm" data-testid="gl-accepted">
               <p>{t("geliver.flow.tracking")}: <span className="font-mono">{accepted.trackingNumber ?? "—"}</span></p>
@@ -145,37 +134,60 @@ function FlowCard({ call }: { call: ReturnType<typeof useGeliverCall> }) {
 /* --------------------------------------------------------------- Shipments */
 
 function Shipments({ call }: { call: ReturnType<typeof useGeliverCall> }) {
-  const { t } = useT();
+  const { t, locale } = useT();
   const [page, setPage] = useState(1);
+  const [status, setStatus] = useState("");
+  const [orderNumber, setOrderNumber] = useState("");
   const [res, setRes] = useState<GeliverCallResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [detail, setDetail] = useState<GeliverCallResult | null>(null);
-  const load = async (p = page) => { setBusy(true); const r = await call.run("listShipments", { query: { limit: 10, page: p } }); if (r) setRes(r); setBusy(false); };
+  const load = async (p = page) => {
+    setBusy(true);
+    const r = await call.run("listShipments", { query: { limit: 10, page: p, ...(status ? { statusFilter: status } : {}), ...(orderNumber.trim() ? { orderNumber: orderNumber.trim() } : {}) } });
+    if (r) setRes(r); setBusy(false);
+  };
   const rows = rowsOf(res);
   const body = res?.response.body as any;
   const show = async (id: string) => setDetail(await call.run("getShipment", { path: { id } }));
   const cancel = async (id: string) => { if (await call.run("cancelShipment", { path: { id } })) void load(); };
+  const d = (detail?.response.body as any)?.data;
   return (
-    <Card title={t("geliver.ship.title")} actions={<Button size="sm" variant="secondary" loading={busy} disabled={!call.cat.canSend} onClick={() => void load()}><RefreshCw size={13} />{t(res ? "geliver.ship.refresh" : "geliver.quote.run")}</Button>}>
+    <Card title={t("geliver.ship.title")} actions={<Button size="sm" variant="secondary" loading={busy} disabled={!call.cat.canSend} onClick={() => { setPage(1); void load(1); }}><RefreshCw size={13} />{t(res ? "geliver.ship.refresh" : "geliver.ship.load")}</Button>}>
+      <div className="mb-3 grid gap-3 sm:grid-cols-2">
+        <SelectField label={t("geliver.col.status")} value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="">—</option>{["PRE_TRANSIT", "TRANSIT", "DELIVERED", "RETURNED", "CANCELED"].map((x) => <option key={x} value={x}>{x}</option>)}
+        </SelectField>
+        <TextField label={t("geliver.col.order")} value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} />
+      </div>
       {!res ? <EmptyState title={t("geliver.ship.title")} description={t("geliver.ship.empty")} /> : res.error ? <p className="text-sm text-danger">{res.error.message}</p> : !rows.length ? <EmptyState title={t("geliver.ship.empty")} /> : (
         <div className="space-y-3" data-testid="gl-ships">
-          <Table caption={t("geliver.ship.title")} head={[t("geliver.col.id"), t("geliver.col.carrier"), t("geliver.col.tracking"), t("geliver.col.status"), <span key="a" className="sr-only">{t("geliver.col.actions")}</span>]}>
+          <Table caption={t("geliver.ship.title")} head={[t("geliver.col.date"), t("geliver.col.carrier"), t("geliver.col.tracking"), t("geliver.col.status"), t("geliver.col.recipient"), t("geliver.col.price"), <span key="a" className="sr-only">{t("geliver.col.actions")}</span>]}>
             {rows.map((s) => (
-              <tr key={s.id}><Td className="font-mono text-[13px]">{s.id}</Td><Td>{s.providerCode ?? "—"}</Td><Td className="font-mono text-[13px]">{s.trackingNumber ?? "—"}</Td><Td>{s.trackingStatus?.trackingStatusCode ?? s.statusCode ?? "—"}</Td>
-                <Td className="text-right"><div className="flex justify-end gap-1"><Button size="sm" variant="ghost" onClick={() => void show(s.id)}>{t("geliver.ship.details")}</Button><Button size="sm" variant="ghost" onClick={() => void cancel(s.id)}>{t("geliver.ship.cancel")}</Button></div></Td></tr>
+              <tr key={s.id}>
+                <Td className="whitespace-nowrap text-[13px]">{fmtDate(s.createdAt, locale) || "—"}</Td>
+                <Td><div className="font-medium">{s.providerCode ?? "—"}</div><div className="font-mono text-[12px] text-muted">{s.providerServiceCode}</div></Td>
+                <Td className="font-mono text-[13px]">{s.trackingUrl && /^https:\/\//.test(s.trackingUrl) ? <a className="text-brand-700 underline" href={s.trackingUrl} target="_blank" rel="noreferrer noopener">{s.trackingNumber ?? "—"}</a> : s.trackingNumber ?? "—"}</Td>
+                <Td><div className="flex flex-col items-start gap-1">{s.statusCode && <Badge tone={statusTone(s.statusCode)}>{s.statusCode}</Badge>}{s.trackingStatus?.trackingStatusCode && <Badge tone={statusTone(s.trackingStatus.trackingStatusCode)}>{s.trackingStatus.trackingStatusCode}</Badge>}</div></Td>
+                <Td className="text-[13px]"><div>{s.recipientAddress?.name ?? "—"}</div><div className="text-muted">{place(s.recipientAddress)}</div></Td>
+                <Td className="whitespace-nowrap tabular-nums">{moneyStr(s.totalAmount ?? s.amount, s.currency) || "—"}</Td>
+                <Td className="text-right"><div className="flex justify-end gap-1"><Button size="sm" variant="ghost" onClick={() => void show(s.id)}>{t("geliver.ship.details")}</Button><Button size="sm" variant="ghost" onClick={() => void cancel(s.id)}>{t("geliver.ship.cancel")}</Button></div></Td>
+              </tr>
             ))}
           </Table>
-          {body?.totalPages > 1 && (
-            <div className="flex items-center justify-end gap-2 text-sm text-muted">
-              <Button size="sm" variant="ghost" disabled={page <= 1} onClick={() => { setPage(page - 1); void load(page - 1); }}>‹</Button>
-              {t("geliver.ship.pager", { page, pages: body.totalPages })}
-              <Button size="sm" variant="ghost" disabled={page >= body.totalPages} onClick={() => { setPage(page + 1); void load(page + 1); }}>›</Button>
-            </div>
-          )}
+          <div className="flex items-center justify-between gap-2 text-sm text-muted">
+            <span>{body?.totalRows != null ? t("geliver.ship.total", { n: body.totalRows }) : ""}</span>
+            {body?.totalPages > 1 && (
+              <span className="flex items-center gap-2">
+                <Button size="sm" variant="ghost" disabled={page <= 1} onClick={() => { setPage(page - 1); void load(page - 1); }}>‹</Button>
+                {t("geliver.ship.pager", { page, pages: body.totalPages })}
+                <Button size="sm" variant="ghost" disabled={page >= body.totalPages} onClick={() => { setPage(page + 1); void load(page + 1); }}>›</Button>
+              </span>
+            )}
+          </div>
         </div>
       )}
-      <Modal open={!!detail} onClose={() => setDetail(null)} title={t("geliver.ship.detailsTitle", { id: String((detail?.response.body as any)?.data?.id ?? "") })} wide>
-        <pre className="max-h-96 overflow-auto rounded-lg bg-canvas p-3 text-xs">{pretty(detail?.response.body)}</pre>
+      <Modal open={!!detail} onClose={() => setDetail(null)} title={t("geliver.ship.detailsTitle", { id: String(d?.id ?? "") })} wide>
+        {detail && (detail.ok && d ? <ShipmentDetail s={d} raw={detail.response.body} /> : <><p className="mb-2 text-sm text-danger">{detail.error?.message}</p><JsonPanel value={detail.response.body} /></>)}
       </Modal>
     </Card>
   );
@@ -243,7 +255,9 @@ function Explorer({ call }: { call: ReturnType<typeof useGeliverCall> }) {
             {res.error && <span className="text-danger">{res.error.message}</span>}
           </div>
           <p className="mb-1 break-all font-mono text-xs text-muted">{res.request.method} {res.request.url}</p>
-          <pre className="max-h-[28rem] overflow-auto rounded-lg bg-canvas p-3 text-xs">{pretty(res.response.body)}</pre>
+          {res.ok && (res.operationId === "getShipment" || res.operationId === "acceptOffer") && ((res.response.body as any)?.data?.shipment ?? (res.response.body as any)?.data)?.id
+            ? <ShipmentDetail s={(res.response.body as any).data.shipment ?? (res.response.body as any).data} raw={res.response.body} />
+            : <JsonPanel value={res.response.body} />}
         </Card>
       )}
     </div>

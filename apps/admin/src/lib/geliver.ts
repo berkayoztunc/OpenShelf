@@ -61,3 +61,43 @@ export function rowsOf(r: GeliverCallResult | null): Record<string, any>[] {
   const d = Array.isArray(b) ? b : b?.data ?? b?.priceList ?? [];
   return Array.isArray(d) ? d : [];
 }
+
+/* ------------------------------------------------------------ data helpers */
+// Real Geliver shapes (verified against a live getShipment response): amounts are STRINGS, `offers` is an OBJECT
+// { cheapest, fastest, list[] } on shipments but a plain array on priceList rows, dates are ISO with offset,
+// "0001-01-01T00:00:00Z" means "not set".
+
+export interface OfferView {
+  id?: string; providerCode: string; providerServiceCode: string; total: string; amount?: string; currency: string;
+  eta?: string; rating?: number; accepted: boolean; pickup: boolean; tags: ("cheapest" | "fastest")[];
+}
+/** Offers of a shipment (`offers.list`), of a priceList row (`offers[]`) or of a bare array; tags cheapest/fastest. */
+export function offersOf(d: any): OfferView[] {
+  const src = d?.offers ?? d;
+  const list: any[] = Array.isArray(src) ? src : Array.isArray(src?.list) ? src.list : [];
+  const cheapest = src?.cheapest?.id, fastest = src?.fastest?.id, acceptedId = d?.acceptedOfferID;
+  return list.map((o) => ({
+    id: o.id, providerCode: String(o.providerCode ?? ""), providerServiceCode: String(o.providerServiceCode ?? ""),
+    total: String(o.totalAmount ?? o.amount ?? "?"), amount: o.amount != null ? String(o.amount) : undefined, currency: String(o.currency ?? ""),
+    eta: o.averageEstimatedTimeHumanReadible || undefined, rating: typeof o.rating === "number" ? o.rating : undefined,
+    accepted: o.isAccepted === true || (!!acceptedId && o.id === acceptedId), pickup: o.hasPickupSupport === true,
+    tags: [...(o.id && o.id === cheapest ? ["cheapest" as const] : []), ...(o.id && o.id === fastest ? ["fastest" as const] : [])],
+  }));
+}
+
+export type Tone = "neutral" | "success" | "danger" | "warning" | "info";
+export const statusTone = (code?: string): Tone => {
+  const c = (code ?? "").toUpperCase();
+  if (c === "DELIVERED" || c === "SHIPPED") return "success";
+  if (c === "CANCELED" || c === "CANCELLED" || c === "RETURNED") return "danger";
+  if (c === "PRE_TRANSIT" || c === "") return "neutral";
+  return "info";
+};
+/** ISO date -> locale string; "" for empty/zero dates. */
+export function fmtDate(s: unknown, locale: Locale): string {
+  if (typeof s !== "string" || !s || s.startsWith("0001-01-01")) return "";
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleString(locale === "tr" ? "tr-TR" : "en-GB", { dateStyle: "medium", timeStyle: "short" });
+}
+export const moneyStr = (v: unknown, cur?: unknown) => (v == null || v === "" ? "" : `${v} ${cur ?? ""}`.trim());
+export const place = (a: any) => [a?.districtName, a?.cityName].filter(Boolean).join(", ");
