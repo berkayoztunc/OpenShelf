@@ -9,6 +9,8 @@ export type JobHandler = (
 
 export type InvoiceRow = { id: string; status: string };
 export interface InvoiceRepo {
+  /** Order channel ("website" | "trendyol" ...). Marketplace orders are shipped/invoiced by the marketplace. */
+  sourceOf?(orderId: string): Promise<string | undefined>;
   loadOrder(orderId: string): Promise<InvoiceInput | null>;
   /** INSERT ... ON CONFLICT(order_id,type) DO NOTHING, then return the (possibly pre-existing) row. */
   claim(orderId: string, type: "e_fatura" | "e_arsiv"): Promise<InvoiceRow>;
@@ -22,6 +24,7 @@ export interface InvoiceRepo {
  */
 export function drizzleInvoiceRepo(db: any): InvoiceRepo {
   return {
+    async sourceOf(orderId) { const [o] = await db.select({ source: orders.source }).from(orders).where(eq(orders.id, orderId)).limit(1); return o?.source; },
     async loadOrder(orderId) {
       const [o] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
       if (!o) return null;
@@ -54,6 +57,8 @@ export function invoiceIssueHandler(repoFor: (db: any) => InvoiceRepo = drizzleI
     const orderId = job.payload?.orderId as string | undefined;
     if (!orderId) throw new Error("invoice.issue: payload.orderId missing");
     const repo = repoFor(ctx.db);
+    const src = await repo.sourceOf?.(orderId);
+    if (src && src !== "website") { await ctx.log("info", "invoice.issue skipped (channel-managed order)", { orderId, source: src }); return; }
     const input = await repo.loadOrder(orderId);
     if (!input) throw new Error(`invoice.issue: order ${orderId} not found`);
     const adapter = (await ctx.getAdapter("efaturam")) as InvoicingProvider & { resolveInvoiceType(i: InvoiceInput): Promise<"e_fatura" | "e_arsiv"> };

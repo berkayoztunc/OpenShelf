@@ -53,6 +53,7 @@ export function LabelDoc({ order, seller }: { order: RawOrder; seller: Seller })
         <div className="pr-label-city">{[a?.district, a?.city].filter(Boolean).join(" / ")} {a?.zip}</div>
       </div>
       <div className="pr-label-code">
+        {order.source === "trendyol" && <div className="pr-label-carrier" data-testid="label-marketplace"><span>{bi("print.h.marketplace")}</span><span>{ship?.externalPackageId ? `${bi("print.h.package")}: ${ship.externalPackageId}` : ""}</span></div>}
         <div className="pr-label-carrier"><span>{ship?.carrier ?? bi("print.h.carrier")}</span><span>{ship?.trackingNumber ? bi("print.h.tracking") : bi("print.h.noTracking")}</span></div>
         <Code128 value={code} height={64} />
         <div className="pr-label-codetext">{code}</div>

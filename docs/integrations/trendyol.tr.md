@@ -22,18 +22,20 @@ Trendyol bazı entegrasyonlar için talep üzerine stage/test ortamı sağlayabi
 
 Trendyol Express veya Trendyol'a özel kargo varsayılmaz ve uygulanmaz; kargo bilgisi yalnızca desteklenen API'lerle güncellenir. Oran limitleri ve kategori/özellik gereksinimleri Trendyol'a aittir. Sipariş içe aktarma, dış id'de tekil, source=`trendyol` siparişler oluşturur. Stok sapması admin panelinde görünür; sayılara güvenmeden önce mutabakat çalıştırın. Adaptör mock ile sınanmıştır, canlı hesapla değil.
 
-## Trendyol'dan ürün içe aktarma (doğruluk kaynağı: Trendyol)
+## Trendyol'dan ürün içe aktarma (doğruluk kaynağı hep OpenShelf)
 
 Admin → **Trendyol konsolu → Ürünler → Eşleştirmeler → Trendyol'dan içe aktar** (veya `POST /api/admin/trendyol/import`) Trendyol'daki **onaylı** ürünleri (`filterApprovedProducts`, sayfa başına 100 içerik, sayfa başına bir outbox job'ı) sayfa sayfa çeker ve yerel kataloğa uygular:
 
 1. **Eşleştirme**: önce mevcut Trendyol eşleştirmesi (barkod), sonra yerel `barcode`, sonra yerel `sku` = Trendyol stok kodu (veya barkod).
-2. **Eşleşen**: eşleştirme ve Trendyol kanal listesi oluşturulur/güncellenir. Doğruluk kaynağı Trendyol değilse başka hiçbir şey değişmez.
+2. **Eşleşen**: eşleştirme ve Trendyol kanal listesi oluşturulur/güncellenir. Yerel başlık, fiyat ve stok asla ezilmez.
 3. **Eşleşmeyen**: atlanır; "Henüz olmayan ürünleri oluştur" açıksa **taslak** ürün olarak oluşturulur (kategori adla, görseller, varyantlar, stok, `trendyol` ve `website` fiyatları). Kimlikler Trendyol kimliklerinden türetilir, tekrar çalıştırmak kopya üretmez.
 4. **Önizle** (dry run) yalnızca ne olacağını sayar. Son çalıştırmanın sonucu sayfada görünür (`sync_cursors[trendyol:products:last]`).
 
-**Doğruluk kaynağı.** Ayarlar → Entegrasyonlar → Trendyol'da *Doğruluk kaynağı* = **Trendyol** seçin. Bu durumda her 15 dakikada (cron) içe aktarma ayrıca bağlı ürünlerin başlık, açıklama, marka, görsel, aktif durumu, fiyat (`trendyol` ve `website`; liste fiyatı üstü çizili fiyat olur) ve stoğunu Trendyol'dan yeniden yazar, eksik ürünleri taslak olarak oluşturur. Stok, defter üzerinden `trendyol_sync` hareketi olarak yazılır; böylece `available = total - reserved - safety_stock` Trendyol miktarına eşit olur. Bu modda OpenShelf Trendyol'a stok/fiyat **göndermez** (`trendyol.stock_push` işlem yapmaz); siparişler yine içe aktarılıp stoktan düşer, sonraki içe aktarma Trendyol'un değerini geri yazar. Dolayısıyla web sitesi satışları Trendyol'a yansımaz: bu modu yalnızca envanteri Trendyol'da yönetiyorsanız kullanın.
+**Doğruluk kaynağı her zaman OpenShelf.** Buradaki stok değişimleri (satış, admin düzenlemesi, içe aktarılan Trendyol siparişleri) `trendyol.stock_push` ile Trendyol'a gönderilir; Trendyol yerel stok, fiyat veya içeriği asla ezmez. Eski *Doğruluk kaynağı: Trendyol* seçeneği kaldırıldı (kayıtlı değerler yok sayılır). İçe aktarma tek seferlik bir işlemdir: ürünleri bağlar, *eksikleri oluştur* ile bilinmeyenleri başlangıç stoğuyla taslak ekler. Trendyol siparişleri içe aktarılıp yerel stoktan düşünce stok gönderimi kuyruğa alınır; Trendyol OpenShelf'i izler.
 
-**Kategoriler.** İçe aktarılan ürünler Trendyol kategorisini tüm üst zinciriyle alır (`ty-cat-<id>`, örn. Giyim → Erkek Giyim → Tişört); Trendyol kategori ağacından üstten alta oluşturulur. Ağaç yalnızca gereken kategori yerelde yoksa çekilir, normal senkronlarda indirilmez. Aynı adlı yerel kategori varsa kopyası oluşturulmaz, o kullanılır. Ağaç çekilemezse üst kategorisiz düz bir kategori oluşturulur. *Doğruluk kaynağı: Trendyol* ise bağlı ürünler de Trendyol kategorisine taşınır.
+**Siparişler ve kargo.** Siparişler kanal bilgisi taşır (`orders.source`). Site siparişi: kargoyu Geliver, faturayı efaturam yönetir. Trendyol siparişi: kargo ve faturayı Trendyol yönetir; OpenShelf siparişi ve kargo bilgisini (firma, takip no ve linki, paket no; `provider = "trendyol"` `shipments` kaydı, Trendyol atar atamaz dolar) yansıtır ve bundan **Trendyol kargo fişi** (etiket çıktısı, 100x150 mm) basar. Elle kargo/fatura düğmeleri gizlenir, API site dışı siparişlerde `409 channel_managed` döner; kuyruktaki `shipment.create` / `invoice.issue` işleri bu siparişleri atlar.
+
+**Kategoriler.** İçe aktarılan ürünler Trendyol kategorisini tüm üst zinciriyle alır (`ty-cat-<id>`, örn. Giyim → Erkek Giyim → Tişört); Trendyol kategori ağacından üstten alta oluşturulur. Ağaç yalnızca gereken kategori yerelde yoksa çekilir, normal senkronlarda indirilmez. Aynı adlı yerel kategori varsa kopyası oluşturulmaz, o kullanılır. Ağaç çekilemezse üst kategorisiz düz bir kategori oluşturulur.
 
 İçe aktarılmaz: onaysız/reddedilen ürünler, varyant seçeneklerinin ötesindeki ürün özellikleri, Adaptörün geri kalanı gibi bu da canlı satıcı hesabında değil, mock'larla ve dokümante edilmiş yanıt şemasıyla test edildi.
 

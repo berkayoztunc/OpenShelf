@@ -197,6 +197,8 @@ export const refunds = sqliteTable("refunds", {
 export const shipments = sqliteTable("shipments", {
   id: id(), orderId: text("order_id").notNull(), provider: text("provider").notNull(), providerShipmentId: text("provider_shipment_id"),
   carrier: text("carrier"), trackingNumber: text("tracking_number"), labelUrl: text("label_url"), status: text("status").notNull().default("created"), createdAt: createdAt(),
+  /** marketplace-managed shipments (provider "trendyol"): public tracking page + marketplace package id */
+  trackingUrl: text("tracking_url"), externalPackageId: text("external_package_id"),
 });
 export const shipmentEvents = sqliteTable("shipment_events", {
   id: integer("id").primaryKey({ autoIncrement: true }), shipmentId: text("shipment_id").notNull(), status: text("status").notNull(), detail: text("detail"), at: createdAt(),

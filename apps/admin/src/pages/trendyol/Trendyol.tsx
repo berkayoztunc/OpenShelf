@@ -10,6 +10,7 @@ import { useAdmin } from "../../lib/auth";
 import { maskSeller, useTrendyolCatalog } from "../../lib/trendyol";
 import { useT } from "../../i18n";
 
+const Overview = lazy(() => import("./views/Overview"));
 const Explorer = lazy(() => import("./explorer/Explorer"));
 const Products = lazy(() => import("./views/Products"));
 const Orders = lazy(() => import("./views/Orders"));
@@ -17,8 +18,8 @@ const Returns = lazy(() => import("./views/Returns"));
 const Questions = lazy(() => import("./views/Questions"));
 const Finance = lazy(() => import("./views/Finance"));
 
-const GUIDE: Record<string, string> = { explorer: "trendyol#api-gezgini", products: "trendyol#urunler", orders: "trendyol#son-satislar", returns: "trendyol#iadeler", questions: "trendyol#sorular", finance: "trendyol#finans" };
-const TABS = ["explorer", "products", "orders", "returns", "questions", "finance"] as const;
+const GUIDE: Record<string, string> = { overview: "trendyol", explorer: "trendyol#api-gezgini", products: "trendyol#urunler", orders: "trendyol#son-satislar", returns: "trendyol#iadeler", questions: "trendyol#sorular", finance: "trendyol#finans" };
+const TABS = ["overview", "products", "orders", "returns", "questions", "finance", "explorer"] as const;
 type TabId = (typeof TABS)[number];
 
 function StatusBar() {
@@ -65,8 +66,8 @@ export default function Trendyol() {
   const { t } = useT();
   const loc = useLocation(); const nav = useNavigate(); const admin = useAdmin();
   const seg = loc.pathname.replace(/^\/trendyol\/?/, "").split("/")[0] ?? "";
-  const tab: TabId = (TABS as readonly string[]).includes(seg) ? (seg as TabId) : "explorer";
-  const go = (id: TabId) => nav(id === "explorer" ? "/trendyol" : `/trendyol/${id}`);
+  const tab: TabId = (TABS as readonly string[]).includes(seg) ? (seg as TabId) : "overview";
+  const go = (id: TabId) => nav(id === "overview" ? "/trendyol" : `/trendyol/${id}`);
   const header = <PageHeader title={t("trendyol.title")} description={t("trendyol.description")} guide={GUIDE[tab]} />;
   if (admin && admin.role === "staff") return <>{header}<EmptyState title={t("trendyol.forbidden.title")} description={t("trendyol.forbidden.body")} /></>;
   return (
@@ -76,7 +77,8 @@ export default function Trendyol() {
       <Tabs tabs={TABS.map((id) => ({ id, label: t(`trendyol.tab.${id}`) }))} value={tab} onChange={go} label={t("trendyol.tabs.label")} />
       <Suspense fallback={<Loading />}>
         <Routes>
-          <Route index element={<Explorer />} />
+          <Route index element={<Overview />} />
+          <Route path="explorer" element={<Explorer />} />
           <Route path="products/*" element={<Products />} />
           <Route path="orders/*" element={<Orders />} />
           <Route path="returns/*" element={<Returns />} />

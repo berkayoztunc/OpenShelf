@@ -7,7 +7,7 @@ import { Button } from "./ui";
 
 const ITEMS: PrintKind[] = ["label", "packing", "invoice", "summary"];
 /** Dropdown that opens the chrome-less print route for one order in a new tab. */
-export function PrintMenu({ orderId }: { orderId: string }) {
+export function PrintMenu({ orderId, managed = false }: { orderId: string; managed?: boolean }) {
   const { td } = useT();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -23,7 +23,7 @@ export function PrintMenu({ orderId }: { orderId: string }) {
       <Button variant="secondary" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}><Printer size={15} />{td("common.print")}<ChevronDown size={14} /></Button>
       {open && (
         <div role="menu" className="absolute right-0 top-full z-30 mt-2 w-56 overflow-hidden rounded-xl border border-line bg-raised py-1 shadow-lift">
-          {ITEMS.map((k) => <button key={k} role="menuitem" type="button" title={td(`orders.print.${k}.title`)} className="block w-full px-4 py-2 text-left text-sm transition hover:bg-hover" onClick={() => { setOpen(false); openPrint(k, [orderId]); }}>{td(`orders.print.${k}`)}</button>)}
+          {ITEMS.filter((k) => !(managed && k === "invoice")).map((k) => <button key={k} role="menuitem" type="button" title={td(`orders.print.${k}.title`)} className="block w-full px-4 py-2 text-left text-sm transition hover:bg-hover" onClick={() => { setOpen(false); openPrint(k, [orderId]); }}>{td(`orders.print.${k}`)}</button>)}
         </div>
       )}
     </div>

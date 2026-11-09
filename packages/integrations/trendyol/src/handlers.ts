@@ -1,7 +1,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   categories, channelListings, channelPrices, inventory, inventoryMovements, orderItems, orders, outboxJobs, productImages, productMappings,
-  productVariants, products, syncCursors,
+  productVariants, products, shipments, syncCursors,
 } from "@openshelf/db";
 import type { MarketplaceCategory, MarketplaceOrder, MarketplaceProduct, MarketplaceProductVariant, MarketplaceProvider, MarketplaceStockUpdate } from "@openshelf/integration-sdk";
 import { MAX_INVENTORY_BATCH } from "./endpoints";
@@ -54,7 +54,6 @@ async function loadStockRows(db: any, variantIds?: string[]) {
 export const stockPush: JobHandler = async (job, ctx) => {
   const provider = await getProvider(ctx);
   if (!provider) { await ctx.log("info", "trendyol.stock_push: trendyol not enabled"); return; }
-  if (provider.sourceOfTruth === "trendyol") return; // Trendyol owns stock/price: never overwrite it from here
   const requested: string[] | undefined = Array.isArray(job.payload?.variantIds)
     ? [...new Set<string>(job.payload.variantIds)] : undefined;
   if (requested && requested.length === 0) return;
@@ -95,10 +94,29 @@ export async function stockDriftReport(db: any, tolerance = 0) {
 
 export interface ImportResult { imported: number; duplicate: number; unmappedLines: number }
 
+/**
+ * Mirrors Trendyol's own cargo data as a `shipments` row (provider "trendyol"). Trendyol ships and invoices these orders itself, so
+ * this row only exists to print a shipping slip and show tracking. Idempotent (deterministic id); cargo fields appear after pickup,
+ * so it also runs for already-imported orders.
+ */
+export async function upsertTrendyolShipment(db: any, orderId: string, o: MarketplaceOrder): Promise<void> {
+  const c = o.cargo;
+  if (!c || !(c.provider || c.trackingNumber)) return;
+  const status = o.status === "delivered" ? "delivered" : o.status === "shipped" ? "in_transit" : o.status === "cancelled" ? "cancelled" : "created";
+  const values = {
+    id: `ty-ship-${orderId}`, orderId, provider: CHANNEL, providerShipmentId: c.packageId ?? o.externalId, carrier: c.provider ?? null,
+    trackingNumber: c.trackingNumber ?? null, trackingUrl: c.trackingLink ?? null, externalPackageId: c.packageId ?? o.externalId, status,
+  };
+  await db.insert(shipments).values(values).onConflictDoUpdate({
+    target: shipments.id, set: { carrier: values.carrier, trackingNumber: values.trackingNumber, trackingUrl: values.trackingUrl, status },
+  });
+}
+
 export async function importTrendyolOrder(db: any, o: MarketplaceOrder, newId: () => string = () => crypto.randomUUID()): Promise<"imported" | "duplicate" | { unmapped: number }> {
   const existing = (await db.select().from(orders).where(and(eq(orders.source, CHANNEL), eq(orders.externalOrderId, o.externalId))).limit(1))[0];
   if (existing) {
     if (existing.status !== o.status) await db.update(orders).set({ status: o.status, updatedAt: new Date() }).where(eq(orders.id, existing.id));
+    await upsertTrendyolShipment(db, existing.id, o);
     return "duplicate";
   }
   if (o.status === "cancelled") return "duplicate"; // never seen + already cancelled: nothing to reserve or import
@@ -124,7 +142,7 @@ export async function importTrendyolOrder(db: any, o: MarketplaceOrder, newId: (
     }),
   ];
   for (const { idx, l, variantId } of lines) {
-    stmts.push(db.insert(orderItems).values({ id: `${id}:${idx}`, orderId: id, variantId, sku: l.sku, name: l.sku, quantity: l.quantity, unitPrice: l.unitPrice }));
+    stmts.push(db.insert(orderItems).values({ id: `${id}:${idx}`, orderId: id, variantId, sku: l.sku, name: l.name ?? l.sku, quantity: l.quantity, unitPrice: l.unitPrice }));
     if (!variantId) continue;
     stmts.push(db.update(inventory).set({ total: sql`${inventory.total} - ${l.quantity}`, updatedAt: now }).where(eq(inventory.variantId, variantId)));
     stmts.push(db.insert(inventoryMovements).values({ variantId, delta: -l.quantity, reason: "trendyol_sale", refType: "order", refId: id }));
@@ -135,6 +153,7 @@ export async function importTrendyolOrder(db: any, o: MarketplaceOrder, newId: (
     if (dup) return "duplicate"; // lost a race: other worker imported it (batch rolled back, nothing decremented)
     throw e;
   }
+  await upsertTrendyolShipment(db, id, o);
   return unmapped ? { unmapped } : "imported";
 }
 
@@ -157,6 +176,12 @@ export const reconcileOrders: JobHandler = async (job, ctx) => {
     }
     page = r.nextCursor;
   } while (page);
+  // Local stock is the truth: a Trendyol sale decremented it above, so push the new quantities back (only drifted rows).
+  if (touched.size) {
+    await ctx.db.insert(outboxJobs).values({
+      id: crypto.randomUUID(), kind: "trendyol.stock_push", dedupeKey: `trendyol.stock_push:after-import:${Math.floor(startedAt / 60000)}`, payload: { stockOnly: true },
+    }).onConflictDoNothing();
+  }
   const value = String(startedAt - OVERLAP_MS);
   await ctx.db.insert(syncCursors).values({ key: ORDERS_CURSOR_KEY, value }).onConflictDoUpdate({ target: syncCursors.key, set: { value, updatedAt: new Date() } });
   if (res.unmappedLines) await ctx.log("warn", "trendyol.reconcile_orders: lines without variant mapping", { count: res.unmappedLines });
@@ -361,10 +386,10 @@ export const importProducts: JobHandler = async (job, ctx) => {
   const provider = await getProvider(ctx);
   if (!provider) { await ctx.log("info", "trendyol.import_products: trendyol not enabled"); return; }
   if (!provider.fetchProducts) throw new Error("trendyol adapter has no fetchProducts");
-  const sourceOfTruth = provider.sourceOfTruth ?? "local";
+  const sourceOfTruth = "local" as const; // OpenShelf is always the truth: import only creates/links, never overwrites
   const runId: string = job.payload?.runId ?? job.id;
   const dryRun = !!job.payload?.dryRun;
-  const createMissing = job.payload?.createMissing ?? sourceOfTruth === "trendyol";
+  const createMissing = job.payload?.createMissing ?? false;
   const totals: ImportTotals = { ...emptyTotals(), ...(job.payload?.totals ?? {}) };
   const prev = await loadImportStatus(ctx.db);
   const base: ImportStatus = {

@@ -193,4 +193,7 @@ export const orders = {
   "help.orders.notifications.title": "Sipariş bildirimleri",
   "help.orders.notifications.body": "Bu siparişle ilgili müşteriye (ve yöneticiye) giden SMS ve e-postaların kaydı. Durum “Gönderildi” ise sağlayıcı mesajı aldı; “Başarısız” ise nedeni yanında yazar ve sistem otomatik olarak yeniden dener.\n\nHangi olayda hangi kanaldan mesaj gideceğini Ayarlar → Bildirimler’den seçersiniz.",
   "help.orders.notifications.guide": "orders#siparis-bildirimleri",
+  "orders.detail.managed": "Bu sipariş {channel} kaynaklı. Kargo ve faturayı {channel} yönetir; OpenShelf yalnızca yansıtır ve kargo bilgisinden kargo fişi basar.",
+  "orders.detail.shipments.managedBody": "Pazaryeri kargo firması ve takip numarası atayınca bilgiler burada görünür.",
+  "orders.detail.invoices.managedBody": "Bu siparişin faturasını pazaryeri keser.",
 } satisfies Record<string, string>;

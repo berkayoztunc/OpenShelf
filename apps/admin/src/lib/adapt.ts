@@ -45,7 +45,7 @@ export const orderDetailFromApi = (o: W): OrderDetail => ({
   customerName: [o.shippingAddress?.name, o.shippingAddress?.surname].filter(Boolean).join(" ") || undefined,
   items: (o.items ?? []).map((i: W) => ({ id: i.id, title: i.name, sku: i.sku, quantity: i.quantity, unitPrice: i.unitPrice, total: i.unitPrice * i.quantity })),
   payments: (o.payments ?? []).map((p: W) => ({ id: p.id, provider: p.provider, status: p.status, amount: p.amount, createdAt: iso(p.createdAt), isMock: p.isMock === true })),
-  shipments: (o.shipments ?? []).map((s: W) => ({ id: s.id, carrier: s.carrier ?? undefined, trackingNumber: s.trackingNumber ?? undefined, status: s.status, labelUrl: s.labelUrl ?? undefined, createdAt: iso(s.createdAt) })),
+  shipments: (o.shipments ?? []).map((s: W) => ({ id: s.id, carrier: s.carrier ?? undefined, trackingNumber: s.trackingNumber ?? undefined, status: s.status, labelUrl: s.labelUrl ?? undefined, trackingUrl: typeof s.trackingUrl === "string" && /^https:\/\//i.test(s.trackingUrl) ? s.trackingUrl : undefined, createdAt: iso(s.createdAt) })),
   invoices: (o.invoices ?? []).map((i: W) => ({ id: i.id, type: i.type, number: i.number ?? undefined, status: i.status, url: i.pdfUrl ?? undefined, createdAt: iso(i.createdAt) })),
   events: (o.events ?? []).map((e: W, n: number) => ({ id: String(n), type: e.type, detail: e.detail == null ? undefined : typeof e.detail === "string" ? e.detail : JSON.stringify(e.detail).slice(0, 200), createdAt: iso(e.at) ?? "" })),
   shippingAddress: o.shippingAddress,

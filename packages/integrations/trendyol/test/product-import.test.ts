@@ -185,13 +185,13 @@ describe("trendyol.import_products job", () => {
     const f = vi.fn(async () => json({ content: [content(++call, [variant(`PB${call}`, 3)])], totalPages: 2 }));
     const p = provider(f, "trendyol");
     const h = jobHandlers["trendyol.import_products"]!;
-    await h({ id: "j1", kind: "k", payload: { runId: "run1" }, attempts: 1 }, ctxOf(db, p));
+    await h({ id: "j1", kind: "k", payload: { runId: "run1", createMissing: true }, attempts: 1 }, ctxOf(db, p));
     expect((await loadImportStatus(db))!.state).toBe("running");
     const next = (await db.select().from(outboxJobs))[0]!;
     expect(next).toMatchObject({ kind: "trendyol.import_products", dedupeKey: "trendyol.import_products:run1:1" });
     await h({ id: "j2", kind: "k", payload: next.payload as any, attempts: 1 }, ctxOf(db, p));
     const st = (await loadImportStatus(db))!;
-    expect(st).toMatchObject({ state: "done", sourceOfTruth: "trendyol", createMissing: true });
+    expect(st).toMatchObject({ state: "done", sourceOfTruth: "local", createMissing: true });
     expect(st.totals).toMatchObject({ pages: 2, contents: 2, created: 2 });
     expect(await db.select().from(outboxJobs)).toHaveLength(1); // no third page
   });
@@ -206,11 +206,11 @@ describe("trendyol.import_products job", () => {
     expect((await loadImportStatus(db))!.error).toContain("500");
   });
 
-  it("stock_push does nothing while Trendyol is the source of truth", async () => {
+  it("stock_push still pushes even if a legacy config says sourceOfTruth=trendyol (OpenShelf is always the truth)", async () => {
     const { db, raw } = makeDb(); seedProduct(raw); seedVariants(raw);
     raw.prepare("INSERT INTO product_mappings (id, variant_id, provider, external_sku, external_barcode) VALUES ('m1','v1','trendyol','SKU1','BC1')").run();
     const f = vi.fn(async () => json({ batchRequestId: "b" }));
     await jobHandlers["trendyol.stock_push"]!({ id: "j", kind: "k", payload: {}, attempts: 1 }, ctxOf(db, provider(f, "trendyol")));
-    expect(f).not.toHaveBeenCalled();
+    expect(f).toHaveBeenCalled();
   });
 });

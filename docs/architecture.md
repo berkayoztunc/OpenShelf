@@ -62,7 +62,7 @@ Browser and server send the same `event_id` (UUID) for the same action, so Meta 
 
 ## Marketplace sync
 
-Trendyol: stock/price pushes through the outbox (or, with source of truth = Trendyol, a 15-minute `trendyol.import_products` job pulls catalog, stock and prices instead); orders pulled by cron reconciliation (and webhook if configured), inserted with `orders (source, external_order_id)` uniqueness; stock decrements recorded as `trendyol_sale` movements.
+Trendyol: OpenShelf is always the stock/price truth (pushed through the outbox; a Trendyol sale decrements local stock and queues a push back); orders pulled by cron reconciliation (and webhook if configured), inserted with `orders (source, external_order_id)` uniqueness; stock decrements recorded as `trendyol_sale` movements. Channel-aware fulfilment: website orders use Geliver + efaturam, Trendyol orders are shipped/invoiced by Trendyol (cargo mirrored into `shipments` with provider `trendyol`, shipping slip printed from it).
 
 ## Security boundaries
 

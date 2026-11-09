@@ -50,7 +50,7 @@ function setup(cat: TrendyolCatalogResponse, opts: { call?: (body: Record<string
   });
   return { calls, api };
 }
-const open = (op: string) => renderRoutes({ "/trendyol/*": <Trendyol /> }, `/trendyol?op=${op}`);
+const open = (op: string) => renderRoutes({ "/trendyol/*": <Trendyol /> }, `/trendyol/explorer?op=${op}`);
 
 beforeEach(() => { sessionStorage.clear(); asRole("owner"); });
 

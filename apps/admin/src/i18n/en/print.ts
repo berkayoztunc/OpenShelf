@@ -73,4 +73,6 @@ export const print = {
   "help.print.paper.body": "Pressing Print opens the browser's print dialog. For the shipping label choose a paper size of 100 × 150 mm, for A4 documents choose A4; set the scale to 100% and leave margins on \"None/Default\". If background graphics are off the barcode may print faintly; turn them on.",
   "help.print.paper.warn": "If your label printer only supports one size and you pick the wrong one, the barcode can be cut off and fail to scan.",
   "help.print.paper.guide": "orders#yazdirma",
+  "print.h.marketplace": "TRENDYOL SHIPPING SLIP",
+  "print.h.package": "Package",
 } satisfies Record<string, string>;

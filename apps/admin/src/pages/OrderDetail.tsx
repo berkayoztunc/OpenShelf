@@ -59,17 +59,19 @@ export default function OrderDetail() {
     ...o.invoices.map((i) => ({ at: i.createdAt ?? "", text: i.number ? t("orders.timeline.invoiceNumber", { type: typeLabel(i.type), status: enumLabel("invoice", i.status), number: i.number }) : t("orders.timeline.invoice", { type: typeLabel(i.type), status: enumLabel("invoice", i.status) }) })),
   ].sort((a, b) => a.at.localeCompare(b.at));
 
+  const managed = o.source !== "website"; // marketplace order: the marketplace ships + invoices it, we only mirror it
   const mockPay = o.payments.some((p) => p.isMock);
   return (
     <>
       <PageHeader title={t("orders.detail.title", { number: o.number })} description={t("orders.detail.description", { date: dateTime(o.createdAt), customer: `${o.customerName ?? ""} ${o.email ?? ""}`.trim() || "-" })} guide="orders#siparis-detayi"
         actions={<><Link to="/orders"><Button variant="ghost">{t("common.back")}</Button></Link>
           {canRefund && <Button variant="secondary" title={t("orders.detail.refund.title")} onClick={() => setRefund({ amount: "", reason: "" })}>{t("orders.detail.refund")}</Button>}
-          <Button variant="secondary" title={t("orders.detail.createShipment.title")} onClick={() => setShip("")}>{t("orders.detail.createShipment")}</Button>
-          <Button variant="secondary" title={t("orders.detail.issueInvoice.title")} loading={invoice.isPending} onClick={() => setInvoiceOpen(true)}>{t("orders.detail.issueInvoice")}</Button>
-          <Link to={`/invoices/new?orderId=${encodeURIComponent(o.id)}`} title={t("orders.detail.invoiceFromOrder.title")}><Button variant="secondary"><FileText size={15} />{t("orders.detail.invoiceFromOrder")}</Button></Link>
+          {!managed && <Button variant="secondary" title={t("orders.detail.createShipment.title")} onClick={() => setShip("")}>{t("orders.detail.createShipment")}</Button>}
+          {!managed && <Button variant="secondary" title={t("orders.detail.issueInvoice.title")} loading={invoice.isPending} onClick={() => setInvoiceOpen(true)}>{t("orders.detail.issueInvoice")}</Button>}
+          {!managed && <Link to={`/invoices/new?orderId=${encodeURIComponent(o.id)}`} title={t("orders.detail.invoiceFromOrder.title")}><Button variant="secondary"><FileText size={15} />{t("orders.detail.invoiceFromOrder")}</Button></Link>}
           <Link to={`/emails/compose?${new URLSearchParams({ ...(o.email ? { to: o.email } : {}), orderId: o.id, subject: t("orders.detail.emailSubject", { number: o.number }) })}`} title={t("orders.detail.emailCustomer.title")}><Button variant="secondary"><Mail size={15} />{t("orders.detail.emailCustomer")}</Button></Link>
-          <PrintMenu orderId={o.id} /></>} />
+          <PrintMenu orderId={o.id} managed={managed} /></>} />
+      {managed && <div role="status" data-testid="order-managed" className="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3"><Badge tone="info">{enumLabel("source", o.source)}</Badge><p className="min-w-0 flex-1 text-sm text-muted">{t("orders.detail.managed", { channel: enumLabel("source", o.source) })}</p></div>}
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <Card title={t("orders.detail.items")}>
@@ -80,10 +82,10 @@ export default function OrderDetail() {
           </Card>
           <Card title={t("orders.detail.payments")}>{o.payments.length === 0 ? <EmptyState title={t("orders.detail.payments.empty")} description={t("orders.detail.payments.emptyBody")} /> : (
             <Table head={[t("orders.detail.col.provider"), t("orders.detail.col.status"), t("orders.detail.col.amount"), t("orders.detail.col.date")]}>{o.payments.map((p) => <tr key={p.id}><Td>{enumLabel("provider", p.provider)}{p.isMock && <span className="ml-2"><Badge tone="danger">{t("orders.mockBadge")}</Badge></span>}</Td><Td><Badge tone={statusTone(p.status)}>{enumLabel("payment", p.status)}</Badge></Td><Td>{money(p.amount, o.currency)}</Td><Td>{dateTime(p.createdAt)}</Td></tr>)}</Table>)}</Card>
-          <Card title={t("orders.detail.shipments")}>{o.shipments.length === 0 ? <EmptyState title={t("orders.detail.shipments.empty")} description={t("orders.detail.shipments.emptyBody")} /> : (
-            <Table head={[<Term key="c" id="carrier">{t("orders.detail.col.carrier")}</Term>, <Term key="t" id="trackingno">{t("orders.detail.col.tracking")}</Term>, t("orders.detail.col.status"), t("orders.detail.col.label")]}>{o.shipments.map((s) => <tr key={s.id}><Td>{s.carrier ?? "-"}</Td><Td>{s.trackingNumber ?? "-"}</Td><Td><Badge tone={statusTone(s.status)}>{enumLabel("shipment", s.status)}</Badge></Td><Td>{s.labelUrl ? <a className="text-brand-ink underline" href={s.labelUrl} target="_blank" rel="noopener noreferrer">{t("common.open")}</a> : "-"}</Td></tr>)}</Table>)}</Card>
+          <Card title={t("orders.detail.shipments")}>{o.shipments.length === 0 ? <EmptyState title={t("orders.detail.shipments.empty")} description={managed ? t("orders.detail.shipments.managedBody") : t("orders.detail.shipments.emptyBody")} /> : (
+            <Table head={[<Term key="c" id="carrier">{t("orders.detail.col.carrier")}</Term>, <Term key="t" id="trackingno">{t("orders.detail.col.tracking")}</Term>, t("orders.detail.col.status"), t("orders.detail.col.label")]}>{o.shipments.map((s) => <tr key={s.id}><Td>{s.carrier ?? "-"}</Td><Td>{s.trackingNumber ? (s.trackingUrl ? <a className="text-brand-ink underline" href={s.trackingUrl} target="_blank" rel="noopener noreferrer">{s.trackingNumber}</a> : s.trackingNumber) : "-"}</Td><Td><Badge tone={statusTone(s.status)}>{enumLabel("shipment", s.status)}</Badge></Td><Td>{s.labelUrl ? <a className="text-brand-ink underline" href={s.labelUrl} target="_blank" rel="noopener noreferrer">{t("common.open")}</a> : "-"}</Td></tr>)}</Table>)}</Card>
           <NotificationHistory orderId={o.id} />
-          <Card title={t("orders.detail.invoices")}>{o.invoices.length === 0 ? <EmptyState title={t("orders.detail.invoices.empty")} description={t("orders.detail.invoices.emptyBody")} /> : (
+          <Card title={t("orders.detail.invoices")}>{o.invoices.length === 0 ? <EmptyState title={t("orders.detail.invoices.empty")} description={managed ? t("orders.detail.invoices.managedBody") : t("orders.detail.invoices.emptyBody")} /> : (
             <Table head={[t("orders.detail.col.type"), t("orders.detail.col.number"), t("orders.detail.col.status"), t("orders.detail.col.document")]}>{o.invoices.map((i) => <tr key={i.id}><Td>{typeLabel(i.type)}</Td><Td>{i.number ?? "-"}</Td><Td><Badge tone={statusTone(i.status)}>{enumLabel("invoice", i.status)}</Badge></Td><Td>{i.url ? <a className="text-brand-ink underline" href={i.url} target="_blank" rel="noopener noreferrer">{t("common.open")}</a> : "-"}</Td></tr>)}</Table>)}</Card>
         </div>
         <div className="space-y-6">

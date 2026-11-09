@@ -76,7 +76,9 @@ export interface InvoicingProvider extends OpenShelfIntegration {
 
 // ---------- Marketplace ----------
 export interface MarketplaceStockUpdate { sku: string; barcode?: string; quantity: number; price?: number }
-export interface MarketplaceOrder { externalId: string; status: string; placedAt: string; total: number; currency: string; customer: { name: string; email?: string; phone?: string; address: string; city: string }; lines: { sku: string; barcode?: string; quantity: number; unitPrice: number }[] }
+/** Cargo data of a marketplace order. The marketplace ships it itself, we only mirror it (and print a slip from it). */
+export interface MarketplaceCargo { provider?: string; trackingNumber?: string; trackingLink?: string; packageId?: string; orderNumber?: string }
+export interface MarketplaceOrder { externalId: string; cargo?: MarketplaceCargo; status: string; placedAt: string; total: number; currency: string; customer: { name: string; email?: string; phone?: string; address: string; city: string }; lines: { sku: string; name?: string; barcode?: string; quantity: number; unitPrice: number }[] }
 /** One sellable variant of a marketplace product. Prices are minor units (kuruş), same as the rest of OpenShelf. */
 export interface MarketplaceProductVariant {
   barcode: string; stockCode?: string; quantity: number; salePrice: number; listPrice: number;
@@ -95,8 +97,6 @@ export interface MarketplaceCategory { externalId: string; parentId: string | nu
 export interface MarketplaceProvider extends OpenShelfIntegration {
   /** Whole category tree, flattened (parents may appear after children). */
   fetchCategories?(): Promise<MarketplaceCategory[]>;
-  /** Which side owns stock/price/content. "trendyol" turns push off and pulls products on a schedule. */
-  readonly sourceOfTruth?: "local" | "trendyol";
   /** Pages through the seller's catalog (approved products). Cursor is opaque. */
   fetchProducts?(cursor?: string): Promise<{ products: MarketplaceProduct[]; nextCursor?: string }>;
   pushStockAndPrice(updates: MarketplaceStockUpdate[]): Promise<{ ok: boolean; batchId?: string; errors?: string[] }>;

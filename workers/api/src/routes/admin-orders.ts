@@ -105,6 +105,7 @@ adminOrders.post("/orders/:id/shipment", requireRole("staff"), async (c) => {
   const id = c.req.param("id"); const b = await body(c, ShipmentBody); const db = c.get("db");
   const [o] = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
   if (!o) throw notFound("Order");
+  if (o.source !== "website") throw new ApiError(409, "channel_managed", `Shipping for ${o.source} orders is managed by the marketplace`);
   if (!["paid", "fulfilling"].includes(o.status)) throw new ApiError(409, "invalid_order_state", "Order must be paid before shipping");
   let a = null; let pid = "geliver";
   for (const p of SHIPPING_PROVIDER_IDS) { a = await getAdapter<ShippingProvider>(c.env, db, p); if (a) { pid = p; break; } }
@@ -122,8 +123,9 @@ adminOrders.post("/orders/:id/shipment", requireRole("staff"), async (c) => {
 
 adminOrders.post("/orders/:id/invoice", requireRole("staff"), async (c) => {
   const id = c.req.param("id"); const db = c.get("db");
-  const [o] = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, id)).limit(1);
+  const [o] = await db.select({ status: orders.status, source: orders.source }).from(orders).where(eq(orders.id, id)).limit(1);
   if (!o) throw notFound("Order");
+  if (o.source !== "website") throw new ApiError(409, "channel_managed", `Invoicing for ${o.source} orders is managed by the marketplace`);
   if (["pending", "awaiting_payment", "cancelled"].includes(o.status)) throw new ApiError(409, "invalid_order_state", "Order is not paid");
   let on = false;
   for (const p of INVOICING_PROVIDER_IDS) if (await isIntegrationEnabled(c.env, db, p)) { on = true; break; }

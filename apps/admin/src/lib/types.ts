@@ -24,7 +24,7 @@ export interface OrderRow { id: string; number: string; status: OrderStatus; sou
 export interface OrderDetail extends OrderRow {
   items: { id: string; title: string; sku?: string; quantity: number; unitPrice: number; total: number }[];
   payments: { id: string; provider: string; status: string; amount: number; createdAt?: string; isMock?: boolean }[];
-  shipments: { id: string; carrier?: string; trackingNumber?: string; status: string; labelUrl?: string; createdAt?: string }[];
+  shipments: { id: string; carrier?: string; trackingNumber?: string; status: string; labelUrl?: string; trackingUrl?: string; createdAt?: string }[];
   invoices: { id: string; type: string; number?: string; status: string; url?: string; createdAt?: string }[];
   events: { id: string; type: string; detail?: string; createdAt: string }[];
   shippingAddress?: Record<string, string>;

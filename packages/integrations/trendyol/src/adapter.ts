@@ -17,8 +17,8 @@ export const trendyolConfigSchema = z.object({
     supplierId: z.string().regex(/^\d{3,12}$/, "Numeric Supplier/Seller ID"),
     /** docs/3-prod-stage-environments-1: stage = stageapigw.trendyol.com, needs IP whitelisting + different credentials. */
     environment: z.enum(["production", "stage"]).default("production"),
-    /** "trendyol": Trendyol owns stock, price and content; OpenShelf pulls them on a schedule and stops pushing stock/price. */
-    sourceOfTruth: z.enum(["local", "trendyol"]).default("local"),
+    /** Legacy field: OpenShelf is ALWAYS the source of truth now. Old stored values are accepted and ignored. */
+    sourceOfTruth: z.any().optional().transform(() => "local" as const),
   }),
   secrets: z.object({
     apiKey: z.string().min(4), apiSecret: z.string().min(4),
@@ -38,11 +38,6 @@ export const manifest: IntegrationManifest = {
       key: "environment", label: "Environment", type: "select",
       options: [{ value: "production", label: "Production" }, { value: "stage", label: "Stage (test)" }],
       help: "Default production. Stage needs Trendyol-side IP whitelisting (503 = not whitelisted) and uses DIFFERENT API credentials than production.",
-    },
-    {
-      key: "sourceOfTruth", label: "Source of truth", type: "select",
-      options: [{ value: "local", label: "OpenShelf (push stock/price to Trendyol)" }, { value: "trendyol", label: "Trendyol (pull products, stock and price into OpenShelf)" }],
-      help: "With Trendyol as the source, a scheduled import overwrites local title, description, images, stock and prices of linked products, and OpenShelf stops pushing stock/price.",
     },
   ],
   secretFields: [
@@ -80,6 +75,12 @@ export function mapPackage(p: any): MarketplaceOrder {
   const id = p.shipmentPackageId ?? p.id; // docs: `id` equals the package id; orderNumber is the parent order
   return {
     externalId: String(id),
+    cargo: {
+      provider: p.cargoProviderName ? String(p.cargoProviderName) : undefined,
+      trackingNumber: p.cargoTrackingNumber ? String(p.cargoTrackingNumber) : undefined,
+      trackingLink: typeof p.cargoTrackingLink === "string" && /^https:\/\//i.test(p.cargoTrackingLink) ? p.cargoTrackingLink : undefined,
+      packageId: String(id), orderNumber: p.orderNumber ? String(p.orderNumber) : undefined,
+    },
     status: mapTrendyolStatus(String(p.status ?? p.shipmentPackageStatus ?? "")) as OrderStatus,
     placedAt: new Date(Number(p.orderDate ?? p.lastModifiedDate ?? Date.now())).toISOString(),
     total: minor(p.packageTotalPrice ?? p.totalPrice ?? p.packageGrossAmount ?? p.grossAmount), // minor units
@@ -90,7 +91,7 @@ export function mapPackage(p: any): MarketplaceOrder {
       address: [addr.address1, addr.address2, addr.district].filter(Boolean).join(" "), city: addr.city ?? "",
     },
     lines: (p.lines ?? []).map((l: any) => ({
-      sku: String(l.merchantSku ?? l.stockCode ?? l.barcode ?? ""), barcode: l.barcode ? String(l.barcode) : undefined,
+      sku: String(l.merchantSku ?? l.stockCode ?? l.barcode ?? ""), name: l.productName ? String(l.productName) : undefined, barcode: l.barcode ? String(l.barcode) : undefined,
       quantity: Number(l.quantity ?? 1), unitPrice: minor(l.lineUnitPrice ?? l.price ?? l.amount),
     })),
   };
@@ -152,7 +153,6 @@ export class TrendyolProvider implements MarketplaceProvider {
     this.ua = userAgentFor(this.sid); // docs/authorization: "<sellerId> - SelfIntegration"; missing User-Agent => 403
     this.sleep = deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
   }
-  get sourceOfTruth() { return this.creds.config.sourceOfTruth; }
   async validateConfig(): Promise<void> {}
 
   private async call(method: string, path: string, body?: unknown): Promise<any> {

@@ -73,4 +73,6 @@ export const print = {
   "help.print.paper.body": "Yazdır’a bastığınızda tarayıcının yazdırma penceresi açılır. Kargo etiketinde kâğıt boyutunu 100 × 150 mm, A4 belgelerde A4 seçin; ölçeği %100 yapın ve kenar boşluklarını “Yok/Varsayılan” bırakın. Arka plan grafikleri kapalıysa barkod soluk çıkabilir; açın.",
   "help.print.paper.warn": "Etiket yazıcınız yalnızca belirli boyutu destekliyorsa, doğru boyutu seçmezseniz barkod kesilebilir ve okunmayabilir.",
   "help.print.paper.guide": "orders#yazdirma",
+  "print.h.marketplace": "TRENDYOL KARGO FİŞİ",
+  "print.h.package": "Paket",
 } satisfies Record<string, string>;

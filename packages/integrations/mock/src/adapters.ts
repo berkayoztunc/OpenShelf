@@ -116,8 +116,8 @@ class MockTrendyol implements MarketplaceProvider {
   }
   async fetchOrders(_since: Date, cursor?: string): Promise<{ orders: MarketplaceOrder[]; nextCursor?: string }> {
     if (cursor) return { orders: [] };
-    return { orders: [{ externalId: "MOCK-1001", status: "Created", placedAt: new Date(0).toISOString(), total: 25000, currency: "TRY",
-      customer: { name: "Mock Müşteri", email: "mock-buyer@example.invalid", address: "Mock Mah. 1. Sok.", city: "İstanbul" }, lines: [{ sku: "MOCK-SKU", quantity: 1, unitPrice: 25000 }] }] };
+    return { orders: [{ externalId: "MOCK-1001", cargo: { provider: "Trendyol Express Marketplace", trackingNumber: "7270000000001", trackingLink: "https://www.trendyol.com/mock-takip", packageId: "MOCK-1001", orderNumber: "MOCK-ORD-1" }, status: "Created", placedAt: new Date(0).toISOString(), total: 25000, currency: "TRY",
+      customer: { name: "Mock Müşteri", email: "mock-buyer@example.invalid", address: "Mock Mah. 1. Sok.", city: "İstanbul" }, lines: [{ sku: "MOCK-SKU", name: "Mock Trendyol Ürünü", quantity: 1, unitPrice: 25000 }] }] };
   }
   async updateShipment(externalId: string, t: { carrier: string; trackingNumber: string }) {
     await recordMock(this.d.db, { channel: "shipment", to: "trendyol", subject: "trendyol.update_shipment", meta: { externalId, ...t } });

@@ -8,6 +8,8 @@ export type JobHandler = (
 ) => Promise<void>;
 
 export interface ShipmentRepo {
+  /** Order channel ("website" | "trendyol" ...). Marketplace orders are shipped/invoiced by the marketplace. */
+  sourceOf?(orderId: string): Promise<string | undefined>;
   loadOrder(orderId: string): Promise<{ input: ShipmentInput; currency: string; total: number } | null>;
   findShipment(orderId: string): Promise<{ id: string } | null>;
   saveShipment(orderId: string, r: { providerShipmentId: string; carrier?: string; trackingNumber?: string; labelUrl?: string }): Promise<void>;
@@ -16,6 +18,7 @@ export interface ShipmentRepo {
 /** Order shipping address JSON is assumed to follow addresses columns: name, phone, line1, line2, city, district, zip. */
 export function drizzleShipmentRepo(db: any): ShipmentRepo {
   return {
+    async sourceOf(orderId) { const [o] = await db.select({ source: orders.source }).from(orders).where(eq(orders.id, orderId)).limit(1); return o?.source; },
     async loadOrder(orderId) {
       const [o] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
       if (!o) return null;
@@ -50,6 +53,8 @@ export function createShipmentHandler(repoFor: (db: any) => ShipmentRepo = drizz
     const orderId = job.payload?.orderId as string | undefined;
     if (!orderId) throw new Error("shipment.create: payload.orderId missing");
     const repo = repoFor(ctx.db);
+    const src = await repo.sourceOf?.(orderId);
+    if (src && src !== "website") { await ctx.log("info", "shipment.create skipped (channel-managed order)", { orderId, source: src }); return; }
     if (await repo.findShipment(orderId)) { await ctx.log("info", "shipment.create skipped (exists)", { orderId }); return; }
     const data = await repo.loadOrder(orderId);
     if (!data) throw new Error(`shipment.create: order ${orderId} not found`);

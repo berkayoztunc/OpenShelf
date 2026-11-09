@@ -11,7 +11,7 @@ export interface RawOrder {
   subtotal: number; discountTotal: number; shippingTotal: number; taxTotal: number; total: number; couponCode?: string | null;
   items: { id: string; sku: string; name: string; quantity: number; unitPrice: number; taxRate?: number; variantId?: string | null }[];
   payments: { id: string; provider: string; status: string; amount: number; isMock?: boolean }[];
-  shipments: { id: string; carrier?: string | null; trackingNumber?: string | null; status: string; labelUrl?: string | null }[];
+  shipments: { id: string; carrier?: string | null; trackingNumber?: string | null; status: string; labelUrl?: string | null; provider?: string; trackingUrl?: string | null; externalPackageId?: string | null }[];
   invoices: { id: string; type: string; number?: string | null; status: string; pdfUrl?: string | null; createdAt?: string | number }[];
 }
 

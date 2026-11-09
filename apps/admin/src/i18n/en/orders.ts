@@ -193,4 +193,7 @@ export const orders = {
   "help.orders.notifications.title": "Order notifications",
   "help.orders.notifications.body": "The log of SMS and e-mails sent to the customer (and the admin) about this order. \"Sent\" means the provider accepted the message; \"Failed\" shows the reason next to it and the system retries automatically.\n\nYou choose which channel sends what for each event in Settings → Notifications.",
   "help.orders.notifications.guide": "orders#siparis-bildirimleri",
+  "orders.detail.managed": "This order comes from {channel}. {channel} handles its shipping and invoice; OpenShelf only mirrors it and prints the shipping slip from the cargo data.",
+  "orders.detail.shipments.managedBody": "Cargo details appear here once the marketplace assigns a carrier and tracking number.",
+  "orders.detail.invoices.managedBody": "The marketplace issues the invoice for this order.",
 } satisfies Record<string, string>;

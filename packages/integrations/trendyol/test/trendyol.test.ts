@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { factory, jobHandlers, mapTrendyolStatus, computeStockDrift, mapPackage } from "../src";
 import { importTrendyolOrder } from "../src";
 import { MAX_INVENTORY_BATCH } from "../src/endpoints";
-import { orders, orderItems, inventory, inventoryMovements, syncCursors, channelListings } from "@openshelf/db";
+import { orders, orderItems, inventory, inventoryMovements, syncCursors, channelListings, shipments, outboxJobs } from "@openshelf/db";
 import { eq } from "drizzle-orm";
 import { makeDb, seedVariants } from "./db";
 
@@ -142,6 +142,35 @@ describe("trendyol.reconcile_orders", () => {
     expect(await importTrendyolOrder(db, mapPackage(pkg(7, "Shipped")))).toBe("duplicate");
     expect((await db.select().from(orders))[0]!.status).toBe("shipped");
     expect((await db.select().from(inventory).where(eq(inventory.variantId, "v1")))[0]!.total).toBe(8);
+  });
+  it("mapPackage keeps Trendyol cargo data; only https tracking links", () => {
+    const o = mapPackage({ ...pkg(9), orderNumber: "ORD9", cargoProviderName: "Trendyol Express", cargoTrackingNumber: "7270001", cargoTrackingLink: "https://t.example/7270001" });
+    expect(o.cargo).toEqual({ provider: "Trendyol Express", trackingNumber: "7270001", trackingLink: "https://t.example/7270001", packageId: "9", orderNumber: "ORD9" });
+    expect(mapPackage({ ...pkg(9), cargoTrackingLink: "javascript:alert(1)" }).cargo?.trackingLink).toBeUndefined();
+  });
+  it("mirrors cargo as a trendyol shipment, and fills it in when Trendyol assigns it later (no double decrement)", async () => {
+    const { db, raw } = makeDb(); seedVariants(raw);
+    expect(await importTrendyolOrder(db, mapPackage(pkg(21)))).toBe("imported");
+    expect(await db.select().from(shipments)).toHaveLength(0); // no cargo yet
+    const withCargo = { ...pkg(21, "Shipped"), cargoProviderName: "Yurtiçi Kargo Marketplace", cargoTrackingNumber: "TRK21", cargoTrackingLink: "https://t.example/TRK21" };
+    expect(await importTrendyolOrder(db, mapPackage(withCargo))).toBe("duplicate");
+    expect(await importTrendyolOrder(db, mapPackage(withCargo))).toBe("duplicate"); // idempotent
+    const sh = await db.select().from(shipments);
+    expect(sh).toHaveLength(1);
+    expect(sh[0]).toMatchObject({ provider: "trendyol", carrier: "Yurtiçi Kargo Marketplace", trackingNumber: "TRK21", trackingUrl: "https://t.example/TRK21", externalPackageId: "21", status: "in_transit" });
+    expect((await db.select().from(inventory).where(eq(inventory.variantId, "v1")))[0]!.total).toBe(8);
+  });
+  it("order lines keep the product name", async () => {
+    const { db, raw } = makeDb(); seedVariants(raw);
+    await importTrendyolOrder(db, mapPackage(pkg(22, "Created", [{ merchantSku: "SKU1", barcode: "BC1", quantity: 1, price: 10, productName: "Kırmızı Tişört" } as any])));
+    expect((await db.select().from(orderItems))[0]!.name).toBe("Kırmızı Tişört");
+  });
+  it("reconcile queues a stock push after a Trendyol sale so Trendyol follows local stock", async () => {
+    const { db, raw } = makeDb(); seedVariants(raw);
+    const f = vi.fn(async () => json({ hasMore: false, content: [pkg(30)] }));
+    await jobHandlers["trendyol.reconcile_orders"]!({ id: "j", kind: "k", payload: {}, attempts: 0 }, ctxOf(db, provider(f)));
+    const jobs = await db.select().from(outboxJobs);
+    expect(jobs.filter((j: any) => j.kind === "trendyol.stock_push")).toHaveLength(1);
   });
   it("import is atomic: a failure mid-batch leaves no order and no stock change", async () => {
     const { db, raw } = makeDb(); seedVariants(raw);

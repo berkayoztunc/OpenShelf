@@ -1,11 +1,11 @@
 import { Hono } from "hono";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { channelListings, integrationConfigs, outboxJobs, productMappings, productVariants, products, trendyolCalls } from "@openshelf/db";
+import { channelListings, integrationConfigs, integrationEvents, outboxJobs, syncCursors, productMappings, productVariants, products, trendyolCalls } from "@openshelf/db";
 import {
   TrendyolCallBody, type MockHandler, type TrendyolCatalogResponse, type TrendyolEnv, type TrendyolOperation,
 } from "@openshelf/shared";
 import {
-  ConsoleError, MAX_BODY_BYTES, MAX_RESPONSE_BYTES, TRENDYOL_MOCKS, TRENDYOL_OPERATIONS, loadImportStatus, opAvailableOn, runCall,
+  ConsoleError, MAX_BODY_BYTES, MAX_RESPONSE_BYTES, TRENDYOL_MOCKS, TRENDYOL_OPERATIONS, loadImportStatus, opAvailableOn, runCall, stockDriftReport, ORDERS_CURSOR_KEY,
 } from "@openshelf/integration-trendyol";
 import { z } from "zod";
 import type { AppEnv } from "../env";
@@ -227,3 +227,30 @@ adminTrendyol.post("/trendyol/import", async (c) => {
 });
 
 adminTrendyol.get("/trendyol/import", async (c) => c.json({ status: await loadImportStatus(c.get("db")) }));
+
+/** Sync health for the console overview: orders mirrored, cargo coverage, stock drift (local is the truth), last errors. */
+adminTrendyol.get("/trendyol/health", async (c) => {
+  const db = c.get("db");
+  const one = async <T,>(q: ReturnType<typeof sql>) => ((await db.all(q)) as T[])[0];
+  const wk = Math.floor(Date.now() / 1000) - 7 * 86400;
+  const ord = await one<{ total: number; week: number; last: number | null; noCargo: number; unmapped: number }>(sql`
+    SELECT COUNT(*) AS total,
+      SUM(CASE WHEN o.created_at >= ${wk} THEN 1 ELSE 0 END) AS week, MAX(o.created_at) AS last,
+      SUM(CASE WHEN o.status NOT IN ('cancelled','delivered') AND NOT EXISTS (SELECT 1 FROM shipments s WHERE s.order_id = o.id AND s.provider = 'trendyol') THEN 1 ELSE 0 END) AS noCargo,
+      (SELECT COUNT(*) FROM order_items i JOIN orders o2 ON o2.id = i.order_id WHERE o2.source = 'trendyol' AND i.variant_id IS NULL) AS unmapped
+    FROM orders o WHERE o.source = 'trendyol'`);
+  const [cur] = await db.select().from(syncCursors).where(eq(syncCursors.key, ORDERS_CURSOR_KEY)).limit(1);
+  const lst = await one<{ enabled: number; errors: number; lastPush: number | null }>(sql`
+    SELECT COUNT(*) AS enabled, SUM(CASE WHEN last_error IS NOT NULL THEN 1 ELSE 0 END) AS errors, MAX(last_synced_at) AS lastPush
+    FROM channel_listings WHERE channel = 'trendyol' AND enabled = 1`);
+  const drift = await stockDriftReport(db).catch(() => []);
+  const events = await db.select().from(integrationEvents).where(and(eq(integrationEvents.provider, "trendyol"), sql`${integrationEvents.level} IN ('warn','error')`)).orderBy(desc(integrationEvents.id)).limit(5);
+  const sec = (v: number | null | undefined) => (v ? new Date(v * 1000).toISOString() : null);
+  return c.json({
+    orders: { total: ord?.total ?? 0, last7d: ord?.week ?? 0, lastAt: sec(ord?.last), withoutCargo: ord?.noCargo ?? 0, unmappedLines: ord?.unmapped ?? 0 },
+    reconcile: { lastRunAt: cur?.updatedAt ? new Date(cur.updatedAt).toISOString() : null },
+    stock: { listings: lst?.enabled ?? 0, errors: lst?.errors ?? 0, drift: drift.length, lastPushAt: sec(lst?.lastPush), truth: "local" },
+    import: await loadImportStatus(db),
+    errors: events.map((e) => ({ id: e.id, level: e.level, message: e.message, at: e.at ? new Date(e.at as unknown as number).toISOString() : null })),
+  });
+});
