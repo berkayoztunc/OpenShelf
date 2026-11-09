@@ -1,6 +1,9 @@
 export const nav = {
-  "nav.group.store": "Store",
-  "nav.group.configuration": "Configuration",
+  "nav.group.sales": "Sales",
+  "nav.group.catalog": "Catalog",
+  "nav.group.communication": "Marketing & messages",
+  "nav.group.channels": "Channels & shipping",
+  "nav.group.integrations": "Integrations & logs",
   "nav.group.administration": "Administration",
   "nav.dashboard": "Dashboard",
   "nav.orders": "Orders",

@@ -18,31 +18,40 @@ import { ThemeMenu } from "./ThemeMenu";
 
 /** `badge: "integrations"` shows a red dot when an enabled integration is failing. Add new pages by appending to an `items` array. */
 interface NavItem { to: string; labelKey: MessageKey; icon: LucideIcon; mockOnly?: boolean; badge?: "integrations" }
-export const NAV_GROUPS: { titleKey: MessageKey; items: NavItem[] }[] = [
-  { titleKey: "nav.group.store", items: [
+/** Sidebar structure. A group without `titleKey` renders without a heading (the dashboard on top). Groups whose items are all hidden are not shown. */
+export const NAV_GROUPS: { id: string; titleKey?: MessageKey; items: NavItem[] }[] = [
+  { id: "home", items: [
     { to: "/", labelKey: "nav.dashboard", icon: LayoutDashboard },
+  ] },
+  { id: "sales", titleKey: "nav.group.sales", items: [
     { to: "/orders", labelKey: "nav.orders", icon: ClipboardList },
-    { to: "/invoices", labelKey: "nav.invoices", icon: FileText },
-    { to: "/emails", labelKey: "nav.emails", icon: Mail },
-    { to: "/campaigns", labelKey: "nav.campaigns", icon: Megaphone },
-    { to: "/sms", labelKey: "nav.sms", icon: MessageSquare },
-    { to: "/products", labelKey: "nav.products", icon: Package },
-    { to: "/categories", labelKey: "nav.categories", icon: Tags },
     { to: "/customers", labelKey: "nav.customers", icon: Users },
+    { to: "/invoices", labelKey: "nav.invoices", icon: FileText },
     { to: "/coupons", labelKey: "nav.coupons", icon: Ticket },
   ] },
-  { titleKey: "nav.group.configuration", items: [
-    { to: "/integrations", labelKey: "nav.integrations", icon: Plug, badge: "integrations" },
+  { id: "catalog", titleKey: "nav.group.catalog", items: [
+    { to: "/products", labelKey: "nav.products", icon: Package },
+    { to: "/categories", labelKey: "nav.categories", icon: Tags },
+  ] },
+  { id: "communication", titleKey: "nav.group.communication", items: [
+    { to: "/campaigns", labelKey: "nav.campaigns", icon: Megaphone },
+    { to: "/emails", labelKey: "nav.emails", icon: Mail },
+    { to: "/sms", labelKey: "nav.sms", icon: MessageSquare },
+  ] },
+  { id: "channels", titleKey: "nav.group.channels", items: [
     { to: "/trendyol", labelKey: "nav.trendyol", icon: ShoppingBag },
     { to: "/geliver", labelKey: "nav.geliver", icon: Truck },
-    { to: "/settings", labelKey: "nav.settings", icon: Settings },
-    { to: "/mock-inbox", labelKey: "nav.mockInbox", icon: Inbox, mockOnly: true },
-    { to: "/integration-events", labelKey: "nav.integrationEvents", icon: Zap },
   ] },
-  { titleKey: "nav.group.administration", items: [
+  { id: "integrations", titleKey: "nav.group.integrations", items: [
+    { to: "/integrations", labelKey: "nav.integrations", icon: Plug, badge: "integrations" },
+    { to: "/integration-events", labelKey: "nav.integrationEvents", icon: Zap },
+    { to: "/mock-inbox", labelKey: "nav.mockInbox", icon: Inbox, mockOnly: true },
+  ] },
+  { id: "administration", titleKey: "nav.group.administration", items: [
+    { to: "/settings", labelKey: "nav.settings", icon: Settings },
     { to: "/security", labelKey: "nav.security", icon: ShieldCheck },
-    { to: "/audit", labelKey: "nav.audit", icon: BarChart3 },
     { to: "/data", labelKey: "nav.data", icon: Database },
+    { to: "/audit", labelKey: "nav.audit", icon: BarChart3 },
     { to: "/help", labelKey: "nav.help", icon: BookOpen },
   ] },
 ];
@@ -149,9 +158,10 @@ export function Layout() {
         <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
           {NAV_GROUPS.map((g) => {
             const items = g.items.filter((n) => !n.mockOnly || settings.data?.system?.mockMode);
+            if (items.length === 0) return null;
             return (
-              <div key={g.titleKey}>
-                <p className="mb-1.5 px-2 text-[11px] font-semibold uppercase tracking-wider text-muted">{t(g.titleKey)}</p>
+              <div key={g.id} data-nav-group={g.id}>
+                {g.titleKey && <p className="mb-1.5 px-2 text-[11px] font-semibold uppercase tracking-wider text-muted">{t(g.titleKey)}</p>}
                 <div className="space-y-0.5">
                   {items.map((n) => (
                     <NavLink key={n.to} to={n.to} end={n.to === "/"}

@@ -1,6 +1,9 @@
 export const nav = {
-  "nav.group.store": "Mağaza",
-  "nav.group.configuration": "Yapılandırma",
+  "nav.group.sales": "Satış",
+  "nav.group.catalog": "Katalog",
+  "nav.group.communication": "Pazarlama ve mesajlar",
+  "nav.group.channels": "Kanallar ve kargo",
+  "nav.group.integrations": "Entegrasyonlar ve loglar",
   "nav.group.administration": "Yönetim",
   "nav.dashboard": "Genel bakış",
   "nav.orders": "Siparişler",
