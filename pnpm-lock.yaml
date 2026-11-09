@@ -527,6 +527,8 @@ importers:
 
   site: {}
 
+  tooling/deploy: {}
+
   tooling/help-shots:
     devDependencies:
       playwright-core:

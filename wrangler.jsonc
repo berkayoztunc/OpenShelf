@@ -17,6 +17,8 @@
     "run_worker_first": [
       "/api/*", "/webhooks/*", "/media/*", "/feeds/*", "/mock/*",
       "/sitemap.xml", "/sitemap-*", "/robots.txt", "/health", "/admin", "/admin/*",
+      // MCP endpoint (Bearer header or /mcp/<token> connector URL) and the public marketing unsubscribe page
+      "/mcp", "/mcp/*", "/unsubscribe/*",
       // Storefront HTML routes: the Worker injects SEO head tags + a crawler snapshot into the SPA shell (workers/api/src/routes/storefront.ts).
       // Listed explicitly (no negation patterns) so /assets/* and every other static file stay on the static fast path.
       "/", "/products", "/products/*", "/product/*", "/category/*", "/legal/*", "/cart", "/checkout", "/order/*"
