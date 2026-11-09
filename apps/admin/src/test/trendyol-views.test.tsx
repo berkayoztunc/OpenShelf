@@ -31,6 +31,7 @@ function setup(handlers: Record<string, (c: Call) => unknown>, mode: TrendyolCat
   const calls: Call[] = [];
   mockApi({
     "GET /api/admin/trendyol/catalog": () => cat(mode),
+    "GET /api/admin/orders": () => ({ items: [], total: 0, page: 1, pageSize: 10 }),
     "POST /api/admin/trendyol/call": (_p, body) => {
       const c = body as Call; calls.push(c);
       const h = handlers[c.operationId];

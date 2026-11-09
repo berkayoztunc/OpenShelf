@@ -591,4 +591,13 @@ export const trendyolviews = {
   "trendyolviews.import.dryTag": "preview, nothing written",
   "trendyolviews.import.truth": "Source of truth: Trendyol",
   "trendyolviews.import.stats": "{pages} page(s) · {variants} variant(s) · {linked} linked · {created} created · {updated} updated · {skipped} skipped · {stockChanged} stock change(s) · {categories} categorie(s) created",
+  "trendyolviews.mirror.title": "Orders mirrored in OpenShelf",
+  "trendyolviews.mirror.body": "Trendyol ships and invoices these orders. OpenShelf keeps a copy (stock, reports) and prints the shipping slip from Trendyol’s cargo data.",
+  "trendyolviews.mirror.empty.title": "No Trendyol orders imported yet",
+  "trendyolviews.mirror.empty.body": "Orders are pulled every 5 minutes once Trendyol is enabled.",
+  "trendyolviews.mirror.col.order": "Order",
+  "trendyolviews.mirror.col.date": "Date",
+  "trendyolviews.mirror.col.status": "Status",
+  "trendyolviews.mirror.col.total": "Total",
+  "trendyolviews.mirror.slip": "Shipping slip",
 } satisfies Record<string, string>;

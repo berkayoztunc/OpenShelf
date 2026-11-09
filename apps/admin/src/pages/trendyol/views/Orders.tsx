@@ -4,6 +4,7 @@ import { Button, Card, EmptyState, Table, TextField, Td, cx } from "../../../com
 import { RangeFields, Stat, StatusBadge, TableSkeleton, TyErrorBox, TyPager, ViewGate, arr, num, paged, presetRange, rangeValid, str, tryMoney, tsDate, useOps, useTyQuery, useTyWrite } from "../../../components/trendyol/views/shared";
 import type { Range } from "../../../components/trendyol/views/shared";
 import { OrderDrawer } from "./orders/OrderDrawer";
+import { MirroredOrders } from "./orders/MirroredOrders";
 import { useT } from "../../../i18n";
 
 const STATUSES = ["Created", "Picking", "Invoiced", "Shipped", "Delivered", "Cancelled", "UnSupplied", "Returned", "UnDelivered"] as const;
@@ -51,6 +52,7 @@ function OrdersBody() {
 
   return (
     <div className="space-y-5">
+      <MirroredOrders />
       <Card title={t("trendyolviews.orders.filters")} actions={<Button size="sm" variant="secondary" loading={q.isFetching} onClick={() => void q.refetch()}><RefreshCw size={13} />{t("trendyolviews.common.refresh")}</Button>}>
         <div className="space-y-4">
           <RangeFields idPrefix="tyo" range={range} maxDays={14} presets={["today", "d3", "d7", "d14"]} onChange={(r) => { setPage(0); setRange(r); }} />

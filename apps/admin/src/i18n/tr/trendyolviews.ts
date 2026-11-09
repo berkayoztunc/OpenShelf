@@ -591,4 +591,13 @@ export const trendyolviews = {
   "trendyolviews.import.dryTag": "önizleme, hiçbir şey yazılmadı",
   "trendyolviews.import.truth": "Doğruluk kaynağı: Trendyol",
   "trendyolviews.import.stats": "{pages} sayfa · {variants} varyant · {linked} bağlandı · {created} oluşturuldu · {updated} güncellendi · {skipped} atlandı · {stockChanged} stok değişimi · {categories} kategori oluşturuldu",
+  "trendyolviews.mirror.title": "OpenShelf’e yansıyan siparişler",
+  "trendyolviews.mirror.body": "Bu siparişlerin kargo ve faturasını Trendyol yönetir. OpenShelf kopyasını tutar (stok, raporlar) ve Trendyol kargo bilgisinden kargo fişi basar.",
+  "trendyolviews.mirror.empty.title": "Henüz içe aktarılan Trendyol siparişi yok",
+  "trendyolviews.mirror.empty.body": "Trendyol etkinleştirilince siparişler 5 dakikada bir çekilir.",
+  "trendyolviews.mirror.col.order": "Sipariş",
+  "trendyolviews.mirror.col.date": "Tarih",
+  "trendyolviews.mirror.col.status": "Durum",
+  "trendyolviews.mirror.col.total": "Toplam",
+  "trendyolviews.mirror.slip": "Kargo fişi",
 } satisfies Record<string, string>;

@@ -3,6 +3,7 @@ import { screen } from "@testing-library/react";
 import OrderDetail from "../pages/OrderDetail";
 import { LabelDoc } from "../pages/print/docs";
 import type { RawOrder } from "../lib/rawOrder";
+import { MirroredOrders } from "../pages/trendyol/views/orders/MirroredOrders";
 import Overview from "../pages/trendyol/views/Overview";
 import { mockApi, renderRoutes } from "./helpers";
 
@@ -43,5 +44,12 @@ describe("channel-managed orders (Trendyol)", () => {
     renderRoutes({ "/": <Overview /> }, "/");
     expect(await screen.findByTestId("tdy-overview")).toHaveTextContent("12");
     expect(screen.getByText("lines without variant mapping")).toBeInTheDocument();
+  });
+
+  it("Trendyol tab lists mirrored orders with link to the local order", async () => {
+    mockApi({ "GET /api/admin/orders": (p) => { expect(p).toContain("source=trendyol"); return { items: [{ id: "o9", number: "TY-555", source: "trendyol", status: "shipped", email: "t@example.invalid", createdAt: 1767000000, currency: "TRY", total: 1000 }], total: 1, page: 1, pageSize: 10 }; } });
+    renderRoutes({ "/": <MirroredOrders /> }, "/");
+    expect(await screen.findByRole("link", { name: "TY-555" })).toHaveAttribute("href", "/orders/o9");
+    expect(screen.getAllByTestId("tdy-mirror-row")).toHaveLength(1);
   });
 });
