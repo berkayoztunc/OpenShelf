@@ -24,6 +24,10 @@ Sunucu JSON döner; istemci yalnızca SSE kabul ediyorsa tek bir `text/event-str
 ## Araç izinleri (owner)
 **Ayarlar → MCP / AI erişimi → Araçlar** her aracı gruplarıyla ve bir onay kutusuyla listeler. Bir aracın işaretini kaldırırsanız hiçbir AI istemcisi onu göremez veya çağıramaz; `full` anahtar olsa bile (araç yalnızca işaretliyse **ve** anahtarın seviyesi izin veriyorsa çalışır). Hazır ayarlar: yalnızca okuma araçları, `full` araçlar kapalı, hepsine izin ver. Ana şalter anahtarları silmeden tüm MCP erişimini kapatır. Yalnızca owner değiştirebilir; admin görüntüler; anahtar asla değiştiremez. Varsayılan: her şey açık.
 
+## Ayar ve SEO araçları
+- **Mağaza ayarları** (PATCH: yalnızca gönderdiğiniz alanlar değişir, iç içe nesneler birleşir, birleşmiş grup bütün olarak doğrulanır): `update_store_profile` (mağaza adı, slogan, iletişim, para birimi, vergi), `update_seo_settings`, `update_branding`, `update_legal_pages`, `update_checkout_settings`, `update_tracking_settings`, `update_notification_settings`; tek grup okumak için `get_settings_group`.
+- **SEO**: `seo_audit` (site geneli anahtarlar + her ürün/kategori eksiği: başlık/açıklama yok, noindex, alt metinsiz görsel, tekrar eden başlık), `update_product_seo` / `update_category_seo` (yalnızca arama ve sosyal alanlar), `seo_preview` (Google/sosyal ağların tam olarak ne göreceği).
+
 ## MCP'den asla erişilemeyenler
 Kullanıcı/şifre/MFA, anahtar oluşturma, entegrasyon **sırlarını** yazma, mock modu anahtarı, fabrika sıfırlama, mock gelen kutusu, Trendyol geçmişi silme. Yeni bir admin rotası ne araç ne de hariç tutma listesinde ise `mcp.test.ts` kırılır (`workers/api/src/mcp/tools.ts`).
 

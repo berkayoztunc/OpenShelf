@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-  CategoryInput, ComposeEmailBody, CouponInput, GeliverCallBody, InventoryAdjustBody, ManualInvoiceBody, OrderStatusBody, ProductInput, RefundBody, SETTING_GROUPS,
+  BrandingSettings, CategoryInput, CheckoutSettings, ComposeEmailBody, GeneralSettings, LegalSettings, NotificationSettings, SeoSettings, TrackingSettings, CouponInput, GeliverCallBody, InventoryAdjustBody, ManualInvoiceBody, OrderStatusBody, ProductInput, RefundBody, SETTING_GROUPS,
   ShipmentBody, TrendyolCallBody,
 } from "@openshelf/shared";
 import { CampaignBody } from "../lib/campaigns";
@@ -10,7 +10,7 @@ export const LEVEL_RANK: Record<Level, number> = { read: 1, write: 2, full: 3 };
 
 export interface ToolDef {
   name: string; title: string; description: string; level: Level;
-  method: "GET" | "POST" | "PUT" | "DELETE";
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   /** path relative to /api/admin, `:param` segments are filled from the arguments of the same name */
   path: string;
   /** zod shape of the tool arguments (path params + query params + optional `body`) */
@@ -19,9 +19,13 @@ export interface ToolDef {
   /** argument holding the JSON request body (default "body" when the shape has it) */
   bodyArg?: string;
   /** "csv": send `csv` argument as a multipart file upload (product import) */
-  upload?: "csv";
+  upload?: "csv" | "base64";
   /** full-level tools need `confirm: true` unless the API itself has a confirm rule (raw Trendyol/Geliver calls) */
   noConfirm?: boolean;
+  /** route pattern this tool covers when `path` is concrete (e.g. path "/settings/seo" covers "PATCH /settings/:group") */
+  coverAs?: string;
+  /** forward the caller's `body` argument as sent (no defaults/transforms applied here): the API merges + validates it (PATCH tools) */
+  rawBody?: boolean;
 }
 
 /* ---------- shared argument pieces ---------- */
@@ -53,6 +57,9 @@ export const TOOLS: ToolDef[] = [
   t({ name: "list_categories", title: "List categories", level: "read", method: "GET", path: "/categories", shape: {}, description: "All categories (tree via parentId)." }),
   t({ name: "list_coupons", title: "List coupons", level: "read", method: "GET", path: "/coupons", shape: {}, description: "All coupons with usage." }),
   t({ name: "get_settings", title: "Get all settings", level: "read", method: "GET", path: "/settings", shape: {}, description: "All setting groups: general, branding, seo, legal, checkout, tracking, notifications, system. Read before update_settings (updates replace a whole group)." }),
+  t({ name: "get_settings_group", title: "Get one settings group", level: "read", method: "GET", path: "/settings/:group",
+    shape: { group: z.enum(SETTING_KEYS).describe("general (store name, contact, currency, tax) | branding | seo | legal | checkout | tracking | notifications") },
+    description: "Read ONE settings group (smaller than get_settings)." }),
   t({ name: "list_integrations", title: "List integrations", level: "read", method: "GET", path: "/integrations", shape: {}, description: "Integration status (enabled, configured). Secrets are always masked." }),
   t({ name: "list_integration_events", title: "Integration events", level: "read", method: "GET", path: "/integration-events", query: ["provider", "page", "pageSize"], shape: { provider: q("e.g. trendyol, geliver, outbox"), ...page }, description: "Integration log (warnings/errors from background jobs): first place to look when something fails." }),
   t({ name: "list_marketing_events", title: "Marketing events", level: "read", method: "GET", path: "/marketing-events", query: ["page", "pageSize"], shape: { ...page }, description: "Server-side analytics/ads events sent (Meta, GA4) and their status." }),
@@ -60,9 +67,14 @@ export const TOOLS: ToolDef[] = [
   t({ name: "list_audit_logs", title: "Audit log", level: "read", method: "GET", path: "/audit-logs", query: ["page", "pageSize"], shape: { ...page }, description: "Who did what: admin actions, including MCP tool calls." }),
   t({ name: "mock_status", title: "Mock mode status", level: "read", method: "GET", path: "/mock/status", shape: {}, description: "Whether mock (demo) mode is allowed/enabled. In mock mode no real payments, e-mails or SMS are sent." }),
   t({ name: "list_media", title: "List media", level: "read", method: "GET", path: "/media", query: ["kind"], shape: { kind: q("image|document") }, description: "Uploaded media library." }),
+  t({ name: "get_image_specs", title: "Image requirements", level: "read", method: "GET", path: "/media/specs", shape: {},
+    description: "ALWAYS call this before generating an image for the store. Returns, per kind (product, banner, og, logo, logo_dark, favicon): recommended pixel size and aspect ratio, minimum size, max file size actually enforced, transparency, preferred formats, where/how the image is shown (and cropped), composition/safe-area guidance and how to attach it after upload." }),
   t({ name: "export_data", title: "Export data", level: "read", method: "GET", path: "/export/:file", shape: { file: z.enum(["products.csv", "products.json", "orders.csv", "orders.json", "customers.csv", "customers.json", "config.json"]).describe("export file name") },
     description: `Bulk export (up to 10000 rows). config.json is the configuration backup without secrets. ${SENSITIVE}` }),
-  t({ name: "seo_preview", title: "SEO preview", level: "read", method: "GET", path: "/seo/preview", query: ["type", "id"], shape: { type: q("product|category|home"), id: q("entity id") }, description: "What search engines/social previews will see for a page." }),
+  t({ name: "seo_preview", title: "SEO preview", level: "read", method: "GET", path: "/seo/preview", query: ["type", "id"], shape: { type: z.enum(["product", "category", "home"]).describe("page type"), id: q("product/category id (not needed for home)") },
+    description: "Exactly what search engines and social networks will see for a page: resolved <title>, description, canonical URL, robots, Open Graph/Twitter card and JSON-LD. Use after changing SEO fields to verify." }),
+  t({ name: "seo_audit", title: "SEO audit", level: "read", method: "GET", path: "/seo/audit", shape: {},
+    description: "SEO health check of the whole store: site-wide problems (store hidden from search, default store name, no home title/description, no default social image, JSON-LD off, no Search Console code...) plus every active product/category with gaps (no SEO title/description, thin description, noindex, images without alt text, duplicate titles). Start here for 'improve my SEO', then fix with update_product_seo / update_category_seo / update_seo_settings / update_store_profile and verify with seo_preview." }),
   t({ name: "catalog_lookup", title: "Catalog lookup", level: "read", method: "GET", path: "/catalog-lookup", query: ["q"], shape: { q: q("sku/name") }, description: "Find variants by sku/name (for invoices, mappings)." }),
   t({ name: "customer_lookup", title: "Customer lookup", level: "read", method: "GET", path: "/customer-lookup", query: ["q"], shape: { q: q("name/e-mail") }, description: `Find customers by name/e-mail. ${SENSITIVE}` }),
   /* e-mail / SMS / campaigns (read) */
@@ -90,7 +102,7 @@ export const TOOLS: ToolDef[] = [
 
   /* ================= write ================= */
   t({ name: "create_product", title: "Create product", level: "write", method: "POST", path: "/products", shape: { body: ProductInput },
-    description: "Create a product with variants. Prices are minor units (kuruş). status=draft keeps it off the storefront. Look at an existing product (get_product) for the exact shape." }),
+    description: "Create a product with variants. Prices are minor units (kuruş). status=draft keeps it off the storefront. Look at an existing product (get_product) for the exact shape. Images: images:[{mediaId (from upload_media) or https url, alt}], first = cover; recommended 1600×2000 (4:5): see get_image_specs." }),
   t({ name: "update_product", title: "Update product", level: "write", method: "PUT", path: "/products/:id", shape: { id: id("product"), body: ProductInput }, description: "Replace a product (send the FULL product, e.g. from get_product with your changes)." }),
   t({ name: "create_category", title: "Create category", level: "write", method: "POST", path: "/categories", shape: { body: CategoryInput }, description: "Create a category (parentId for nesting)." }),
   t({ name: "update_category", title: "Update category", level: "write", method: "PUT", path: "/categories/:id", shape: { id: id("category"), body: CategoryInput }, description: "Replace a category." }),
@@ -102,9 +114,33 @@ export const TOOLS: ToolDef[] = [
     description: "Move an order along its allowed transitions (paid/refunded are set by payment flows and are rejected). Trendyol orders are managed by Trendyol." }),
   t({ name: "update_settings", title: "Update settings group", level: "write", method: "PUT", path: "/settings/:group",
     shape: { group: z.enum(SETTING_KEYS).describe("setting group (system/mock settings are not available)"), value: z.record(z.unknown()).describe("the COMPLETE new value of the group (get_settings first, change fields, send everything back)") }, bodyArg: "value",
-    description: "Replace one settings group. Validation errors list the bad fields. Does not touch integration secrets." }),
+    description: "REPLACE a whole settings group (every field must be present). Prefer the typed patch tools (update_store_profile, update_seo_settings, update_branding, update_legal_pages, update_checkout_settings, update_tracking_settings, update_notification_settings) which change only the fields you send. Does not touch integration secrets." }),
+  /* --- store settings: PATCH = send only the fields to change (nested objects merge); the merged group is validated as a whole --- */
+  t({ name: "update_store_profile", title: "Update store profile (name, contact, currency, tax)", level: "write", method: "PATCH", path: "/settings/general", coverAs: "/settings/:group", rawBody: true, shape: { body: GeneralSettings.partial() },
+    description: "Change store-wide basics: storeName (the brand shown in header, e-mails, SEO titles), tagline, description (home/SEO fallback, max 500), contactEmail/Phone, address, taxId, currency (TRY), pricesIncludeTax, defaultTaxRate (percent), defaultLocale (tr|en), locales, timezone. Send ONLY the fields to change." }),
+  t({ name: "update_seo_settings", title: "Update store SEO settings", level: "write", method: "PATCH", path: "/settings/seo", coverAs: "/settings/:group", rawBody: true, shape: { body: SeoSettings.partial() },
+    description: "Site-wide SEO: titleTemplate (\"%s | {storeName}\"), homeTitle (≤120), homeDescription (≤320), defaultOgMediaId (1200×630 image from upload_media), robotsIndex (false hides the WHOLE store from search engines: be careful), twitterHandle, Google/Bing/Facebook verification codes, robotsDisallow paths, jsonLd (structured data). Send ONLY the fields to change; verify with seo_preview type=home." }),
+  t({ name: "update_branding", title: "Update branding", level: "write", method: "PATCH", path: "/settings/branding", coverAs: "/settings/:group", rawBody: true, shape: { body: BrandingSettings.partial() },
+    description: "Logo/dark logo/favicon (media ids from upload_media; see get_image_specs), home banners (bannerMediaIds ≤6, bannerTitle, bannerSubtitle, bannerCtaLabel, bannerCtaUrl), primaryColor/accentColor (#RRGGBB) and social links (instagram, facebook, x, youtube, tiktok: nested object merges). Send ONLY the fields to change." }),
+  t({ name: "update_legal_pages", title: "Update legal pages", level: "write", method: "PATCH", path: "/settings/legal", coverAs: "/settings/:group", rawBody: true, shape: { body: LegalSettings.partial() },
+    description: "Legal page texts shown in the storefront footer: kvkk, distanceSales (mesafeli satış), returns (iade), cookies, privacy. Plain text/markdown. Sending a key replaces that whole text." }),
+  t({ name: "update_checkout_settings", title: "Update checkout settings", level: "write", method: "PATCH", path: "/settings/checkout", coverAs: "/settings/:group", rawBody: true, shape: { body: CheckoutSettings.partial() },
+    description: "Checkout: guestCheckout, reservationMinutes (5-120 stock hold), safetyStock (units never sold), freeShippingThreshold (minor units/kuruş, null = off), flatShippingFee (minor units)." }),
+  t({ name: "update_tracking_settings", title: "Update tracking/analytics IDs", level: "write", method: "PATCH", path: "/settings/tracking", coverAs: "/settings/:group", rawBody: true, shape: { body: TrackingSettings.partial() },
+    description: "Public tracking IDs only: ga4MeasurementId (G-XXXX), gtmContainerId (GTM-XXXX), metaPixelId (digits), metaTestEventCode, consentRequired. API secrets are not settable here." }),
+  t({ name: "update_notification_settings", title: "Update notification settings", level: "write", method: "PATCH", path: "/settings/notifications", coverAs: "/settings/:group", rawBody: true, shape: { body: NotificationSettings.partial() },
+    description: "Order e-mail/SMS notifications: fromName, fromEmail, smsSenderId (≤11), adminEmail/adminPhone (+E.164), smsAllowedCountries, daily caps, per-event channels (events.order_paid.sms/email …) and templates (templates.tr.order_paid.subject/body with {{orderNumber}} {{customerName}} {{total}} {{trackingNumber}} {{trackingUrl}} {{storeName}} {{orderUrl}}). Nested objects merge: send only what changes." }),
+  t({ name: "update_product_seo", title: "Update product SEO", level: "write", method: "PATCH", path: "/products/:id/seo", coverAs: "/products/:id/seo", rawBody: true,
+    shape: { id: id("product"), body: ProductInput.pick({ seoTitle: true, seoDescription: true, seoOgMediaId: true, seoOgImageUrl: true, seoNoindex: true, seoCanonical: true }).partial() },
+    description: "Set a product's search/social fields without touching anything else: seoTitle (≤70, ideally 50-60 chars, include the main keyword), seoDescription (≤320, ideally 120-160, benefit + call to action), seoOgMediaId (1200×630 from upload_media) or seoOgImageUrl (https), seoNoindex (true hides it from search), seoCanonical (absolute https URL). Empty string clears a field. Verify with seo_preview type=product." }),
+  t({ name: "update_category_seo", title: "Update category SEO", level: "write", method: "PATCH", path: "/categories/:id/seo", coverAs: "/categories/:id/seo", rawBody: true,
+    shape: { id: id("category"), body: CategoryInput.pick({ seoTitle: true, seoDescription: true, seoOgImageUrl: true, seoNoindex: true }).partial() },
+    description: "Set a category's seoTitle (≤70), seoDescription (≤320), seoOgImageUrl (https) and seoNoindex without touching anything else. Verify with seo_preview type=category." }),
   t({ name: "retry_outbox_job", title: "Retry background job", level: "write", method: "POST", path: "/outbox/:id/retry", shape: { id: id("job") }, description: "Re-queue a failed/dead background job." }),
   t({ name: "test_integration", title: "Test integration", level: "write", method: "POST", path: "/integrations/:provider/test", shape: { provider: z.string().min(1).describe("provider id, e.g. trendyol, geliver, iyzico") }, description: "Run the provider's health check (one outbound API call, nothing is changed)." }),
+  t({ name: "upload_media", title: "Upload image", level: "write", method: "POST", path: "/media", upload: "base64",
+    shape: { kind: z.enum(["product", "banner", "og", "logo", "logo_dark", "favicon"]).describe("what the image is for; see get_image_specs"), data: z.string().min(20).describe("the image file as base64 (no data: prefix)"), filename: z.string().max(120).optional().describe("optional, e.g. hero.webp"), alt: z.string().max(300).optional().describe("alt text (describe the image; important for SEO/accessibility)") },
+    description: "Upload a (generated) image to the media library. png/jpeg/webp/gif/avif only (no SVG), within the size limit of its kind. Returns id, url, size, width, height and `warnings` when it does not fit the slot (wrong aspect ratio / too small): if warnings appear, regenerate to the recommended size. Then attach the id (product images mediaId, branding logoMediaId/faviconMediaId/bannerMediaIds, product seoOgMediaId). Call get_image_specs first." }),
   t({ name: "create_campaign", title: "Create campaign draft", level: "write", method: "POST", path: "/campaigns", shape: { body: CampaignBody },
     description: "Create an e-mail or SMS campaign DRAFT (nothing is sent). Placeholders {{name}}, {{storeName}}. An unsubscribe link is added automatically. Next: campaign_audience, preview_campaign, test_campaign, then send_campaign." }),
   t({ name: "update_campaign", title: "Update campaign draft", level: "write", method: "PUT", path: "/campaigns/:id", shape: { id: id("campaign"), body: CampaignBody }, description: "Edit a campaign (drafts only)." }),
@@ -154,7 +190,7 @@ export const EXCLUDED_ROUTES = [
   "GET /users", "POST /users", "PATCH /users/:id", "DELETE /users/:id",
   "GET /tokens", "POST /tokens", "DELETE /tokens/:id", "GET /mcp/tools", "PUT /mcp/tools",
   "PUT /settings/system", "DELETE /mock/messages", "GET /mock/messages", "PUT /integrations/:provider",
-  "POST /system/reset", "DELETE /trendyol/history", "POST /trendyol/mock/reset", "POST /media", "GET /media/:id",
+  "POST /system/reset", "DELETE /trendyol/history", "POST /trendyol/mock/reset", "GET /media/:id",
 ] as const;
 
 /** JSON-Schema-friendly top-level object for a tool. */
@@ -165,7 +201,7 @@ export const inputSchema = (d: ToolDef) => {
 };
 
 /* ---------- grouping for the admin screen ---------- */
-export const TOOL_GROUPS = ["overview", "orders", "customers", "catalog", "messaging", "invoices", "trendyol", "geliver", "system"] as const;
+export const TOOL_GROUPS = ["overview", "orders", "customers", "catalog", "seo", "messaging", "invoices", "trendyol", "geliver", "system"] as const;
 export type ToolGroup = (typeof TOOL_GROUPS)[number];
 const GROUP_BY_SEGMENT: Record<string, ToolGroup> = {
   dashboard: "overview", orders: "orders", customers: "customers", "customer-lookup": "customers",
@@ -173,4 +209,4 @@ const GROUP_BY_SEGMENT: Record<string, ToolGroup> = {
   emails: "messaging", sms: "messaging", campaigns: "messaging", notifications: "messaging",
   "manual-invoices": "invoices", trendyol: "trendyol", geliver: "geliver",
 };
-export const groupOf = (d: ToolDef): ToolGroup => GROUP_BY_SEGMENT[d.path.split("/")[1] ?? ""] ?? "system";
+export const groupOf = (d: ToolDef): ToolGroup => (/seo/.test(d.name) ? "seo" : GROUP_BY_SEGMENT[d.path.split("/")[1] ?? ""] ?? "system");

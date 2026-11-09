@@ -33,5 +33,12 @@ Users/passwords/MFA, creating tokens, integration **secrets** (write), mock-mode
 - Tools run the real admin API in-process with an HMAC-signed, 60-second internal claim, so permissions, validation and rate limits are the same as in the panel. A token cannot call `/api/admin/*` directly.
 - Marketing campaigns only reach customers with marketing consent. AI conversations may contain customer data: start with `read`.
 
+## Settings and SEO tools
+- **Store settings** (PATCH, only the fields you send change; nested objects merge, the merged group is validated as a whole): `update_store_profile` (store name, tagline, contact, currency, tax), `update_seo_settings`, `update_branding`, `update_legal_pages`, `update_checkout_settings`, `update_tracking_settings`, `update_notification_settings`; read one group with `get_settings_group`.
+- **SEO**: `seo_audit` (site-wide switches + every product/category gap: missing title/description, noindex, images without alt, duplicate titles), `update_product_seo` / `update_category_seo` (search & social fields only), `seo_preview` (exactly what Google/social will see).
+
+## Images
+The `get_image_specs` tool tells the AI the exact size, aspect ratio, safe area and file limit for every image slot (product 1600×2000, banner 2400×1050, social 1200×630, logo, favicon), and `upload_media` uploads generated images (base64) and answers with the real width/height plus warnings when the image does not fit. Specs live in `packages/shared/src/imageSpecs.ts`.
+
 ## Adding a tool
 Add an entry to `workers/api/src/mcp/tools.ts` (name, level, method, path, zod shape). Responses are capped at ~100 KB.

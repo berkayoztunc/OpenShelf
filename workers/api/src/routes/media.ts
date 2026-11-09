@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { desc, eq } from "drizzle-orm";
 import { media } from "@openshelf/db";
-import { MEDIA_KINDS, type MediaKind } from "@openshelf/shared";
+import { IMAGE_GENERAL, IMAGE_SPECS, MEDIA_KINDS, checkImage, imageSize, type MediaKind } from "@openshelf/shared";
 import type { AppEnv } from "../env";
 import { ApiError, notFound } from "../lib/http";
 import { audit } from "../lib/audit";
@@ -78,7 +78,20 @@ adminMedia.post("/", requireRole("admin"), async (c) => {
   if (useR2) { r2Key = `media/${id}`; await c.env.MEDIA!.put(r2Key, bytes, { httpMetadata: { contentType: sniffed } }); }
   await c.get("db").insert(media).values({ id, kind, mime: sniffed, size: bytes.length, sha256: sha, r2Key, data: useR2 ? null : Buffer.from(bytes), alt: typeof form["alt"] === "string" ? form["alt"].slice(0, 300) : null, createdBy: c.get("admin")!.id });
   await audit(c, "media.upload", "media", id, { kind, mime: sniffed, size: bytes.length });
-  return c.json({ id, url: `/media/${id}`, mime: sniffed, size: bytes.length }, 201);
+  // best-effort dimensions (png/jpeg/webp/gif) so a generator/uploader learns immediately if the image does not fit its slot
+  const dim = imageSize(bytes);
+  const warnings = dim ? checkImage(kind, dim.width, dim.height) : [];
+  return c.json({ id, url: `/media/${id}`, mime: sniffed, size: bytes.length, ...(dim ? { width: dim.width, height: dim.height } : {}), warnings }, 201);
+});
+/** Image requirements per kind (recommended size, aspect, safe area, limits actually in force). Used by the MCP get_image_specs tool. */
+adminMedia.get("/specs", requireRole("staff"), (c) => {
+  const r2 = !!c.env.MEDIA;
+  return c.json({
+    storage: r2 ? "r2" : "d1",
+    kinds: MEDIA_KINDS.map((k) => ({ ...IMAGE_SPECS[k], maxBytes: r2 ? R2_LIMIT : D1_LIMITS[k], maxKB: Math.floor((r2 ? R2_LIMIT : D1_LIMITS[k]!) / 1024) })),
+    general: IMAGE_GENERAL,
+    upload: "upload_media (MCP) or POST /api/admin/media multipart (file, kind, alt). Response includes width, height and warnings when the image does not fit its slot.",
+  });
 });
 adminMedia.get("/", requireRole("staff"), async (c) => {
   const kind = c.req.query("kind");

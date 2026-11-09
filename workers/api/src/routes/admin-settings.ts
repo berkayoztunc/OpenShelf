@@ -12,6 +12,39 @@ import { isProvider, listIntegrations, saveIntegration, testIntegration } from "
 export const adminSettings = new Hono<AppEnv>();
 
 adminSettings.get("/settings", requireRole("staff"), async (c) => c.json(await getAllSettings(c.get("db"))));
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+/** Recursive merge: objects merge key by key, arrays and primitives replace, null sets null, undefined is ignored. */
+export function deepMerge(base: unknown, patch: unknown): unknown {
+  if (!isObj(base) || !isObj(patch)) return patch === undefined ? base : patch;
+  const out: Record<string, unknown> = { ...base };
+  for (const [k, v] of Object.entries(patch)) if (v !== undefined) out[k] = isObj(v) && isObj(base[k]) ? deepMerge(base[k], v) : v;
+  return out;
+}
+
+adminSettings.get("/settings/:group", requireRole("staff"), async (c) => {
+  const group = c.req.param("group") as SettingGroup;
+  if (!(group in SETTING_GROUPS)) throw notFound("Settings group");
+  return c.json((await getAllSettings(c.get("db")))[group]);
+});
+
+/** Partial update: only the fields sent change (nested objects merge), the merged result is validated as a whole. */
+adminSettings.patch("/settings/:group", requireRole("admin"), async (c) => {
+  const group = c.req.param("group") as SettingGroup;
+  if (!(group in SETTING_GROUPS)) throw notFound("Settings group");
+  if (group === "system" && c.get("admin")!.role !== "owner") throw new ApiError(403, "forbidden", "Only the owner can change system settings");
+  let patch: unknown;
+  try { patch = await c.req.json(); } catch { throw new ApiError(400, "invalid_json", "Request body must be valid JSON"); }
+  if (!isObj(patch) || Object.keys(patch).length === 0) throw new ApiError(400, "validation_error", "Send an object with at least one field to change");
+  const db = c.get("db");
+  const current = (await getAllSettings(db))[group];
+  const unknown = Object.keys(patch).filter((k) => !(k in (SETTING_GROUPS[group] as unknown as { shape: Record<string, unknown> }).shape));
+  if (unknown.length) throw new ApiError(400, "validation_error", `Unknown field(s) for "${group}": ${unknown.join(", ")}`);
+  const value = parse(SETTING_GROUPS[group], deepMerge(current, patch));
+  await saveSettings(db, group, value as never, c.get("admin")!.id);
+  await audit(c, "settings.update", "settings", group, { keys: Object.keys(patch), patch: true });
+  return c.json(value);
+});
+
 adminSettings.put("/settings/:group", requireRole("admin"), async (c) => {
   const group = c.req.param("group") as SettingGroup;
   if (!(group in SETTING_GROUPS)) throw notFound("Settings group");

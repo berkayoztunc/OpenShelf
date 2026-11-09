@@ -39,7 +39,7 @@ export type IntegrationPutBody = z.infer<typeof IntegrationPutBody>;
 // ---------- media ----------
 export const MEDIA_KINDS = ["logo", "logo_dark", "favicon", "banner", "og", "product"] as const;
 export type MediaKind = (typeof MEDIA_KINDS)[number];
-export interface MediaUploadResponse { id: string; url: string; mime: string; size: number }
+export interface MediaUploadResponse { id: string; url: string; mime: string; size: number; width?: number; height?: number; warnings?: string[] }
 
 // ---------- catalog ----------
 const minor = z.number().int().min(0);

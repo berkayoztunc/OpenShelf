@@ -45,6 +45,28 @@ adminCatalog.delete("/categories/:id", requireRole("admin"), async (c) => {
   return c.body(null, 204);
 });
 
+// ---------- per-entity SEO (partial update of the search/social fields only) ----------
+const ProductSeoPatch = ProductInput.pick({ seoTitle: true, seoDescription: true, seoOgMediaId: true, seoOgImageUrl: true, seoNoindex: true, seoCanonical: true }).partial();
+const CategorySeoPatch = CategoryInput.pick({ seoTitle: true, seoDescription: true, seoOgImageUrl: true, seoNoindex: true }).partial();
+const definedOnly = (o: Record<string, unknown>) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+
+adminCatalog.patch("/products/:id/seo", requireRole("admin"), async (c) => {
+  const id = c.req.param("id"); const b = definedOnly(await body(c, ProductSeoPatch));
+  if (Object.keys(b).length === 0) throw new ApiError(400, "validation_error", "Send at least one SEO field");
+  const r = await c.get("db").update(products).set({ ...b, updatedAt: new Date() }).where(eq(products.id, id)).returning({ id: products.id, slug: products.slug, seoTitle: products.seoTitle, seoDescription: products.seoDescription, seoOgMediaId: products.seoOgMediaId, seoOgImageUrl: products.seoOgImageUrl, seoNoindex: products.seoNoindex, seoCanonical: products.seoCanonical });
+  if (!r.length) throw notFound("Product");
+  await audit(c, "product.seo", "product", id, { keys: Object.keys(b) });
+  return c.json(r[0]);
+});
+adminCatalog.patch("/categories/:id/seo", requireRole("admin"), async (c) => {
+  const id = c.req.param("id"); const b = definedOnly(await body(c, CategorySeoPatch));
+  if (Object.keys(b).length === 0) throw new ApiError(400, "validation_error", "Send at least one SEO field");
+  const r = await c.get("db").update(categories).set(b).where(eq(categories.id, id)).returning({ id: categories.id, slug: categories.slug, seoTitle: categories.seoTitle, seoDescription: categories.seoDescription, seoOgImageUrl: categories.seoOgImageUrl, seoNoindex: categories.seoNoindex });
+  if (!r.length) throw notFound("Category");
+  await audit(c, "category.seo", "category", id, { keys: Object.keys(b) });
+  return c.json(r[0]);
+});
+
 // ---------- products ----------
 adminCatalog.get("/products", requireRole("staff"), async (c) => {
   const p = paging(c); const db = c.get("db");

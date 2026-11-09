@@ -36,6 +36,16 @@ export async function authenticateToken(db: Db, raw: string, now = new Date()): 
   return { tokenId: r.t.id, adminId: r.a.id, role: r.a.role as Role, level: (r.t.level as Level) ?? "read" };
 }
 
+/** MIME from magic bytes so the upload route's declared-vs-real type check passes for any allowed format. */
+const sniffMime = (b: Uint8Array) => {
+  const s = (o: number, n: number) => String.fromCharCode(...b.slice(o, o + n));
+  if (b[0] === 0x89 && s(1, 3) === "PNG") return "image/png";
+  if (b[0] === 0xff && b[1] === 0xd8) return "image/jpeg";
+  if (s(0, 4) === "RIFF" && s(8, 4) === "WEBP") return "image/webp";
+  if (s(0, 3) === "GIF") return "image/gif";
+  if (s(4, 4) === "ftyp") return "image/avif";
+  return "application/octet-stream";
+};
 const toolJson = (d: ToolDef) => {
   const { $schema: _s, ...schema } = zodToJsonSchema(inputSchema(d), { target: "jsonSchema7", $refStrategy: "none" }) as Record<string, unknown>;
   return {
@@ -70,9 +80,18 @@ export async function callTool(app: Hono<AppEnv>, env: AppEnv["Bindings"], ctx: 
   const headers = new Headers({ [INTERNAL_HEADER]: await signInternal(env, { aid: p.adminId, role: p.role, lvl: p.level, tid: p.tokenId }), "CF-Connecting-IP": p.ip, "user-agent": "openshelf-mcp" });
   let body: BodyInit | undefined;
   if (def.upload === "csv") { const f = new FormData(); f.set("file", new File([String(args["csv"])], "import.csv", { type: "text/csv" })); body = f; }
+  else if (def.upload === "base64") {
+    let bytes: Uint8Array;
+    try { bytes = Uint8Array.from(atob(String(args["data"]).replace(/^data:[^,]*,/, "").replace(/\s+/g, "")), (ch) => ch.charCodeAt(0)); }
+    catch { return text("Invalid arguments: data is not valid base64", true); }
+    const f = new FormData();
+    f.set("file", new File([bytes as BlobPart], String(args["filename"] ?? "upload"), { type: sniffMime(bytes) }));
+    f.set("kind", String(args["kind"])); if (args["alt"]) f.set("alt", String(args["alt"]));
+    body = f;
+  }
   else if (def.method !== "GET" && def.method !== "DELETE") {
     const key = def.bodyArg ?? "body";
-    if (key in def.shape) { headers.set("content-type", "application/json"); body = JSON.stringify(args[key] ?? {}); }
+    if (key in def.shape) { headers.set("content-type", "application/json"); body = JSON.stringify((def.rawBody ? (rawArgs as Record<string, unknown> | undefined)?.[key] : args[key]) ?? {}); }
   }
   const res = await app.fetch(new Request(`${origin}/api/admin${path}`, { method: def.method, headers, body }), env, ctx);
   const raw = await res.text();

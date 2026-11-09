@@ -582,4 +582,5 @@ export const settings = {
   "mcp.group.trendyol": "Trendyol",
   "mcp.group.geliver": "Geliver (shipping)",
   "mcp.group.system": "Settings, integrations & logs",
+  "mcp.group.seo": "SEO",
 } satisfies Record<string, string>;

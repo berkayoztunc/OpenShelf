@@ -260,7 +260,7 @@ describe("role cap", () => {
 
 describe("tool registry integrity", () => {
   it("every admin route is exposed as a tool or explicitly excluded (new routes must be classified)", () => {
-    const covered = new Set<string>([...EXCLUDED_ROUTES, ...TOOLS.map((x) => `${x.method} ${x.path}`)]);
+    const covered = new Set<string>([...EXCLUDED_ROUTES, ...TOOLS.map((x) => `${x.method} ${x.coverAs ?? x.path}`)]);
     const norm = (s: string) => s.replace(/\/+$/, "") || "/";
     const routes = app.routes.filter((r) => r.path.startsWith("/api/admin") && r.method !== "ALL").map((r) => `${r.method} ${norm(r.path.slice("/api/admin".length))}`);
     const missing = [...new Set(routes)].filter((r) => !covered.has(r));
@@ -268,15 +268,15 @@ describe("tool registry integrity", () => {
   });
   it("every tool points at a real admin route", () => {
     const real = new Set(app.routes.filter((r) => r.path.startsWith("/api/admin") && r.method !== "ALL").map((r) => `${r.method} ${r.path.slice("/api/admin".length).replace(/\/+$/, "") || "/"}`));
-    expect(TOOLS.map((x) => `${x.method} ${x.path}`).filter((r) => !real.has(r))).toEqual([]);
+    expect(TOOLS.map((x) => `${x.method} ${x.coverAs ?? x.path}`).filter((r) => !real.has(r))).toEqual([]);
   });
   it("path params and query names appear in the tool shape; no excluded route is also a tool", () => {
     for (const d of TOOLS) {
-      for (const m of d.path.matchAll(/:([A-Za-z]+)/g)) expect(Object.keys(d.shape), `${d.name} path param ${m[1]}`).toContain(m[1]);
+      for (const m of (d.coverAs ? d.path : d.path).matchAll(/:([A-Za-z]+)/g)) expect(Object.keys(d.shape), `${d.name} path param ${m[1]}`).toContain(m[1]);
       for (const q of d.query ?? []) expect(Object.keys(d.shape), `${d.name} query ${q}`).toContain(q);
       expect(inputSchema(d)).toBeTruthy();
     }
-    const tools = new Set(TOOLS.map((x) => `${x.method} ${x.path}`));
+    const tools = new Set(TOOLS.map((x) => `${x.method} ${x.coverAs ?? x.path}`));
     expect(EXCLUDED_ROUTES.filter((r) => tools.has(r))).toEqual([]);
     expect(TOOL_BY_NAME.size).toBe(TOOLS.length);
   });
