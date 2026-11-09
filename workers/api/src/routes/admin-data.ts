@@ -107,7 +107,7 @@ export const RESET_TABLES = [
   "inventory", "inventory_movements", "inventory_reservations", "channel_prices", "channel_listings", "product_mappings", "carts", "cart_items", "coupons",
   "orders", "order_items", "payments", "payment_events", "refunds", "shipments", "shipment_events", "invoices", "invoice_events", "integration_events", "outbox_jobs",
   "sync_cursors", "webhook_receipts", "marketing_events", "utm_attributions", "mock_messages", "notification_log", "slug_redirects", "manual_invoices",
-  "outbound_emails", "trendyol_calls", "mock_state",
+  "outbound_emails", "outbound_sms", "campaigns", "campaign_recipients", "trendyol_calls", "mock_state",
 ] as const;
 
 const ResetBody = z.object({ confirm: z.literal("SIFIRLA"), password: z.string().min(1).max(200) });

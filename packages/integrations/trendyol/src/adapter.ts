@@ -1,3 +1,4 @@
+import { htmlToText } from "./html";
 import { z } from "zod";
 import type { OrderStatus } from "@openshelf/shared";
 import type {
@@ -108,7 +109,7 @@ export function mapContent(c: any): MarketplaceProduct {
   };
   return {
     externalId: String(c.contentId), mainId: c.productMainId ? String(c.productMainId) : undefined,
-    title: String(c.title ?? ""), description: c.description ? String(c.description) : undefined,
+    title: String(c.title ?? ""), description: htmlToText(c.description) || undefined,
     brand: c.brand?.name ? String(c.brand.name) : undefined, category: c.category?.name ? String(c.category.name) : undefined,
     categoryId: c.category?.id != null ? String(c.category.id) : undefined,
     images: (c.images ?? []).map((i: any) => i?.url).filter((u: unknown): u is string => typeof u === "string" && /^https:\/\//.test(u)),

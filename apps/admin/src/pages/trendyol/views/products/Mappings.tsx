@@ -103,6 +103,11 @@ export function ImportCard() {
     onSuccess: () => { toast.success(t("trendyolviews.import.queued")); void qc.invalidateQueries({ queryKey: IMPORT_KEY }); },
     onError: (e) => toast.error(errMsg(e)),
   });
+  const clean = useMutation({
+    mutationFn: () => api.post<{ cleaned: number }>("/api/admin/trendyol/import/clean-descriptions"),
+    onSuccess: (r) => toast.success(t("trendyolviews.import.cleaned", { n: r.cleaned })),
+    onError: (e) => toast.error(errMsg(e)),
+  });
   const s = q.data?.status;
   const busy = s?.state === "queued" || s?.state === "running";
   return (
@@ -112,6 +117,7 @@ export function ImportCard() {
       <div className="mt-3 flex flex-wrap gap-2">
         <Button variant="secondary" disabled={busy} loading={start.isPending && start.variables === true} onClick={() => start.mutate(true)}>{t("trendyolviews.import.dry")}</Button>
         <Button disabled={busy} loading={start.isPending && start.variables === false} onClick={() => start.mutate(false)}>{t("trendyolviews.import.run")}</Button>
+        <Button variant="ghost" loading={clean.isPending} title={t("trendyolviews.import.clean.title")} onClick={() => clean.mutate()}>{t("trendyolviews.import.clean")}</Button>
       </div>
       {s && (
         <div className="mt-4 space-y-1 text-sm" data-testid="tdyv-import-status">

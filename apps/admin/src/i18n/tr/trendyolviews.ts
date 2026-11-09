@@ -600,4 +600,7 @@ export const trendyolviews = {
   "trendyolviews.mirror.col.status": "Durum",
   "trendyolviews.mirror.col.total": "Toplam",
   "trendyolviews.mirror.slip": "Kargo fişi",
+  "trendyolviews.import.clean": "Açıklamalardaki HTML’i temizle",
+  "trendyolviews.import.clean.title": "Daha önce aktarılan ürün açıklamalarındaki <p>, <br>, <li> gibi etiketleri düz metne çevirir",
+  "trendyolviews.import.cleaned": "{n} açıklama temizlendi",
 } satisfies Record<string, string>;

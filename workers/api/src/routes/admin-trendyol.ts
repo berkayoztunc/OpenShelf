@@ -5,7 +5,7 @@ import {
   TrendyolCallBody, type MockHandler, type TrendyolCatalogResponse, type TrendyolEnv, type TrendyolOperation,
 } from "@openshelf/shared";
 import {
-  ConsoleError, MAX_BODY_BYTES, MAX_RESPONSE_BYTES, TRENDYOL_MOCKS, TRENDYOL_OPERATIONS, loadImportStatus, opAvailableOn, runCall, stockDriftReport, ORDERS_CURSOR_KEY,
+  ConsoleError, MAX_BODY_BYTES, MAX_RESPONSE_BYTES, TRENDYOL_MOCKS, TRENDYOL_OPERATIONS, loadImportStatus, opAvailableOn, runCall, stockDriftReport, ORDERS_CURSOR_KEY, htmlToText, looksLikeHtml,
 } from "@openshelf/integration-trendyol";
 import { z } from "zod";
 import type { AppEnv } from "../env";
@@ -253,4 +253,16 @@ adminTrendyol.get("/trendyol/health", async (c) => {
     import: await loadImportStatus(db),
     errors: events.map((e) => ({ id: e.id, level: e.level, message: e.message, at: e.at ? new Date(e.at as unknown as number).toISOString() : null })),
   });
+});
+
+/** One-off: strips HTML markup from product descriptions already stored (older imports kept Trendyol's HTML). Idempotent. */
+adminTrendyol.post("/trendyol/import/clean-descriptions", async (c) => {
+  const db = c.get("db");
+  const rows = await db.select({ id: products.id, d: products.descriptionTr }).from(products).where(sql`${products.descriptionTr} LIKE '%<%' OR ${products.descriptionTr} LIKE '%&%;%'`);
+  const dirty = rows.filter((r) => looksLikeHtml(r.d));
+  for (let i = 0; i < dirty.length; i += 100) {
+    await db.batch(dirty.slice(i, i + 100).map((r) => db.update(products).set({ descriptionTr: htmlToText(r.d) || null }).where(eq(products.id, r.id))) as unknown as [any, ...any[]]);
+  }
+  await audit(c, "trendyol.clean_descriptions", "products", "bulk", { cleaned: dirty.length });
+  return c.json({ cleaned: dirty.length });
 });

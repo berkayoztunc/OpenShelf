@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { applyBrandTheme } from "@openshelf/ui";
-import { Truck, ShoppingBag, BookOpen, BarChart3, ChevronRight, ClipboardList, Database, LayoutDashboard, LogOut, Menu, Package, Plug, Settings, ShieldCheck, Store, Tags, Ticket, Users, X, Zap, Inbox, FileText, Mail } from "lucide-react";
+import { Truck, ShoppingBag, BookOpen, BarChart3, ChevronRight, ClipboardList, Database, LayoutDashboard, LogOut, Menu, Package, Plug, Settings, ShieldCheck, Store, Tags, Ticket, Users, X, Zap, Inbox, FileText, Mail, Megaphone, MessageSquare } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { api } from "../lib/api";
 import { useAdmin } from "../lib/auth";
@@ -24,6 +24,8 @@ export const NAV_GROUPS: { titleKey: MessageKey; items: NavItem[] }[] = [
     { to: "/orders", labelKey: "nav.orders", icon: ClipboardList },
     { to: "/invoices", labelKey: "nav.invoices", icon: FileText },
     { to: "/emails", labelKey: "nav.emails", icon: Mail },
+    { to: "/campaigns", labelKey: "nav.campaigns", icon: Megaphone },
+    { to: "/sms", labelKey: "nav.sms", icon: MessageSquare },
     { to: "/products", labelKey: "nav.products", icon: Package },
     { to: "/categories", labelKey: "nav.categories", icon: Tags },
     { to: "/customers", labelKey: "nav.customers", icon: Users },

@@ -600,4 +600,7 @@ export const trendyolviews = {
   "trendyolviews.mirror.col.status": "Status",
   "trendyolviews.mirror.col.total": "Total",
   "trendyolviews.mirror.slip": "Shipping slip",
+  "trendyolviews.import.clean": "Clean HTML in descriptions",
+  "trendyolviews.import.clean.title": "Converts <p>, <br>, <li> … in already imported product descriptions to plain text",
+  "trendyolviews.import.cleaned": "{n} description(s) cleaned",
 } satisfies Record<string, string>;

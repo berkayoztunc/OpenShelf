@@ -15,3 +15,4 @@ export const jobHandlers: Record<string, JobHandler> = {
   "trendyol.import_products": importProducts,
 };
 export { TRENDYOL_OPERATIONS, TRENDYOL_MOCKS, getOperation, loadProducts, saveProducts, loadList, saveList, pageOf, seedProducts, type MockProduct } from "./catalog";
+export { htmlToText, decodeEntities, looksLikeHtml } from "./html";

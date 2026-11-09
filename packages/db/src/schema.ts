@@ -290,6 +290,26 @@ export const outboundEmails = sqliteTable("outbound_emails", {
   createdBy: text("created_by"), createdAt: createdAt(), sentAt: integer("sent_at", { mode: "timestamp" }),
 }, (t) => ({ at: index("outbound_emails_at_idx").on(t.createdAt) }));
 
+// ---------- campaigns (bulk e-mail / SMS to customers who gave marketing consent) ----------
+export const campaigns = sqliteTable("campaigns", {
+  id: id(), name: text("name").notNull(), channel: text("channel").notNull(), // email|sms
+  subject: text("subject"), body: text("body").notNull(),
+  filters: text("filters", { mode: "json" }).$type<{ minOrders?: number; orderedWithinDays?: number; city?: string }>().notNull().default({}),
+  status: text("status").notNull().default("draft"), // draft|sending|done|cancelled|failed
+  total: integer("total").notNull().default(0), sent: integer("sent").notNull().default(0), failed: integer("failed").notNull().default(0), skipped: integer("skipped").notNull().default(0),
+  createdBy: text("created_by"), createdAt: createdAt(), startedAt: integer("started_at", { mode: "timestamp" }), finishedAt: integer("finished_at", { mode: "timestamp" }),
+}, (t) => ({ at: index("campaigns_at_idx").on(t.createdAt) }));
+export const campaignRecipients = sqliteTable("campaign_recipients", {
+  id: id(), campaignId: text("campaign_id").notNull(), customerId: text("customer_id").notNull(), to: text("to").notNull(), name: text("name"),
+  status: text("status").notNull().default("pending"), // pending|sent|failed|skipped
+  error: text("error"), sentAt: integer("sent_at", { mode: "timestamp" }),
+}, (t) => ({ u: uniqueIndex("campaign_recipients_u").on(t.campaignId, t.customerId), st: index("campaign_recipients_st").on(t.campaignId, t.status) }));
+export const outboundSms = sqliteTable("outbound_sms", {
+  id: id(), to: text("to").notNull(), text: text("text").notNull(), status: text("status").notNull().default("queued"), // queued|sent|failed
+  provider: text("provider"), providerMessageId: text("provider_message_id"), error: text("error"),
+  createdBy: text("created_by"), createdAt: createdAt(), sentAt: integer("sent_at", { mode: "timestamp" }),
+}, (t) => ({ at: index("outbound_sms_at_idx").on(t.createdAt) }));
+
 // ---------- Trendyol API console ----------
 export const trendyolCalls = sqliteTable("trendyol_calls", {
   id: integer("id").primaryKey({ autoIncrement: true }), operationId: text("operation_id").notNull(), method: text("method").notNull(),
