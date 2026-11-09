@@ -12,6 +12,9 @@ OpenShelf'in tüm yönetimi `https://<adresiniz>/mcp` adresinde bir **MCP sunucu
 
 Sunucu JSON döner; istemci yalnızca SSE kabul ediyorsa tek bir `text/event-stream` olayı döner. Durumsuzdur (oturum yok), sade bir Worker'da çalışır.
 
+### Yalnızca URL kabul eden uygulamalar (Grok, ChatGPT, Claude.ai…)
+Bazı sohbet uygulamaları `Authorization` başlığı gönderemez ("MCP sunucusu ekle" formunda yalnızca URL vardır). Anahtar oluştururken bir kez gösterilen **bağlayıcı adresini** kullanın: `https://<adres>/mcp/osk_…` (anahtar yolun son parçasıdır; başlık gerekmez). Adres sırrı içerir: paylaşmayın, `read` anahtarı tercih edin, aynı sekmeden iptal edin. Hata logları bunu gizler, ancak kendi hesabınızdaki Cloudflare istek logları URL'leri gösterir.
+
 ## Seviyeler
 | Seviye | Yapabilir |
 |---|---|

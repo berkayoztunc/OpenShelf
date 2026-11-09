@@ -39,6 +39,8 @@ describe("MCP / API tokens tab", () => {
     expect(within(dlg).getByText("osk_SECRETSECRET")).toBeInTheDocument();
     expect(dlg.textContent).toContain('claude mcp add --transport http openshelf https://shop.test/mcp --header "Authorization: Bearer osk_SECRETSECRET"');
     expect(dlg).toHaveTextContent(/only once|yalnızca bir kez/i);
+    expect(dlg.textContent).toContain("https://shop.test/mcp/osk_SECRETSECRET"); // connector URL for URL-only apps (Grok, ChatGPT…)
+    expect(dlg).toHaveTextContent(/Grok/);
   });
 
   it("lists tokens (prefix only, never the secret) and revokes after confirmation", async () => {

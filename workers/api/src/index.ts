@@ -102,7 +102,7 @@ app.onError((err, c) => {
   }
   if (err instanceof ZodError) return c.json({ error: { code: "validation_error", message: "Invalid request", details: zodDetails(err) } }, 400);
   if (err instanceof HTTPException) return c.json({ error: { code: "http_error", message: err.message } }, err.status);
-  log("error", "unhandled error", { path: c.req.path, requestId: c.get("requestId"), error: err instanceof Error ? err.message : String(err) });
+  log("error", "unhandled error", { path: c.req.path.replace(/^(\/mcp\/).+$/, "$1<token>"), requestId: c.get("requestId"), error: err instanceof Error ? err.message : String(err) });
   return c.json({ error: { code: "internal_error", message: "Internal server error", requestId: c.get("requestId") } }, 500);
 });
 

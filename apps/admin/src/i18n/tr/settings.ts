@@ -583,4 +583,6 @@ export const settings = {
   "mcp.group.geliver": "Geliver (kargo)",
   "mcp.group.system": "Ayarlar, entegrasyonlar ve loglar",
   "mcp.group.seo": "SEO",
+  "mcp.created.connector": "Bağlayıcı adresi (yalnızca URL kabul eden uygulamalar için: Grok, ChatGPT, Claude.ai…)",
+  "mcp.created.connector.warn": "Bu adres anahtarı içerir: adrese sahip olan herkes bu anahtarın seviyesinde mağazayı yönetir. Paylaşmayın. İstemci destekliyorsa başlık biçimini tercih edin.",
 } satisfies Record<string, string>;

@@ -12,6 +12,9 @@ OpenShelf exposes its whole admin as an **MCP server** (Streamable HTTP, statele
 
 The server answers JSON, or a single `text/event-stream` event when the client only accepts SSE. It is stateless (no sessions), so it works on a plain Worker.
 
+### Apps that only accept a URL (Grok, ChatGPT, Claude.ai…)
+Some chat apps cannot send an `Authorization` header (their "add MCP server" form only has a URL). Use the **connector URL** shown once when you create a token: `https://<host>/mcp/osk_…` (the token is the last path segment; no header needed). It contains the secret: don't share it, prefer a `read` token, revoke it in the same tab. Error logs redact it, but Cloudflare's request logs in your own account show URLs.
+
 ## Levels
 | Level | Can do |
 |---|---|

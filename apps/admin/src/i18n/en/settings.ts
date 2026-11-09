@@ -583,4 +583,6 @@ export const settings = {
   "mcp.group.geliver": "Geliver (shipping)",
   "mcp.group.system": "Settings, integrations & logs",
   "mcp.group.seo": "SEO",
+  "mcp.created.connector": "Connector URL (for apps that only accept a URL: Grok, ChatGPT, Claude.ai…)",
+  "mcp.created.connector.warn": "This URL contains the token: anyone with it controls the store at this token's level. Don't share or post it. Prefer the header form when the client supports it.",
 } satisfies Record<string, string>;

@@ -92,6 +92,8 @@ export default function ApiTokens() {
             <p role="alert" className="rounded-lg border border-warn-line bg-warn-soft px-3 py-2 text-sm text-warn">{t("mcp.created.once")}</p>
             <CopyBox label={t("mcp.created.token")} value={created.token} />
             <CopyBox label={t("mcp.created.url")} value={created.mcpUrl} />
+            <CopyBox label={t("mcp.created.connector")} value={`${created.mcpUrl}/${created.token}`} />
+            <p className="-mt-2 text-xs text-warn">{t("mcp.created.connector.warn")}</p>
             <CopyBox label={t("mcp.created.claude")} value={claudeCommand(created.mcpUrl, created.token)} />
             <CopyBox label={t("mcp.created.json")} value={jsonConfig(created.mcpUrl, created.token)} />
           </div>
