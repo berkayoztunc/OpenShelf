@@ -13,11 +13,11 @@ Open-source, single-tenant e-commerce that runs as one Cloudflare Worker with D1
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-f38020.svg)](https://workers.cloudflare.com/)
 [![Status: early development](https://img.shields.io/badge/status-early%20development-orange.svg)](#roadmap)
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/<ORG>/openshelf)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/berkayoztunc/openshelf)
 
 </div>
 
-> **About the Deploy button.** The button only works when the repository is **public on GitHub**. Replace `<ORG>` in the button URL with your GitHub organization or username (for example your fork). Details in [Quick start](#quick-start).
+> **About the Deploy button.** The button only works when the repository is **public on GitHub**. Replace `berkayoztunc` in the button URL with your GitHub organization or username (for example your fork). Details in [Quick start](#quick-start).
 
 <div align="center">
 
@@ -97,9 +97,11 @@ Three ways, easiest first.
 
 ### 1. Deploy to Cloudflare button
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/<ORG>/openshelf)
+> **Easiest path:** the [launch page](https://berkayoztunc.github.io/OpenShelf/) generates your two secrets in the browser, opens the button and checks your deployment (`/health`).
 
-Requirements: the repo is **public on GitHub**, and you replaced `<ORG>` with your GitHub org/user in the URL above.
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/berkayoztunc/openshelf)
+
+Requirements: the repo is **public on GitHub**, and you replaced `berkayoztunc` with your GitHub org/user in the URL above.
 
 What the button does:
 

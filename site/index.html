@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src https:; base-uri 'none'; form-action 'none'">
+  <title>OpenShelf: your online store on Cloudflare</title>
+  <meta name="description" content="Deploy a complete open-source online store (storefront, admin, orders, invoices, Trendyol, AI management) to your own Cloudflare account in minutes.">
+  <meta property="og:title" content="OpenShelf: your online store, live in 5 minutes">
+  <meta property="og:description" content="Open-source e-commerce on Cloudflare with AI (MCP) management. Free tier friendly.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap bar">
+    <a class="brand" href="#top"><span class="logo" aria-hidden="true">O</span>OpenShelf</a>
+    <nav>
+      <a data-doc="deploy-cloudflare.md" data-i="nav.docs" href="#">Docs</a>
+      <a id="gh" data-i="nav.github" href="#">GitHub</a>
+      <span class="lang" role="group" aria-label="Language"><button data-lang="en" aria-pressed="true">EN</button><button data-lang="tr" aria-pressed="false">TR</button></span>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero wrap">
+    <p class="badge" data-i="hero.badge">Open source · runs on your own Cloudflare account</p>
+    <h1 data-i="hero.title">Your online store, live in 5 minutes.</h1>
+    <p class="sub" data-i="hero.sub">OpenShelf is a complete shop that deploys to Cloudflare.</p>
+    <div class="cta"><a class="btn primary" href="#steps" data-i="hero.cta">Start the 3-step setup</a><a class="btn ghost" data-doc="quickstart.md" data-i="hero.docs" href="#">Read the docs</a></div>
+    <noscript><p class="warn-box">This setup page needs JavaScript to generate your secrets. Or use the command line: <code>git clone</code> + <code>pnpm run setup</code>.</p></noscript>
+  </section>
+
+  <section id="steps" class="wrap">
+    <h2 data-i="steps.title">Deploy in 3 steps</h2>
+    <ol class="steps">
+      <li class="card">
+        <span class="num">1</span>
+        <h3 data-i="s1.title">Generate your secrets</h3>
+        <p data-i="s1.body"></p>
+        <div class="secret"><div><label data-i="s1.key">APP_ENCRYPTION_KEY</label><small data-i="s1.keyHint"></small><code id="key" tabindex="0"></code></div><button class="btn small" id="copy-key" data-i="s1.copy">Copy</button></div>
+        <div class="secret"><div><label data-i="s1.token">SETUP_TOKEN</label><small data-i="s1.tokenHint"></small><code id="token" tabindex="0"></code></div><button class="btn small" id="copy-token" data-i="s1.copy">Copy</button></div>
+        <div class="row"><button class="btn small ghost" id="regen" data-i="s1.regen">Generate new</button><button class="btn small ghost" id="download" data-i="s1.download">Download as .txt</button></div>
+        <label class="check"><input type="checkbox" id="saved"> <span data-i="s1.saved"></span></label>
+      </li>
+      <li class="card">
+        <span class="num">2</span>
+        <h3 data-i="s2.title">Deploy to Cloudflare</h3>
+        <p data-i="s2.body"></p>
+        <a class="btn primary big" id="deploy" href="#" target="_blank" rel="noopener" aria-disabled="true">Tick the box in step 1 first</a>
+        <p class="note" data-i="s2.note"></p>
+      </li>
+      <li class="card">
+        <span class="num">3</span>
+        <h3 data-i="s3.title">Create your admin account</h3>
+        <p data-i="s3.body"></p>
+        <input id="addr" type="text" inputmode="url" autocomplete="off" spellcheck="false" data-ph="s3.placeholder" placeholder="my-shop.openshelf.workers.dev" aria-label="Shop address">
+        <p id="addr-err" class="err" hidden data-i="s3.bad"></p>
+        <div class="row"><button class="btn primary" id="open" data-i="s3.open">Open setup page</button><button class="btn ghost" id="check" data-i="s3.check">Check my deployment</button></div>
+        <ul id="result" class="result" hidden aria-live="polite"></ul>
+      </li>
+    </ol>
+  </section>
+
+  <section class="wrap two">
+    <div>
+      <h2 data-i="next.title">After you log in</h2>
+      <p class="muted" data-i="next.sub"></p>
+      <ol class="todo"><li data-i="n1"></li><li data-i="n2"></li><li data-i="n3"></li><li data-i="n4"></li><li data-i="n5"></li><li data-i="n6"></li></ol>
+    </div>
+    <div class="card ai">
+      <h3 data-i="ai.title">Connect an AI assistant</h3>
+      <p data-i="ai.body"></p>
+      <pre><code id="cmd"></code></pre>
+      <a data-doc="mcp.md" href="#" class="link">docs/mcp.md →</a>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <h2 data-i="feat.title">What you get</h2>
+    <div class="grid">
+      <div class="card"><h3 data-i="f1.t"></h3><p data-i="f1.b"></p></div><div class="card"><h3 data-i="f2.t"></h3><p data-i="f2.b"></p></div>
+      <div class="card"><h3 data-i="f3.t"></h3><p data-i="f3.b"></p></div><div class="card"><h3 data-i="f4.t"></h3><p data-i="f4.b"></p></div>
+      <div class="card"><h3 data-i="f5.t"></h3><p data-i="f5.b"></p></div><div class="card"><h3 data-i="f6.t"></h3><p data-i="f6.b"></p></div>
+    </div>
+  </section>
+
+  <section class="wrap help card">
+    <h2 data-i="help.title">Need a different way?</h2>
+    <p data-i="help.cli"></p>
+    <p class="links"><a data-doc="deploy-cloudflare.md" href="#" data-i="help.docs"></a> · <a data-doc="security.md" href="#" data-i="help.sec"></a> · <a href="https://github.com/berkayoztunc/OpenShelf/issues" data-i="help.issue"></a></p>
+  </section>
+</main>
+<footer class="wrap foot"><p data-i="foot">OpenShelf is open source (MIT). Not affiliated with Cloudflare.</p></footer>
+<script type="module" src="app.js"></script>
+</body>
+</html>

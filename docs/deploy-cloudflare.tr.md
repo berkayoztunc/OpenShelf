@@ -8,10 +8,12 @@ OpenShelf **tek bir Cloudflare Worker** olarak dağıtılır: vitrin `/`, yönet
 
 ## 1. Deploy to Cloudflare butonu (en kolay)
 
+**[Kurulum sayfasını](https://berkayoztunc.github.io/OpenShelf/)** kullanın: `APP_ENCRYPTION_KEY` ve `SETUP_TOKEN` değerlerini tarayıcınızda üretir (hiçbir yere gönderilmez), bu düğmeyi açar ve "Kurulumumu kontrol et" düğmesi yeni Worker'ınızın `GET /health` çıktısını okur (veritabanı, şifreleme anahtarı, kurulum şifresi, yönetici hesabı var mı). Yeni kurulumun çıplak Worker adresi `/` isteğini `/admin/setup`'a yönlendirir.
+
 Depo **GitHub veya GitLab'da herkese açık (public)** olmalıdır. Buton URL'si (alt dizin değil, depo kökü):
 
 ```
-https://deploy.workers.cloudflare.com/?url=https://github.com/<ORG>/openshelf
+https://deploy.workers.cloudflare.com/?url=https://github.com/berkayoztunc/openshelf
 ```
 
 Akış: butona tıklayın, Cloudflare'in GitHub'a erişmesine izin verin, formu inceleyin. Cloudflare depoyu hesabınıza kopyalar, `wrangler.jsonc` içindeki `DB` bağlamasından **D1 veritabanını otomatik oluşturur** (kopyalanacak ID yok) ve `.dev.vars.example` / `package.json` (`cloudflare.bindings`) içinde tanımlı secret'ları sorar:

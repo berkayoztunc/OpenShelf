@@ -72,7 +72,13 @@ async function respond(c: Context<AppEnv>, resolver: (cx: SeoCx) => Promise<Head
 }
 
 const both = (p: string) => [p, `${p}/`];
-storefrontRoutes.get("/", (c) => respond(c, (cx) => resolveHome(c.get("db"), cx)));
+/** Fresh install (no admin yet): send the visitor who opened the new Worker URL straight to the setup page. Cached once an admin exists. */
+let setupDone = false;
+async function needsSetup(c: Context<AppEnv>): Promise<boolean> {
+  if (setupDone) return false;
+  try { setupDone = !!(await c.env.DB.prepare("SELECT 1 AS x FROM admins LIMIT 1").first()); return !setupDone; } catch { return false; }
+}
+storefrontRoutes.get("/", async (c) => (await needsSetup(c)) ? c.redirect("/admin/setup", 302) : respond(c, (cx) => resolveHome(c.get("db"), cx)));
 for (const p of both("/products")) storefrontRoutes.get(p, (c) => respond(c, (cx) => resolveList(c.get("db"), cx, pageOf(c), c.req.query("q")?.trim() || undefined)));
 // legacy/feed style URL -> canonical product path
 for (const p of both("/products/:slug")) storefrontRoutes.get(p, (c) => c.redirect(`/product/${encodeURIComponent((c.req.param("slug") ?? ""))}${new URL(c.req.url).search}`, 301));

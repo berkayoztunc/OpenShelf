@@ -30,6 +30,7 @@ import { adminGeliver } from "./routes/admin-geliver";
 import { adminCampaigns } from "./routes/admin-campaigns";
 import { unsubscribeRoutes } from "./routes/unsubscribe";
 import { campaignSendJob } from "./lib/campaigns";
+import { encryptionKeyProblem } from "./lib/origins";
 import { mountMcp } from "./mcp/server";
 import { adminTokens } from "./routes/admin-tokens";
 import { adminMcp } from "./routes/admin-mcp";
@@ -80,7 +81,18 @@ app.route("/", unsubscribeRoutes);
 app.route("/", publicRoutes);
 app.route("/", siteRoutes);
 app.route("/", storefrontRoutes);
-app.get("/health", (c) => c.json({ ok: true }));
+/** Deployment self-check (no secrets, no customer data). The launch page calls it cross-origin to tell a new owner what is still missing. */
+app.get("/health", async (c) => {
+  let setup: "needed" | "done" | "unknown" = "unknown"; let dbOk = true;
+  try { setup = (await c.env.DB.prepare("SELECT 1 AS x FROM admins LIMIT 1").first()) ? "done" : "needed"; } catch { dbOk = false; }
+  const key = encryptionKeyProblem(c.env);
+  c.header("Access-Control-Allow-Origin", "*"); c.header("Cache-Control", "no-store");
+  return c.json({
+    ok: dbOk, db: dbOk ? "ok" : "error (migrations not applied?)", setup,
+    encryptionKey: key === null ? "ok" : c.env.APP_ENCRYPTION_KEY?.trim() ? "invalid" : "missing",
+    setupToken: c.env.SETUP_TOKEN?.trim() ? "set" : "missing",
+  });
+});
 
 app.notFound((c) => storefrontNotFound(c) ?? c.json({ error: { code: "not_found", message: "Route not found" } }, 404));
 app.onError((err, c) => {

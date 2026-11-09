@@ -13,11 +13,11 @@ Tek bir Cloudflare Worker ve D1 üzerinde çalışan, açık kaynak, tek mağaza
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-f38020.svg)](https://workers.cloudflare.com/)
 [![Durum: erken geliştirme](https://img.shields.io/badge/durum-erken%20geli%C5%9Ftirme-orange.svg)](#yol-haritası)
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/<ORG>/openshelf)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/berkayoztunc/openshelf)
 
 </div>
 
-> **Deploy butonu hakkında.** Buton yalnızca depo **GitHub'da herkese açık (public)** ise çalışır. Buton adresindeki `<ORG>` yerine kendi GitHub organizasyonunuzu veya kullanıcı adınızı yazın (örneğin fork'unuzun sahibi). Ayrıntılar [Hızlı başlangıç](#hızlı-başlangıç) bölümünde.
+> **Deploy butonu hakkında.** Buton yalnızca depo **GitHub'da herkese açık (public)** ise çalışır. Buton adresindeki `berkayoztunc` yerine kendi GitHub organizasyonunuzu veya kullanıcı adınızı yazın (örneğin fork'unuzun sahibi). Ayrıntılar [Hızlı başlangıç](#hızlı-başlangıç) bölümünde.
 
 <div align="center">
 
@@ -97,9 +97,11 @@ Tüm adaptörler satıcı dokümanlarına göre yazılmış, mock ve contract te
 
 ### 1. Deploy to Cloudflare butonu
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/<ORG>/openshelf)
+> **En kolay yol:** [Kurulum sayfası](https://berkayoztunc.github.io/OpenShelf/) gizli değerlerinizi tarayıcıda üretir, düğmeyi açar ve kurulumunuzu (`/health`) kontrol eder.
 
-Gereksinim: depo **GitHub'da public** olmalı ve yukarıdaki adreste `<ORG>` yerine kendi GitHub organizasyonunuzu/kullanıcı adınızı yazmış olmalısınız.
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/berkayoztunc/openshelf)
+
+Gereksinim: depo **GitHub'da public** olmalı ve yukarıdaki adreste `berkayoztunc` yerine kendi GitHub organizasyonunuzu/kullanıcı adınızı yazmış olmalısınız.
 
 Buton şunları yapar:
 

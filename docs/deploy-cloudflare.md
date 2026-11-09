@@ -8,10 +8,12 @@ OpenShelf deploys as **one Cloudflare Worker**: the storefront is served at `/`,
 
 ## 1. Deploy to Cloudflare button (easiest)
 
+Use the **[launch page](https://berkayoztunc.github.io/OpenShelf/)**: it generates `APP_ENCRYPTION_KEY` and `SETUP_TOKEN` in your browser (nothing is sent anywhere), opens this button, and its "Check my deployment" button reads `GET /health` of your new Worker (database, encryption key, setup token, whether the admin account exists). Opening the bare Worker URL of a fresh install redirects `/` to `/admin/setup`.
+
 The repo must be **public on GitHub or GitLab**. Button URL (the repo root, not a subdirectory):
 
 ```
-https://deploy.workers.cloudflare.com/?url=https://github.com/<ORG>/openshelf
+https://deploy.workers.cloudflare.com/?url=https://github.com/berkayoztunc/openshelf
 ```
 
 Flow: click the button, authorize Cloudflare to access your GitHub, and review the form. Cloudflare clones the repo into your account, **creates the D1 database automatically** from the `DB` binding in `wrangler.jsonc` (no IDs to copy), and asks for the secrets declared in `.dev.vars.example` / `package.json` (`cloudflare.bindings`):
@@ -54,6 +56,9 @@ GitHub Actions (`.github/workflows/deploy.yml`, manual) does `pnpm build`, appli
 Open `https://<your-worker>.workers.dev/admin/setup`, enter the `SETUP_TOKEN`, create the owner account and enable MFA. If `APP_ENCRYPTION_KEY` is missing or malformed, setup and login answer with a clear `503 misconfigured` error telling you to set it.
 
 Want to try everything without real providers? Enable **Mock Mode** (see [mock-mode.md](mock-mode.md); requires the `ALLOW_MOCK` variable): mock payment page at `/mock/pay/...`, SMS/e-mail land in a Mock Inbox. Switch it off before real orders.
+
+## Launch page (GitHub Pages)
+`site/` is a static page (no build) published by `.github/workflows/pages.yml`. One-time: repo **Settings → Pages → Source: GitHub Actions**. Edit `REPO` in `site/app.js` if you fork. Tests: `pnpm --filter @openshelf/site test`.
 
 ## 5. Secrets and variables
 
