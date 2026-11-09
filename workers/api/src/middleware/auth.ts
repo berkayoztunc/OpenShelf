@@ -7,6 +7,7 @@ import type { AppEnv, Env } from "../env";
 import { ApiError, forbidden, unauthorized } from "../lib/http";
 import { rememberOrigin } from "../lib/origins";
 import { randomToken, sha256Hex, timingSafeEqual } from "../lib/crypto";
+import { INTERNAL_HEADER, verifyInternal } from "../mcp/internal";
 
 export const SESSION_COOKIE = "os_session"; // stored as __Host-os_session
 export const IDLE_TIMEOUT_SEC = 2 * 60 * 60;
@@ -35,6 +36,18 @@ export const clearSessionCookie = (c: Parameters<MiddlewareHandler<AppEnv>>[0]) 
 
 /** Origin check (all admin mutations) + session auth + CSRF token (authenticated mutations). */
 export const adminGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
+  // Internal MCP dispatch: HMAC-signed claim minted by the MCP layer after it validated the API token + tool level. No cookie/Origin/CSRF
+  // (there is no browser); the admin must still exist and be enabled. Any request carrying the header but failing verification is refused.
+  const internal = c.req.header(INTERNAL_HEADER);
+  if (internal) {
+    const claim = await verifyInternal(c.env, internal);
+    if (!claim) throw unauthorized();
+    const [a] = await c.get("db").select().from(admins).where(eq(admins.id, claim.aid)).limit(1);
+    if (!a || a.disabled) throw unauthorized();
+    const role: Role = RANK[a.role as Role] > RANK.admin ? "admin" : (a.role as Role); // tokens never act as owner
+    c.set("admin", { id: a.id, email: a.email, name: a.name, role, totpEnabled: a.totpEnabled, sessionHash: `mcp:${claim.tid}`, csrfToken: "" });
+    return next();
+  }
   const mutating = MUTATING.has(c.req.method);
   if (mutating && !originAllowed(c.env, c.req.header("Origin"))) throw forbidden("Origin not allowed");
   if (PUBLIC_ADMIN_PATHS.has(c.req.path)) return next();

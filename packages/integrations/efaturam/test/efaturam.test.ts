@@ -57,4 +57,13 @@ describe("invoice.issue handler", () => {
     await h(job, ctx); await h(job, ctx);
     expect(issues).toBe(2); expect(rows.size).toBe(1); expect(events).toEqual(["failed", "issued"]);
   });
+  it("skips marketplace (Trendyol) orders: Trendyol issues that invoice", async () => {
+    const { repo, rows } = memRepo();
+    let issues = 0;
+    const adapter = { resolveInvoiceType: async () => "e_arsiv", issue: async () => { issues++; return { providerInvoiceId: "i", type: "e_arsiv" }; } };
+    const logs: string[] = [];
+    const ctx = { db: {}, env: {}, getAdapter: async () => adapter, log: async (_l: string, m: string) => { logs.push(m); } };
+    await invoiceIssueHandler(() => ({ ...repo, sourceOf: async () => "trendyol" }))({ id: "j", kind: "invoice.issue", payload: { orderId: "o1" }, attempts: 0 }, ctx);
+    expect(issues).toBe(0); expect(rows.size).toBe(0); expect(logs[0]).toContain("channel-managed");
+  });
 });

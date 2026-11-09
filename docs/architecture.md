@@ -67,3 +67,6 @@ Trendyol: OpenShelf is always the stock/price truth (pushed through the outbox; 
 ## Security boundaries
 
 Admin: HttpOnly `__Host-` session cookie, CSRF token + Origin check, optional TOTP, RBAC, audit log. Public API: rate limits, Zod, CORS to known origins. Outbound: fixed host allowlist per adapter. See [security.md](security.md).
+
+## MCP server
+`/mcp` (Streamable HTTP, stateless JSON-RPC, `workers/api/src/mcp/`) lets AI clients run the admin. Auth: personal access token (`api_tokens`, SHA-256) with level read/write/full. Tools call the real `/api/admin/*` routes in-process with an HMAC-signed internal claim (`x-os-internal`, 60 s) accepted by `adminGuard`, so RBAC, validation and audit are inherited. See [mcp.md](mcp.md).

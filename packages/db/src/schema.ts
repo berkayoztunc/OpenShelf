@@ -310,6 +310,20 @@ export const outboundSms = sqliteTable("outbound_sms", {
   createdBy: text("created_by"), createdAt: createdAt(), sentAt: integer("sent_at", { mode: "timestamp" }),
 }, (t) => ({ at: index("outbound_sms_at_idx").on(t.createdAt) }));
 
+// ---------- MCP / API tokens (personal access tokens for the MCP endpoint) ----------
+export const apiTokens = sqliteTable("api_tokens", {
+  id: id(), adminId: text("admin_id").notNull(), name: text("name").notNull(),
+  tokenHash: text("token_hash").notNull(), prefix: text("prefix").notNull(), // sha256 of the token; prefix = first chars, display only
+  level: text("level").notNull().default("read"), // read|write|full
+  expiresAt: integer("expires_at", { mode: "timestamp" }), lastUsedAt: integer("last_used_at", { mode: "timestamp" }), revokedAt: integer("revoked_at", { mode: "timestamp" }),
+  createdAt: createdAt(),
+}, (t) => ({ h: uniqueIndex("api_tokens_hash_u").on(t.tokenHash), a: index("api_tokens_admin_idx").on(t.adminId) }));
+
+/** Per-tool MCP switches set by the owner. Only DISABLED tools have a row (default = allowed); tool "*" disabled = MCP master switch off. */
+export const mcpToolSettings = sqliteTable("mcp_tool_settings", {
+  tool: text("tool").primaryKey(), enabled: integer("enabled", { mode: "boolean" }).notNull().default(false), updatedBy: text("updated_by"), updatedAt: updatedAt(),
+});
+
 // ---------- Trendyol API console ----------
 export const trendyolCalls = sqliteTable("trendyol_calls", {
   id: integer("id").primaryKey({ autoIncrement: true }), operationId: text("operation_id").notNull(), method: text("method").notNull(),

@@ -48,4 +48,23 @@ describe("geliver", () => {
     await h({ id: "j", kind: "shipment.create", payload: { orderId: "o1" }, attempts: 1 }, ctx);
     expect(created).toBe(1); expect(saved[0].providerShipmentId).toBe("p-CHEAP");
   });
+  it("shipment.create skips marketplace (Trendyol) orders: no quote, no label purchase", async () => {
+    let calls = 0;
+    const repo: ShipmentRepo = {
+      sourceOf: async () => "trendyol", loadOrder: async () => { calls++; return { input, currency: "TRY", total: 1 }; },
+      findShipment: async () => null, saveShipment: async () => { calls++; },
+    };
+    const logs: string[] = [];
+    const adapter = new Proxy({}, { get: () => () => { calls++; } });
+    const ctx = { db: {}, env: {}, getAdapter: async () => adapter, log: async (_l: string, m: string) => { logs.push(m); } };
+    await createShipmentHandler(() => repo)({ id: "j", kind: "shipment.create", payload: { orderId: "o1" }, attempts: 0 }, ctx);
+    expect(calls).toBe(0); expect(logs[0]).toContain("channel-managed");
+  });
+  it("shipment.create still ships website orders", async () => {
+    let created = 0;
+    const repo: ShipmentRepo = { sourceOf: async () => "website", loadOrder: async () => ({ input, currency: "TRY", total: 1 }), findShipment: async () => null, saveShipment: async () => {} };
+    const adapter = { quote: async () => [{ carrier: "A", serviceId: "S", price: 1, currency: "TRY" }], createShipment: async () => { created++; return { providerShipmentId: "p" }; } };
+    await createShipmentHandler(() => repo)({ id: "j", kind: "shipment.create", payload: { orderId: "o1" }, attempts: 0 }, { db: {}, env: {}, getAdapter: async () => adapter, log: async () => {} });
+    expect(created).toBe(1);
+  });
 });

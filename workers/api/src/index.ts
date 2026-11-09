@@ -30,6 +30,9 @@ import { adminGeliver } from "./routes/admin-geliver";
 import { adminCampaigns } from "./routes/admin-campaigns";
 import { unsubscribeRoutes } from "./routes/unsubscribe";
 import { campaignSendJob } from "./lib/campaigns";
+import { mountMcp } from "./mcp/server";
+import { adminTokens } from "./routes/admin-tokens";
+import { adminMcp } from "./routes/admin-mcp";
 import { notificationJobHandlers } from "./lib/notify";
 import { log } from "./lib/log";
 import { getAdapter } from "./lib/integrations";
@@ -63,8 +66,11 @@ admin.route("/", adminEmails);
 admin.route("/", adminTrendyol);
 admin.route("/", adminGeliver);
 admin.route("/", adminCampaigns);
+admin.route("/", adminTokens);
+admin.route("/", adminMcp);
 admin.route("/media", adminMedia);
 app.route("/api/admin", admin);
+mountMcp(app); // MCP over Streamable HTTP at /mcp (Bearer API token)
 app.route("/api/store/payment/callback", paymentCallback);
 app.route("/api/store", store);
 app.route("/webhooks", webhooks);
@@ -105,6 +111,7 @@ export async function runScheduled(env: Env, now = new Date()) {
       env.DB.prepare("DELETE FROM rate_limits WHERE window_start < ?1").bind(t - 86400),
       env.DB.prepare("DELETE FROM login_attempts WHERE at < ?1").bind(t - 7 * 86400),
       env.DB.prepare("DELETE FROM admin_sessions WHERE expires_at < ?1").bind(t),
+      env.DB.prepare("DELETE FROM api_tokens WHERE (expires_at IS NOT NULL AND expires_at < ?1 - 30 * 86400) OR (revoked_at IS NOT NULL AND revoked_at < ?1 - 30 * 86400)").bind(t),
       env.DB.prepare("DELETE FROM carts WHERE updated_at < ?1 AND id NOT IN (SELECT cart_id FROM inventory_reservations WHERE cart_id IS NOT NULL AND status = 'active')").bind(t - 30 * 86400),
       env.DB.prepare("DELETE FROM outbox_jobs WHERE status = 'done' AND updated_at < ?1").bind(t - 14 * 86400),
       // mock inbox holds full recipients/bodies: keep it short-lived (7 days) and bounded (2000 rows)
