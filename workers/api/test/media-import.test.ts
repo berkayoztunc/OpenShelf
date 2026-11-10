@@ -1,12 +1,12 @@
 import { env, fetchMock } from "cloudflare:test";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { blockedHost, checkImportUrl, fetchImageBytes } from "../src/lib/imageFetch";
-import { signTicket, verifyTicket } from "../src/lib/tickets";
 import { admin, call, ensureOwner, j, loginAs, type Session } from "./helpers";
 
 let owner: Session; let tok = "";
 const be32 = (n: number) => [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255];
-const png = (w: number, h: number, pad = 0) => new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, ...be32(w), ...be32(h), 8, 6, 0, 0, 0, 0, 0, 0, 0, ...new Array(pad).fill(7)]);
+const IEND = [0, 0, 0, 0, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82];
+const png = (w: number, h: number, pad = 0) => new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, ...be32(w), ...be32(h), 8, 6, 0, 0, 0, 0, 0, 0, 0, ...new Array(pad).fill(7), ...IEND]);
 const rpc = (payload: unknown) => call("/mcp", { method: "POST", json: payload, origin: null, headers: { Authorization: `Bearer ${tok}` } });
 const tool = async (name: string, args: unknown = {}) => (await j<any>(await rpc({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }))).result as { content: { text: string }[]; isError?: boolean };
 const data = (r: { content: { text: string }[] }) => JSON.parse(r.content[0]!.text);
@@ -76,47 +76,7 @@ describe("upload_media_from_url (MCP)", () => {
     const list = (await j<any>(await rpc({ jsonrpc: "2.0", id: 2, method: "tools/list" }))).result.tools;
     expect(list.find((t: any) => t.name === "upload_media").description).toMatch(/ONLY for small images/);
     expect(list.find((t: any) => t.name === "upload_media_from_url").description).toMatch(/BEST WAY/);
-    expect(list.map((t: any) => t.name)).toContain("create_upload_link");
-  });
-});
-
-describe("one-time upload link (PUT raw bytes)", () => {
-  it("create_upload_link returns a single-use link; PUT of raw bytes stores the full image; a second PUT is refused", async () => {
-    const link = data(await tool("create_upload_link", { body: { kind: "banner", alt: "Yaz banner" } }));
-    expect(link).toMatchObject({ method: "PUT", expiresInSeconds: 600, singleUse: true, kind: "banner" }); expect(link.uploadUrl).toMatch(/\/media\/upload\/.+\..+/); expect(link.example).toContain("curl -X PUT");
-    const path = new URL(link.uploadUrl).pathname;
-    const img = png(2400, 1050, 100_000);
-    const put = await call(path, { method: "PUT", raw: img as never, origin: null, headers: { "content-type": "application/octet-stream" } });
-    expect(put.status).toBe(201);
-    const r = await j<any>(put);
-    expect(r).toMatchObject({ size: img.length, width: 2400, height: 1050, warnings: [] });
-    expect((await env.DB.prepare("SELECT alt, kind, created_by AS by FROM media WHERE id = ?1").bind(r.id).first<any>())).toMatchObject({ alt: "Yaz banner", kind: "banner" });
-    const again = await call(path, { method: "PUT", raw: img as never, origin: null });
-    expect(again.status).toBe(409); expect((await j<any>(again)).error.code).toBe("ticket_used");
-    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM audit_logs WHERE action = 'media.upload' AND meta LIKE '%upload-link%'").first<any>()).n).toBeGreaterThanOrEqual(1);
-  });
-  it("tampered, forged and expired tickets are refused; the ticket fixes the kind and the limits", async () => {
-    const link = data(await tool("create_upload_link", { body: { kind: "favicon" } }));
-    const path = new URL(link.uploadUrl).pathname; const ticket = path.split("/").pop()!;
-    expect((await call(`/media/upload/${ticket.slice(0, -3)}abc`, { method: "PUT", raw: png(512, 512) as never, origin: null })).status).toBe(401);
-    expect((await call("/media/upload/garbage", { method: "PUT", raw: png(512, 512) as never, origin: null })).status).toBe(401);
-    const aid = (await j<any>(await admin(owner, "/auth/me"))).admin.id;
-    const old = await signTicket(env, { aid, kind: "logo", alt: null }, 600_000, Date.now() - 700_000);
-    expect(await verifyTicket(env, old)).toBeNull();
-    expect((await call(`/media/upload/${old}`, { method: "PUT", raw: png(600, 144) as never, origin: null })).status).toBe(401);
-    expect(await verifyTicket(env, await signTicket(env, { aid, kind: "logo", alt: null }))).toMatchObject({ kind: "logo", aid });
-    // not an image: refused, even with a valid ticket
-    const bad = await call(path, { method: "PUT", raw: new TextEncoder().encode("<svg xmlns='http://www.w3.org/2000/svg'/>") as never, origin: null });
-    expect(bad.status).toBe(415);
-  });
-  it("needs write level and admin role to mint a link; the clear ticket is not stored anywhere", async () => {
-    const rt = (await j<any>(await admin(owner, "/tokens", "POST", { name: "r2", level: "read" }))).token;
-    const res = (await j<any>(await call("/mcp", { method: "POST", json: { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "create_upload_link", arguments: { body: { kind: "logo" } } } }, origin: null, headers: { Authorization: `Bearer ${rt}` } }))).result;
-    expect(res.isError).toBe(true);
-    const link = data(await tool("create_upload_link", { body: { kind: "logo" } }));
-    const ticket = link.uploadUrl.split("/").pop()!;
-    const logs = await env.DB.prepare("SELECT meta FROM audit_logs ORDER BY id DESC LIMIT 20").all<{ meta: string }>();
-    expect(JSON.stringify(logs.results)).not.toContain(ticket);
+    expect(list.map((t: any) => t.name)).not.toContain("create_upload_link"); // no public upload links
   });
 });
 
@@ -125,5 +85,46 @@ describe("existing multipart upload still works", () => {
     const fd = new FormData(); fd.set("kind", "product"); fd.set("file", new File([png(1600, 2000) as never], "p.png", { type: "image/png" })); fd.set("alt", "x");
     const r = await call("/api/admin/media", { method: "POST", form: fd, cookie: owner.cookie, csrf: owner.csrf, ip: owner.ip });
     expect(r.status).toBe(201); expect(await j<any>(r)).toMatchObject({ width: 1600, height: 2000, warnings: [] });
+  });
+});
+
+describe("truncated images are rejected (what chat clients produce from long base64)", () => {
+  const cut = (b: Uint8Array, n: number) => b.slice(0, n);
+  const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 4, 0, 0, 0xff, 0xc0, 0, 17, 8, 3, 232, 2, 88, 3, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1, 0xff, 0xd9]);
+  const gif = new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 10, 0, 10, 0, 0, 0, 0, 0x3b]);
+  const webp = (() => { const b = new Uint8Array(40); b.set([0x52, 0x49, 0x46, 0x46, 32, 0, 0, 0, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x58, 10, 0, 0, 0, 0, 0, 0, 0], 0); return b; })();
+  it("isCompleteImage: complete files pass, cut-off files fail (png/jpeg/gif/webp)", async () => {
+    const { isCompleteImage } = await import("@openshelf/shared");
+    for (const [name, full] of Object.entries({ png: png(300, 400, 500), jpeg, gif, webp })) {
+      expect(isCompleteImage(full), `${name} full`).toBe(true);
+      expect(isCompleteImage(cut(full, Math.floor(full.length / 2))), `${name} half`).toBe(false);
+    }
+    expect(isCompleteImage(png(10, 10).slice(0, 33))).toBe(false); // header only (the 60-byte "logo" from the bug report)
+    expect(isCompleteImage(new Uint8Array([0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70, 0x61, 0x76, 0x69, 0x66, 1, 2, 3, 4]))).toBe(true); // avif: assumed complete
+  });
+  it("upload_media (base64) refuses a cut-off image with guidance instead of storing a broken file", async () => {
+    const half = cut(png(1600, 2000, 60_000), 700);
+    const r = await tool("upload_media", { kind: "product", data: btoa(String.fromCharCode(...half)) });
+    expect(r.isError).toBe(true); expect(r.content[0]!.text).toMatch(/HTTP 422/); expect(r.content[0]!.text).toMatch(/incomplete/); expect(r.content[0]!.text).toMatch(/upload_media_from_url/);
+    const before = (await env.DB.prepare("SELECT COUNT(*) AS n FROM media").first<any>()).n;
+    await tool("upload_media", { kind: "product", data: btoa(String.fromCharCode(...half)) });
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM media").first<any>()).n).toBe(before); // nothing stored
+  });
+  it("a truncated file is refused on the URL import and the multipart upload too", async () => {
+    fetchMock.get("https://img.example.com").intercept({ path: "/cut.png" }).reply(200, Buffer.from(cut(png(1600, 2000, 5000), 900)));
+    expect((await tool("upload_media_from_url", { body: { kind: "product", url: "https://img.example.com/cut.png" } })).content[0]!.text).toMatch(/HTTP 422/);
+    const fd = new FormData(); fd.set("kind", "product"); fd.set("file", new File([cut(png(1600, 2000, 5000), 900) as never], "p.png", { type: "image/png" }));
+    expect((await call("/api/admin/media", { method: "POST", form: fd, cookie: owner.cookie, csrf: owner.csrf, ip: owner.ip })).status).toBe(422);
+  });
+});
+
+describe("list_media flags truncated-looking uploads", () => {
+  it("very small non-favicon files are marked suspect; normal ones are not", async () => {
+    const fd = (kind: string, bytes: Uint8Array) => { const f = new FormData(); f.set("kind", kind); f.set("file", new File([bytes as never], "x.png", { type: "image/png" })); return f; };
+    const small = await j<any>(await call("/api/admin/media", { method: "POST", form: fd("product", png(1600, 2000)), cookie: owner.cookie, csrf: owner.csrf, ip: owner.ip }));
+    const big = await j<any>(await call("/api/admin/media", { method: "POST", form: fd("product", png(1600, 2000, 3000)), cookie: owner.cookie, csrf: owner.csrf, ip: owner.ip }));
+    const list = data(await tool("list_media", { kind: "product" })).items;
+    expect(list.find((m: any) => m.id === small.id).suspect).toMatch(/truncated/);
+    expect(list.find((m: any) => m.id === big.id).suspect).toBeUndefined();
   });
 });

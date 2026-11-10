@@ -199,7 +199,7 @@ describe("audit logging", () => {
     expect((await admin(s, "/settings/general", "PUT", (await j<any>(await admin(s, "/settings"))).general)).status).toBe(200);
     expect((await admin(s, "/integrations/iyzico", "PUT", { enabled: true, config: { sandbox: true }, secrets: { apiKey: "audit-secret-key-1", secretKey: "audit-secret-key-2" } })).status).toBe(200);
     expect((await admin(s, "/integrations/iyzico/test", "POST")).status).toBe(200);
-    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137]);
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 0, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]);
     const f = new FormData(); f.set("file", new File([png], "x.png", { type: "image/png" })); f.set("kind", "logo");
     expect((await call("/api/admin/media", { form: f, cookie: s.cookie, csrf: s.csrf, ip: s.ip })).status).toBe(201);
     await env.DB.prepare("INSERT INTO outbox_jobs (id, kind, payload, status) VALUES ('audit-job', 'noop', '{}', 'failed')").run();

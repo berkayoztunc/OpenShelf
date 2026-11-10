@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { admin, call, ensureOwner, j } from "./helpers";
 
-const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137]);
+const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 0, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]);
 function form(bytes: Uint8Array | string, type: string, kind = "logo", name = "x.png") {
   const f = new FormData(); f.set("file", new File([bytes as BlobPart], name, { type })); f.set("kind", kind); return f;
 }

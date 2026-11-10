@@ -113,3 +113,16 @@ export function checkImage(kind: MediaKind, width: number, height: number): stri
   if (Math.abs(got - want) / want > 0.08) out.push(`Aspect ratio ${got.toFixed(2)}:1 differs from the recommended ${s.aspect} (${want.toFixed(2)}:1): it will be cropped around the centre.`);
   return out;
 }
+
+/**
+ * False when the file is clearly cut off (what happens when a chat client truncates a long base64 argument): PNG without its IEND end chunk,
+ * JPEG without the EOI marker, GIF without the trailer, WebP whose RIFF length does not match. Other formats (AVIF) are assumed complete.
+ */
+export function isCompleteImage(b: Uint8Array): boolean {
+  const n = b.length; const str = (o: number, l: number) => String.fromCharCode(...b.slice(o, o + l));
+  if (n > 8 && b[0] === 0x89 && str(1, 3) === "PNG") return n >= 20 && str(n - 8, 4) === "IEND";
+  if (n > 3 && b[0] === 0xff && b[1] === 0xd8) { let e = n; while (e > 2 && b[e - 1] === 0) e--; return b[e - 2] === 0xff && b[e - 1] === 0xd9; }
+  if (n > 6 && str(0, 3) === "GIF") { let e = n; while (e > 1 && b[e - 1] === 0) e--; return b[e - 1] === 0x3b; }
+  if (n > 12 && str(0, 4) === "RIFF" && str(8, 4) === "WEBP") { const len = (b[4]! | (b[5]! << 8) | (b[6]! << 16) | (b[7]! << 24)) >>> 0; return len + 8 === n || len + 9 === n; }
+  return true;
+}

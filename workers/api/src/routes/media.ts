@@ -1,15 +1,13 @@
 import { Hono } from "hono";
 import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
-import { auditLogs, media } from "@openshelf/db";
-import { IMAGE_GENERAL, IMAGE_SPECS, MEDIA_KINDS, checkImage, imageSize, type MediaKind } from "@openshelf/shared";
+import { media } from "@openshelf/db";
+import { IMAGE_GENERAL, IMAGE_SPECS, MEDIA_KINDS, checkImage, imageSize, isCompleteImage, type MediaKind } from "@openshelf/shared";
 import type { AppEnv } from "../env";
 import { ApiError, body, notFound } from "../lib/http";
 import { audit } from "../lib/audit";
 import { requireRole } from "../middleware/auth";
-import { hit } from "../middleware/security";
 import { fetchImageBytes } from "../lib/imageFetch";
-import { signTicket, verifyTicket } from "../lib/tickets";
 import { sha256Hex, toBytes } from "../lib/crypto";
 import { ALLOWED_MIMES, D1_LIMITS, R2_LIMIT, sniffImage } from "../lib/media";
 
@@ -58,6 +56,7 @@ async function storeImage(c: { env: AppEnv["Bindings"]; get(k: "db"): AppEnv["Va
   if (bytes.byteLength > limit) throw new ApiError(413, "payload_too_large", `File exceeds ${Math.floor(limit / 1024)}KB limit for ${kind}`);
   const sniffed = sniffImage(bytes);
   if (!sniffed || !ALLOWED_MIMES.includes(sniffed)) throw new ApiError(415, "unsupported_media_type", "Only png, jpeg, webp, gif and avif images are allowed (SVG is rejected)");
+  if (!isCompleteImage(bytes)) throw new ApiError(422, "incomplete_image", `The image data is incomplete (cut off after ${bytes.length} bytes). Long base64 strings are truncated by chat clients: use upload_media_from_url (a public https link) or upload the file in the admin panel instead.`);
   if (o.declaredMime && o.declaredMime.toLowerCase() !== sniffed) throw new ApiError(415, "mime_mismatch", "File content does not match declared type");
   const id = crypto.randomUUID(); const sha = await sha256Hex(bytes);
   let r2Key: string | null = null;
@@ -67,22 +66,6 @@ async function storeImage(c: { env: AppEnv["Bindings"]; get(k: "db"): AppEnv["Va
   const dim = imageSize(bytes);
   return { id, url: `/media/${id}`, mime: sniffed, size: bytes.length, ...(dim ? { width: dim.width, height: dim.height } : {}), warnings: dim ? checkImage(kind, dim.width, dim.height) : [] };
 }
-const isKind = (k: unknown): k is MediaKind => (MEDIA_KINDS as readonly string[]).includes(String(k));
-
-/** Public, ticket-authenticated raw upload (PUT /media/upload/:ticket). The ticket is minted by an admin/MCP call: short-lived, single use, fixed kind. */
-mediaPublic.put("/upload/:ticket", async (c) => {
-  const t = await verifyTicket(c.env, c.req.param("ticket"));
-  if (!t) throw new ApiError(401, "invalid_ticket", "Upload link is invalid or expired: create a new one");
-  if ((await hit(c.env.DB, `upload-ticket:${t.n}`, 900)).count > 1) throw new ApiError(409, "ticket_used", "This upload link was already used: create a new one");
-  if (!isKind(t.kind)) throw new ApiError(400, "validation_error", "Bad ticket");
-  const limit = limitFor(c.env, t.kind);
-  if (Number(c.req.header("Content-Length") ?? 0) > limit) throw new ApiError(413, "payload_too_large", `File exceeds ${Math.floor(limit / 1024)}KB limit for ${t.kind}`);
-  const bytes = c.req.raw.body ? await readLimited(c.req.raw.body, limit) : new Uint8Array();
-  const r = await storeImage(c, { bytes, kind: t.kind, alt: t.alt, adminId: t.aid });
-  await c.get("db").insert(auditLogs).values({ adminId: t.aid, action: "media.upload", entity: "media", entityId: r.id, meta: { kind: t.kind, mime: r.mime, size: r.size, via: "upload-link" }, ip: c.get("ip") }).catch(() => {});
-  return c.json(r, 201);
-});
-
 /** Admin: mounted under /api/admin/media */
 export const adminMedia = new Hono<AppEnv>();
 adminMedia.post("/", requireRole("admin"), async (c) => {
@@ -118,15 +101,6 @@ adminMedia.post("/import", requireRole("admin"), async (c) => {
   return c.json(r, 201);
 });
 
-const LinkBody = z.object({ kind: z.enum(MEDIA_KINDS), alt: z.string().max(300).optional() });
-/** One-time upload link for clients that can run an HTTP request but cannot put a large file into a tool argument. */
-adminMedia.post("/upload-link", requireRole("admin"), async (c) => {
-  const b = await body(c, LinkBody); const a = c.get("admin")!;
-  const ticket = await signTicket(c.env, { aid: a.id, kind: b.kind, alt: b.alt ?? null });
-  const uploadUrl = `${new URL(c.req.url).origin}/media/upload/${ticket}`;
-  await audit(c, "media.upload_link", "media", b.kind, { kind: b.kind });
-  return c.json({ uploadUrl, method: "PUT", body: "raw image bytes (not multipart, not base64)", expiresInSeconds: 600, singleUse: true, maxBytes: limitFor(c.env, b.kind), kind: b.kind, example: `curl -X PUT --data-binary @image.png "${uploadUrl}"` }, 201);
-});
 /** Image requirements per kind (recommended size, aspect, safe area, limits actually in force). Used by the MCP get_image_specs tool. */
 adminMedia.get("/specs", requireRole("staff"), (c) => {
   const r2 = !!c.env.MEDIA;
@@ -134,14 +108,14 @@ adminMedia.get("/specs", requireRole("staff"), (c) => {
     storage: r2 ? "r2" : "d1",
     kinds: MEDIA_KINDS.map((k) => ({ ...IMAGE_SPECS[k], maxBytes: r2 ? R2_LIMIT : D1_LIMITS[k], maxKB: Math.floor((r2 ? R2_LIMIT : D1_LIMITS[k]!) / 1024) })),
     general: IMAGE_GENERAL,
-    upload: "upload_media_from_url (MCP, best: public https link, server downloads it), create_upload_link (one-time PUT link), upload_media (MCP, small base64 only) or POST /api/admin/media multipart (file, kind, alt). Responses include width, height and warnings when the image does not fit its slot.",
+    upload: "upload_media_from_url (MCP, best: public https link, server downloads it), upload_media (MCP, small base64 only), or POST /api/admin/media multipart (file, kind, alt). People upload in the admin panel (product images, Settings → Branding). Responses include width, height and warnings when the image does not fit its slot.",
   });
 });
 adminMedia.get("/", requireRole("staff"), async (c) => {
   const kind = c.req.query("kind");
   const rows = await c.get("db").select({ id: media.id, kind: media.kind, mime: media.mime, size: media.size, alt: media.alt, createdAt: media.createdAt }).from(media)
     .where(kind ? eq(media.kind, kind) : undefined).orderBy(desc(media.createdAt)).limit(200);
-  return c.json({ items: rows.map((r) => ({ ...r, url: `/media/${r.id}` })) });
+  return c.json({ items: rows.map((r) => ({ ...r, url: `/media/${r.id}`, ...(r.kind !== "favicon" && r.size < 1500 ? { suspect: "very small file: probably a truncated upload, delete it and upload the full image" } : {}) })) });
 });
 adminMedia.delete("/:id", requireRole("admin"), async (c) => {
   const id = c.req.param("id");
@@ -153,3 +127,4 @@ adminMedia.delete("/:id", requireRole("admin"), async (c) => {
   await audit(c, "media.delete", "media", id);
   return c.body(null, 204);
 });
+
