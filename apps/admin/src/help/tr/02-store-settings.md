@@ -262,9 +262,20 @@ Test gönderimi saatte yönetici başına 5, bağlantı adresi başına 10 ile s
 - **Ülke izin listesine yabancı numara eklemeden SMS beklemek.**
 - **Gönderilen bildirimleri izlemek için** ilgili siparişin sayfasındaki **Bildirimler** kartına bakın; her kanal için Gönderildi/Başarısız/Atlandı durumunu görürsünüz.
 
+## Ana sayfa ürünleri
+
+Ana sayfadaki "öne çıkanlar" bölümünde hangi ürünlerin görüneceğini sol menüdeki **Vitrin → Ana sayfa ürünleri** sekmesinden belirlersiniz.
+
+- **Otomatik:** Ürün sıralaması ayarına göre ilk ürünler gösterilir (örn. en yeniler ya da çok satanlar). Kaç ürün gösterileceğini (4–24) seçersiniz.
+- **Elle seçeceğim:** Ürünleri arayıp **Ekle**'ye basın; ok düğmeleriyle sıralayın. Yalnızca seçtikleriniz, seçtiğiniz sırayla görünür (en fazla 24).
+- **Bölüm başlığı:** Boş bırakırsanız "Öne çıkanlar" yazar; kendi başlığınızı (ve isteğe bağlı İngilizcesini) girebilirsiniz.
+- Taslak ya da arşivdeki bir ürün seçili kalsa bile vitrinde gösterilmez; listede "Aktif değil" etiketi görürsünüz. Seçilen ürünlerin hiçbiri gösterilemiyorsa otomatik liste kullanılır, ana sayfa boş kalmaz.
+
+Değişiklik kaydedildikten sonra vitrine yansıması yaklaşık bir dakika sürebilir.
+
 ## Menü
 
-Vitrinin üst menüsünü bu sekmeden yönetirsiniz.
+Vitrinin üst menüsünü sol menüdeki **Vitrin → Üst menü** sekmesinden yönetirsiniz.
 
 - **Otomatik menü** açıkken menüde “Tüm ürünler” ve ilk 4 ana kategori görünür. Kategorilerin sırası değişmez.
 - Kapattığınızda kendi menünüzü kurarsınız: kategori ve **özel bağlantı** ekleyebilir, ok düğmeleriyle sıralayabilir, her öğenin adını değiştirebilirsiniz (isteğe bağlı İngilizce ad da girilebilir). En fazla 12 öğe eklenir.
@@ -276,7 +287,7 @@ Değişiklik kaydedildikten sonra vitrine yansıması yaklaşık bir dakika sür
 
 ## Vitrin sıralaması
 
-Ürünlerin vitrinde (ana sayfa ve ürün listeleri) hangi sırayla görüneceğini belirler.
+Ürünlerin vitrinde (ana sayfa ve ürün listeleri) hangi sırayla görüneceğini belirler. **Vitrin → Ürün sıralaması** sekmesinde bulunur.
 
 - **Varsayılan sıralama:** Müşteri bir sıralama seçmediğinde kullanılır. Seçenekler: Önerilen, En yeniler, Çok satanlar, Fiyat (artan/azalan), Ada göre.
 - **Önerilen:** Sabitlediğiniz ürünler sırayla en başta, ardından diğerleri en yeniden eskiye doğru gelir. Müşteri de listedeki sıralama menüsünden “Önerilen”i seçebilir.

@@ -10,6 +10,7 @@ export const nav = {
   "nav.invoices": "Faturalar",
   "nav.emails": "E-postalar",
   "nav.products": "Ürünler",
+  "nav.storefront": "Vitrin",
   "nav.categories": "Kategoriler",
   "nav.customers": "Müşteriler",
   "nav.coupons": "Kuponlar",

@@ -143,13 +143,25 @@ export const MerchandisingSettings = z.object({
   bestsellerDays: z.number().int().min(7).max(365).default(30),
 });
 
+/** Products shown in the home page "featured" section. `auto` = the first `limit` products in the default storefront order. */
+export const HomepageSettings = z.object({
+  mode: z.enum(["auto", "manual"]).default("auto"),
+  /** Manual mode: product ids in display order (all of them are shown). */
+  productIds: z.array(z.string().min(1).max(60)).max(24).default([]).transform((a) => [...new Set(a)]),
+  /** Auto mode: how many products to show. */
+  limit: z.number().int().min(4).max(24).default(8),
+  /** Optional heading overrides for the section (empty = the default text). */
+  title: z.string().max(60).default(""),
+  titleEn: z.string().max(60).default(""),
+});
+
 export const SETTING_GROUPS = {
   general: GeneralSettings, branding: BrandingSettings, seo: SeoSettings,
   legal: LegalSettings, checkout: CheckoutSettings, tracking: TrackingSettings,
-  system: SystemSettings, notifications: NotificationSettings, menu: MenuSettings, merchandising: MerchandisingSettings,
+  system: SystemSettings, notifications: NotificationSettings, menu: MenuSettings, merchandising: MerchandisingSettings, homepage: HomepageSettings,
 } as const;
 export type SettingGroup = keyof typeof SETTING_GROUPS;
 export type SettingsOf<G extends SettingGroup> = z.infer<(typeof SETTING_GROUPS)[G]>;
 
 /** Subset safe to expose to storefront. */
-export const PUBLIC_GROUPS: SettingGroup[] = ["general", "branding", "seo", "checkout", "tracking", "menu", "merchandising"];
+export const PUBLIC_GROUPS: SettingGroup[] = ["general", "branding", "seo", "checkout", "tracking", "menu", "merchandising", "homepage"];

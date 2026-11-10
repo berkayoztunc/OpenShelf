@@ -32,7 +32,7 @@ describe("end-to-end: admin setup -> storefront purchase -> outbox", () => {
     const media = await j<{ id: string; url: string; mime: string; size: number }>(up);
     expect(media).toMatchObject({ url: `/media/${media.id}`, mime: "image/png", size: PNG.length });
     const all = await j<any>(await admin(s, "/settings"));
-    expect(Object.keys(all).sort()).toEqual(["branding", "checkout", "general", "legal", "menu", "merchandising", "notifications", "seo", "system", "tracking"]);
+    expect(Object.keys(all).sort()).toEqual(["branding", "checkout", "general", "homepage", "legal", "menu", "merchandising", "notifications", "seo", "system", "tracking"]);
     const put = await admin(s, "/settings/branding", "PUT", { ...all.branding, logoMediaId: media.id, primaryColor: "#112233" });
     expect(put.status).toBe(200);
     const cfg = await j<any>(await call("/api/store/config"));

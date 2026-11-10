@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { admin, call, ensureOwner, j, type Session } from "./helpers";
 
 let owner: Session;
@@ -26,6 +26,15 @@ beforeAll(async () => {
   await prod("ss-c", "SS C", "2026-01-03 10:00:00"); await variant("ss-c", 200, 9);
   await prod("ss-d", "SS D", "2026-01-04 10:00:00"); await variant("ss-d", 400, 3);
   await sold("ss-a", 7); await sold("ss-c", 2); await sold("ss-d", 50, "pending"); // pending orders do not count
+});
+
+// Shared test DB: remove everything this file created so other files never see it.
+afterAll(async () => {
+  for (const sql of [
+    "DELETE FROM order_items WHERE id LIKE 'ss-o-%'", "DELETE FROM orders WHERE id LIKE 'ss-o-%'",
+    "DELETE FROM inventory WHERE variant_id LIKE 'ss-%'", "DELETE FROM channel_prices WHERE variant_id LIKE 'ss-%'",
+    "DELETE FROM product_variants WHERE id LIKE 'ss-%'", "DELETE FROM products WHERE id LIKE 'ss-%'",
+  ]) await env.DB.prepare(sql).run();
 });
 
 describe("storefront product ordering", () => {
@@ -86,5 +95,25 @@ describe("admin product list by ids", () => {
   it("filters by comma-separated ids", async () => {
     const r = await j<any>(await admin(owner, "/products?ids=ss-a,ss-c,nope"));
     expect(r.items.map((p: any) => p.id).sort()).toEqual(["ss-a", "ss-c"]);
+  });
+});
+
+describe("curated home page products", () => {
+  it("?ids returns exactly those active products in the given order and ignores sort settings", async () => {
+    await setMerch({ inStockFirst: true, defaultSort: "price_asc" });
+    const r = await j<any>(await call("/api/store/products?ids=ss-b,ss-a,nope,ss-c&pageSize=24"));
+    expect(r.items.map((p: any) => p.slug)).toEqual(["ss-b", "ss-a", "ss-c"]);
+    await env.DB.prepare("UPDATE products SET status = 'draft' WHERE id = 'ss-a'").run();
+    expect((await j<any>(await call("/api/store/products?ids=ss-b,ss-a,ss-c"))).items.map((p: any) => p.slug)).toEqual(["ss-b", "ss-c"]);
+    await env.DB.prepare("UPDATE products SET status = 'active' WHERE id = 'ss-a'").run();
+    await setMerch({ inStockFirst: false, defaultSort: "newest" });
+  });
+  it("homepage settings: public defaults, validation and dedupe", async () => {
+    expect((await j<any>(await call("/api/store/config"))).homepage).toEqual({ mode: "auto", productIds: [], limit: 8, title: "", titleEn: "" });
+    const ok = await admin(owner, "/settings/homepage", "PATCH", { mode: "manual", productIds: ["ss-c", "ss-a", "ss-c"], title: "Seçtiklerimiz" });
+    expect(ok.status).toBe(200);
+    expect((await j<any>(await call("/api/store/config"))).homepage).toMatchObject({ mode: "manual", productIds: ["ss-c", "ss-a"], title: "Seçtiklerimiz" });
+    for (const bad of [{ mode: "random" }, { limit: 2 }, { limit: 30 }, { productIds: Array.from({ length: 25 }, (_, i) => `p${i}`) }, { title: "x".repeat(61) }]) expect((await admin(owner, "/settings/homepage", "PATCH", bad)).status).toBe(400);
+    await admin(owner, "/settings/homepage", "PATCH", { mode: "auto", productIds: [], title: "" });
   });
 });

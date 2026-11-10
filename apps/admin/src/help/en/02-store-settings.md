@@ -262,9 +262,20 @@ Test sending is limited to 5 per admin per hour and 10 per connecting address. I
 - **Expecting SMS to a foreign number without adding it to the country allow list.**
 - **To monitor sent notifications,** look at the **Notifications** card on the relevant order's page; you will see the Sent/Failed/Skipped status for each channel.
 
+## Home page products {#ana-sayfa-urunleri}
+
+You choose which products appear in the "featured" section of the home page under **Storefront → Home page products** in the left menu.
+
+- **Automatic:** the first products according to the product order setting are shown (e.g. newest or best sellers). You choose how many (4–24).
+- **I'll pick them:** search for products and press **Add**; reorder with the arrows. Only your selection is shown, in your order (up to 24).
+- **Section heading:** leave empty to show "Featured", or enter your own heading (and an optional English one).
+- A draft or archived product is not shown on the storefront even if it stays selected; the list marks it "Not active". If none of the selected products can be shown, the automatic list is used so the home page is never empty.
+
+After saving, the storefront may take about a minute to reflect the change.
+
 ## Menu {#menu}
 
-You manage the storefront's top menu on this tab.
+You manage the storefront's top menu under **Storefront → Top menu** in the left menu.
 
 - While **Automatic menu** is on, the menu shows “All products” and the first 4 top-level categories. The category order cannot be changed.
 - Turn it off to build your own menu: add categories and **custom links**, reorder them with the arrow buttons and rename each item (an optional English name can be entered too). Up to 12 items.
@@ -276,7 +287,7 @@ After saving, the storefront may take about a minute to reflect the change.
 
 ## Product order {#vitrin-siralamasi}
 
-Controls the order in which products appear on the storefront (home page and product lists).
+Controls the order in which products appear on the storefront (home page and product lists). Found under **Storefront → Product order**.
 
 - **Default order:** used when the customer has not chosen one. Options: Recommended, Newest, Best sellers, Price (low/high), By name.
 - **Recommended:** the products you pin come first, in order, then the rest from newest to oldest. Customers can also pick “Recommended” from the sort menu.

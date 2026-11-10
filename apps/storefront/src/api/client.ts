@@ -30,7 +30,7 @@ const qs = (o: Record<string, string | number | undefined | null>) => {
   return s ? `?${s}` : "";
 };
 
-export interface ProductQuery { category?: string; q?: string; sort?: string; page?: number; pageSize?: number }
+export interface ProductQuery { category?: string; q?: string; sort?: string; page?: number; pageSize?: number; /** comma-separated product ids: exactly those products, in that order */ ids?: string }
 
 // ---- adapters: API wire shapes (workers/api/src/routes/store.ts) -> UI types ----
 /* eslint-disable @typescript-eslint/no-explicit-any */

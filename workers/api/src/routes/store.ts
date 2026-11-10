@@ -88,6 +88,9 @@ store.get("/products", async (c) => {
   if (sort === "price_desc") order.push(sql`${minPriceSql} DESC`);
   if (sort === "name") order.push(sql`${products.nameTr} COLLATE NOCASE ASC`);
   order.push(desc(products.createdAt), asc(products.id));
+  // ?ids=a,b,c: exactly those products (active only), in the given order. Used by curated home page sections.
+  const idList = c.req.query("ids")?.split(",").map((x) => x.trim()).filter(Boolean).slice(0, 60);
+  if (idList?.length) { conds.push(inArray(products.id, idList)); order.unshift(sql`CASE ${products.id} ${sql.join(idList.map((id, i) => sql`WHEN ${id} THEN ${i}`), sql` `)} ELSE ${idList.length} END ASC`); }
   const where = and(...conds);
   const rows = await db.select().from(products).where(where).orderBy(...order).limit(p.pageSize).offset(p.offset);
   const [t] = await db.select({ n: sql<number>`count(*)` }).from(products).where(where);

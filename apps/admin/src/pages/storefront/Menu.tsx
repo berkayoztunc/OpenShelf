@@ -5,7 +5,7 @@ import { useGroupForm } from "../../lib/settings";
 import { Badge, Button, Card, SelectField, TextField, Toggle } from "../../components/ui";
 import { useT } from "../../i18n";
 import { useCategories } from "../Categories";
-import { SettingsForm } from "./SaveBar";
+import { SettingsForm } from "../settings/SaveBar";
 
 type Item = SettingsOf<"menu">["items"][number];
 const MAX_ITEMS = 12;

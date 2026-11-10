@@ -50,6 +50,7 @@ export async function publicConfig(db: Db) {
     tracking: { ga4MeasurementId: tracking.ga4MeasurementId, gtmContainerId: tracking.gtmContainerId, metaPixelId: tracking.metaPixelId, consentRequired: tracking.consentRequired },
     legal,
     menu: s.menu,
+    homepage: s.homepage,
     merchandising: { defaultSort: s.merchandising.defaultSort, pinnedCount: s.merchandising.pinned.length },
     locales: { default: s.general.defaultLocale, available: s.general.locales },
     mockMode: s.system.mockMode === true,

@@ -10,13 +10,20 @@ import { useHead, absUrl } from "../lib/head";
 import { ArrowIcon, CATEGORY_ICONS } from "../lib/Icons";
 import { homeDescription, jsonLdEnabled, pageTitle, siteHead } from "../lib/seo";
 import { useConfig } from "../store/ConfigContext";
+import { homePlan } from "../lib/homeProducts";
 
 export default function Home() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { config } = useConfig();
+  const plan = homePlan(config.homepage, locale);
   const cats = useQuery({ queryKey: ["categories"], queryFn: api.categories });
   // One wider fetch feeds the featured grid, the hero collage and the category cover images.
-  const featured = useQuery({ queryKey: ["products", "home", 24, config.merchandising?.defaultSort], queryFn: () => api.products({ pageSize: 24 }) });
+  // Curated (manual) selection: fetch exactly those products; a second default-ordered fetch still supplies category covers.
+  const featured = useQuery({
+    queryKey: ["products", "home", plan.ids ?? config.merchandising?.defaultSort ?? "", 24],
+    queryFn: () => api.products(plan.ids ? { ids: plan.ids, pageSize: 24 } : { pageSize: 24 }),
+  });
+  const pool = useQuery({ queryKey: ["products", "home", "pool", config.merchandising?.defaultSort ?? ""], queryFn: () => api.products({ pageSize: 24 }), enabled: !!plan.ids });
   useHead({
     title: pageTitle(config), description: homeDescription(config), image: absUrl(config.seo.defaultOgUrl), url: `${location.origin}/`, ...siteHead(config),
     jsonLd: jsonLdEnabled(config) ? [
@@ -25,9 +32,13 @@ export default function Home() {
     ] : null,
   });
   const items = featured.data?.items ?? [];
+  // Every curated product deleted/hidden/draft: fall back to the automatic list instead of an empty section.
+  const curatedEmpty = !!plan.ids && featured.isSuccess && items.length === 0;
+  const gridItems = curatedEmpty ? (pool.data?.items ?? []).slice(0, 8) : items.slice(0, plan.count);
+  const coverPool = plan.ids ? [...items, ...(pool.data?.items ?? [])] : items;
   const top = (cats.data ?? []).filter((c) => !c.parentId).slice(0, 4);
-  const coverFor = (id: string, slug: string, own?: string | null) => own || items.find((p) => p.categoryId === id || p.category?.slug === slug)?.images[0]?.url || null;
-  const collage = items.filter((p) => p.images[0]).slice(0, 3).map((p) => ({ url: p.images[0]!.url, title: p.title }));
+  const coverFor = (id: string, slug: string, own?: string | null) => own || coverPool.find((p) => p.categoryId === id || p.category?.slug === slug)?.images[0]?.url || null;
+  const collage = coverPool.filter((p) => p.images[0]).slice(0, 3).map((p) => ({ url: p.images[0]!.url, title: p.title }));
   return (
     <>
       <Banner collage={collage} />
@@ -71,13 +82,13 @@ export default function Home() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="max-w-xl">
             <p className="eyebrow">{t("hero.new")}</p>
-            <h2 id="h-feat" className="section-title mt-2">{t("home.featured")}</h2>
+            <h2 id="h-feat" className="section-title mt-2">{plan.title || t("home.featured")}</h2>
             <p className="mt-2 text-muted">{t("home.featuredSub")}</p>
           </div>
           <Link to="/products" className="link-arrow">{t("home.viewAll")}<ArrowIcon size={16} /></Link>
         </div>
         <div className="mt-8">
-          {featured.isLoading ? <ProductGridSkeleton /> : featured.data ? <ProductGrid products={items.slice(0, 8)} /> : null}
+          {featured.isLoading || (curatedEmpty && pool.isLoading) ? <ProductGridSkeleton /> : featured.data ? <ProductGrid products={gridItems} /> : null}
         </div>
       </section>
     </>

@@ -10,6 +10,7 @@ export const nav = {
   "nav.invoices": "Invoices",
   "nav.emails": "Emails",
   "nav.products": "Products",
+  "nav.storefront": "Storefront",
   "nav.categories": "Categories",
   "nav.customers": "Customers",
   "nav.coupons": "Coupons",

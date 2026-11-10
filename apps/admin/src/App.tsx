@@ -21,6 +21,7 @@ const PrintPage = lazy(() => import("./pages/print/PrintPage"));
 const OauthConsent = lazy(() => import("./pages/OauthConsent"));
 const Coupons = lazy(() => import("./pages/Coupons"));
 const Settings = lazy(() => import("./pages/settings/Settings"));
+const Storefront = lazy(() => import("./pages/storefront/Storefront"));
 const Integrations = lazy(() => import("./pages/Integrations"));
 const IntegrationEvents = lazy(() => import("./pages/IntegrationEvents"));
 const MockInbox = lazy(() => import("./pages/MockInbox"));
@@ -59,6 +60,10 @@ export function App() {
           <Route path="coupons" element={<Coupons />} />
           <Route path="settings" element={<Navigate to="/settings/general" replace />} />
           <Route path="settings/integrations" element={<Navigate to="/integrations" replace />} />
+          <Route path="settings/menu" element={<Navigate to="/storefront/menu" replace />} />
+          <Route path="settings/merchandising" element={<Navigate to="/storefront/order" replace />} />
+          <Route path="storefront" element={<Navigate to="/storefront/home" replace />} />
+          <Route path="storefront/:tab" element={<Storefront />} />
           <Route path="settings/:tab" element={<Settings />} />
           <Route path="integrations" element={<Integrations />} />
           <Route path="integration-events" element={<IntegrationEvents />} />

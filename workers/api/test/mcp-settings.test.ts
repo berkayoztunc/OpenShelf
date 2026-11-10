@@ -14,7 +14,10 @@ beforeAll(async () => {
 });
 
 // Settings live in the shared test DB: put back what these tests change so file order never matters.
-afterAll(async () => { await admin(owner, "/settings/checkout", "PATCH", { freeShippingThreshold: null, flatShippingFee: 0 }); });
+afterAll(async () => {
+  await admin(owner, "/settings/checkout", "PATCH", { freeShippingThreshold: null, flatShippingFee: 0 });
+  await admin(owner, "/settings/general", "PATCH", { defaultTaxRate: 20 });
+});
 
 describe("PATCH /settings/:group (merge)", () => {
   it("changes only the sent fields and validates the merged result", async () => {
@@ -180,10 +183,17 @@ describe("MCP: storefront menu and product order", () => {
     await tool("update_merchandising", { body: { defaultSort: "newest", pinned: [], inStockFirst: false } });
     await admin(owner, `/products/${p.id}`, "DELETE");
   });
+  it("update_homepage selects the home page products", async () => {
+    const r = await tool("update_homepage", { body: { mode: "manual", productIds: ["a", "b"], title: "Seçtiklerimiz" } });
+    expect(r.isError).toBeUndefined();
+    expect(await group("homepage")).toMatchObject({ mode: "manual", productIds: ["a", "b"], title: "Seçtiklerimiz" });
+    expect((await tool("update_homepage", { body: { limit: 99 } })).isError).toBe(true);
+    await tool("update_homepage", { body: { mode: "auto", productIds: [], title: "" } });
+  });
   it("read-level tokens can read both groups but not change them; guided prompts exist", async () => {
     expect((await tool("get_settings_group", { group: "menu" }, read)).isError).toBeUndefined();
     expect((await tool("get_settings_group", { group: "merchandising" }, read)).isError).toBeUndefined();
-    for (const name of ["update_menu", "update_merchandising"]) {
+    for (const name of ["update_menu", "update_merchandising", "update_homepage"]) {
       const d = await tool(name, { body: { inStockFirst: true } }, read);
       expect(d.isError).toBe(true); expect(d.content[0]!.text).toContain('needs level "write"');
     }

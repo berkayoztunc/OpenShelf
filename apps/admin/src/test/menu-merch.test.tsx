@@ -2,9 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MenuSettings, MerchandisingSettings } from "@openshelf/shared";
-import Menu from "../pages/settings/Menu";
-import Merchandising from "../pages/settings/Merchandising";
+import { HomepageSettings, MenuSettings, MerchandisingSettings } from "@openshelf/shared";
+import Menu from "../pages/storefront/Menu";
+import Merchandising from "../pages/storefront/Merchandising";
+import HomeProducts from "../pages/storefront/HomeProducts";
+import Storefront from "../pages/storefront/Storefront";
+import { MemoryRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { ToastProvider } from "../components/ui";
 import { api } from "../lib/api";
 import { setLocale } from "../i18n";
@@ -74,5 +77,53 @@ describe("Settings → Product order", () => {
     expect(screen.queryByLabelText("Çok satanlar için gün aralığı")).toBeNull();
     await u.selectOptions(screen.getByLabelText("Müşteri bir sıralama seçmediğinde"), "bestselling");
     expect(screen.getByLabelText("Çok satanlar için gün aralığı")).toBeTruthy();
+  });
+});
+
+describe("Storefront → Home page products", () => {
+  const PRODUCTS = { items: [{ id: "p1", nameTr: "Seramik Vazo", status: "active" }, { id: "p2", nameTr: "Keten Örtü", status: "active" }, { id: "p3", nameTr: "Ahşap Tabak", status: "draft" }] };
+  const load = (h = HomepageSettings.parse({})) => vi.spyOn(api, "get").mockImplementation(async (p: string) => {
+    if (!p.startsWith("/api/admin/products")) return { homepage: h } as never;
+    const u = new URL(p, "http://x"); const ids = u.searchParams.get("ids"); const q = u.searchParams.get("q") ?? "";
+    return { items: ids ? PRODUCTS.items.filter((x) => ids.split(",").includes(x.id)) : PRODUCTS.items.filter((x) => x.nameTr.toLowerCase().includes(q.toLowerCase())) } as never;
+  });
+  it("automatic by default: limit and heading only, no picker; saves the chosen limit and headings", async () => {
+    load(); const put = vi.spyOn(api, "put").mockImplementation(async (_p, b) => b as never); const u = userEvent.setup(); wrap(<HomeProducts />);
+    expect(await screen.findByLabelText("Kaç ürün gösterilsin?")).toBeTruthy();
+    expect(screen.queryByLabelText("Ürün ara ve ekle")).toBeNull();
+    await u.selectOptions(screen.getByLabelText("Kaç ürün gösterilsin?"), "12");
+    await u.type(screen.getByLabelText("Bölüm başlığı"), "Seçtiklerimiz");
+    await u.click(screen.getByRole("button", { name: "Değişiklikleri kaydet" }));
+    await waitFor(() => expect(put).toHaveBeenCalled());
+    expect(put.mock.calls[0]![0]).toBe("/api/admin/settings/homepage");
+    expect(put.mock.calls[0]![1]).toMatchObject({ mode: "auto", limit: 12, title: "Seçtiklerimiz" });
+  });
+  it("manual: pick products, reorder, flag inactive ones, save the ordered ids", async () => {
+    load(HomepageSettings.parse({ mode: "manual", productIds: ["p3"] })); const put = vi.spyOn(api, "put").mockImplementation(async (_p, b) => b as never); const u = userEvent.setup(); wrap(<HomeProducts />);
+    expect(await screen.findByText("Aktif değil")).toBeTruthy(); // p3 is a draft
+    await u.type(screen.getByLabelText("Ürün ara ve ekle"), "vazo");
+    await u.click(await screen.findByRole("button", { name: "Seramik Vazo ürününü ana sayfaya ekle" }));
+    await u.click(screen.getByRole("button", { name: "2. ürünü en başa al" }));
+    await u.click(screen.getByRole("button", { name: "Değişiklikleri kaydet" }));
+    await waitFor(() => expect(put).toHaveBeenCalled());
+    expect(put.mock.calls[0]![1]).toMatchObject({ mode: "manual", productIds: ["p1", "p3"] });
+  });
+});
+
+describe("Storefront page", () => {
+  const Where = () => <p data-testid="where">{useLocation().pathname}</p>;
+  const app = (path: string) => wrap(<MemoryRouter initialEntries={[path]}><Routes>
+    <Route path="/storefront" element={<Navigate to="/storefront/home" replace />} /><Route path="/storefront/:tab" element={<><Storefront /><Where /></>} />
+    <Route path="/settings/menu" element={<Navigate to="/storefront/menu" replace />} /><Route path="/settings/merchandising" element={<Navigate to="/storefront/order" replace />} />
+  </Routes></MemoryRouter>);
+  beforeEach(() => { vi.spyOn(api, "get").mockImplementation(async (p: string) => (p.startsWith("/api/admin/categories") ? CATS : { menu: MenuSettings.parse({}), merchandising: MerchandisingSettings.parse({}), homepage: HomepageSettings.parse({}) }) as never); });
+  it("has three tabs, defaults to home page products, and old settings URLs redirect", async () => {
+    app("/storefront");
+    expect(await screen.findByRole("heading", { name: "Vitrin" })).toBeTruthy();
+    for (const n of ["Ana sayfa ürünleri", "Üst menü", "Ürün sıralaması"]) expect(screen.getByRole("link", { name: n })).toBeTruthy();
+    expect(screen.getByTestId("where").textContent).toBe("/storefront/home");
+  });
+  it.each([["/settings/menu", "/storefront/menu"], ["/settings/merchandising", "/storefront/order"], ["/storefront/bogus", "/storefront/home"]])("%s lands on %s", async (from, to) => {
+    app(from); await waitFor(() => expect(screen.getByTestId("where").textContent).toBe(to));
   });
 });
