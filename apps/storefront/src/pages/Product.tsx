@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, ApiError } from "../api/client";
@@ -8,6 +8,7 @@ import { useMoney } from "../components/Money";
 import { useI18n } from "../i18n";
 import { BagIcon, CheckIcon, ChevronIcon, MinusIcon, PlusIcon, ReturnIcon, ShieldIcon, TruckIcon } from "../lib/Icons";
 import { ProductImage } from "../components/ProductImage";
+import { Lightbox } from "../components/Lightbox";
 import { absUrl, useHead } from "../lib/head";
 import { breadcrumbLd, clip, jsonLdEnabled, pageTitle, siteHead } from "../lib/seo";
 import { ProductGrid } from "../components/ProductCard";
@@ -117,6 +118,16 @@ function ProductView({ product: p }: { product: ProductDetail }) {
   const th = config.checkout.freeShippingThreshold;
   const cur = p.images[img];
   const [zoom, setZoom] = useState<string | undefined>();
+  const [lightbox, setLightbox] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const buyRef = useRef<HTMLDivElement>(null);
+  const [buyVisible, setBuyVisible] = useState(true);
+  useEffect(() => {
+    const el = buyRef.current; if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => setBuyVisible(!!e?.isIntersecting));
+    io.observe(el); return () => io.disconnect();
+  }, []);
+  const copyLink = async () => { try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* clipboard blocked: ignore */ } };
   const stockTone = soldOut ? "bg-data-bad" : max <= 5 ? "bg-data-warn" : "bg-data-ok";
 
   return (
@@ -132,12 +143,19 @@ function ProductView({ product: p }: { product: ProductDetail }) {
             className="group relative aspect-square flex-1 cursor-zoom-in overflow-hidden rounded-2xl bg-line ring-1 ring-ink/[.07] md:aspect-[4/5]"
             onMouseMove={(e) => { const r = e.currentTarget.getBoundingClientRect(); setZoom(`${((e.clientX - r.left) / r.width) * 100}% ${((e.clientY - r.top) / r.height) * 100}%`); }}
             onMouseLeave={() => setZoom(undefined)} style={{ "--zo": zoom ?? "50% 50%" } as React.CSSProperties}
+            onClick={() => { if (cur) setLightbox(true); }}
           >
             <ProductImage key={cur?.url ?? "none"} src={cur?.url} alt={cur?.alt} title={p.title} eager fetchPriority="high" width={800} height={1000}
               className="absolute inset-0 size-full object-cover [transform-origin:var(--zo)] transition-transform duration-300 ease-out group-hover:scale-[1.6] motion-reduce:group-hover:scale-100"
               />
             {sale && !soldOut && <span className="absolute left-4 top-4 rounded-full bg-accent-500 px-3 py-1 text-xs font-bold text-stone-900 shadow-sm">−{sale.pct}%</span>}
+            {p.images.length > 1 && (<>
+              <button type="button" aria-label={t("lightbox.prev")} onClick={(e) => { e.stopPropagation(); setImg((img - 1 + p.images.length) % p.images.length); }} className="absolute left-3 top-1/2 z-10 grid size-10 -translate-y-1/2 place-items-center rounded-full bg-surface/90 text-ink shadow-md backdrop-blur transition hover:bg-surface md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"><ChevronIcon dir="left" size={20} /></button>
+              <button type="button" aria-label={t("lightbox.next")} onClick={(e) => { e.stopPropagation(); setImg((img + 1) % p.images.length); }} className="absolute right-3 top-1/2 z-10 grid size-10 -translate-y-1/2 place-items-center rounded-full bg-surface/90 text-ink shadow-md backdrop-blur transition hover:bg-surface md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"><ChevronIcon size={20} /></button>
+              <span className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/50 px-2.5 py-0.5 text-xs tabular-nums text-white">{img + 1} / {p.images.length}</span>
+            </>)}
           </div>
+          {lightbox && <Lightbox images={p.images} index={img} title={p.title} onIndex={setImg} onClose={() => setLightbox(false)} />}
           {p.images.length > 1 && (
             <ul className="grid grid-cols-5 gap-2 lg:w-20 lg:grid-cols-1 lg:content-start">
               {p.images.map((im, i) => (
@@ -192,7 +210,7 @@ function ProductView({ product: p }: { product: ProductDetail }) {
             {soldOut ? t("product.unavailable") : max <= 5 ? t("product.lowStock", { n: max }) : t("product.inStock")}
           </p>
 
-          <div className="mt-5 flex items-center gap-3">
+          <div ref={buyRef} className="mt-5 flex items-center gap-3">
             <div className="inline-flex items-center rounded-xl border border-line bg-surface" role="group" aria-label={t("product.quantity")}>
               <button className="icon-btn" aria-label={t("cart.decrease")} disabled={qty <= 1 || soldOut} onClick={() => setQty(qty - 1)}><MinusIcon /></button>
               <span className="w-9 text-center font-medium tabular-nums" aria-live="polite">{qty}</span>
@@ -209,6 +227,11 @@ function ProductView({ product: p }: { product: ProductDetail }) {
             <li className="flex items-center gap-3"><ReturnIcon className="shrink-0 text-brand-ink" /><span className="font-semibold">{t("product.easyReturns")}</span></li>
           </ul>
 
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
+            <span>{variant?.sku ? <>{t("product.sku")}: <span className="font-mono text-ink">{variant.sku}</span></> : null}</span>
+            <button type="button" onClick={() => void copyLink()} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 transition hover:bg-hover hover:text-ink" aria-live="polite">{copied ? <><CheckIcon size={14} />{t("product.shareDone")}</> : t("product.shareCopy")}</button>
+          </div>
+
           {p.description && (
             <section className="mt-8 border-t border-line pt-6">
               <h2 className="text-sm font-semibold">{t("product.description")}</h2>
@@ -217,6 +240,12 @@ function ProductView({ product: p }: { product: ProductDetail }) {
           )}
         </div>
       </div>
+      {variant && !buyVisible && (
+        <div className="fixed inset-x-0 bottom-0 z-30 flex items-center gap-3 border-t border-line bg-surface/95 px-4 py-3 shadow-lift backdrop-blur md:hidden" data-testid="sticky-buy">
+          <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{p.title}</p><p className="text-sm font-semibold tabular-nums">{money(variant.price, currency)}</p></div>
+          <button className="btn-primary shrink-0" disabled={soldOut || busy} onClick={() => void add()}>{soldOut ? t("product.soldOut") : <><BagIcon size={18} />{t("product.addToCart")}</>}</button>
+        </div>
+      )}
       {relatedItems.length > 0 && (
         <section className="mt-16 border-t border-line pt-10" aria-labelledby="h-related">
           <h2 id="h-related" className="section-title">{t("product.related")}</h2>

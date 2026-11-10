@@ -7,7 +7,7 @@ import { ProductGrid, ProductGridSkeleton } from "../components/ProductCard";
 import { useI18n } from "../i18n";
 import { absUrl, useHead } from "../lib/head";
 import { breadcrumbLd, jsonLdEnabled, lowestPrice, pageTitle, siteHead } from "../lib/seo";
-import { SearchIcon } from "../lib/Icons";
+import { CloseIcon, SearchIcon } from "../lib/Icons";
 import { useConfig } from "../store/ConfigContext";
 import { getConsent, onConsentChange, track } from "../tracking";
 
@@ -85,6 +85,13 @@ export default function Listing() {
         </div>
       </div>
       <div className="container-x py-8">
+        <form role="search" className="mb-5" onSubmit={(e) => { e.preventDefault(); const v = String(new FormData(e.currentTarget).get("q") ?? "").trim(); update({ q: v || undefined }); }}>
+          <label htmlFor="list-search" className="sr-only">{t("list.searchHere")}</label>
+          <div className="relative max-w-xl">
+            <input id="list-search" name="q" type="search" key={q} defaultValue={q} placeholder={t("list.searchHere")} enterKeyHint="search" className="field rounded-full bg-surface pl-11" />
+            <SearchIcon size={18} aria-hidden className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted" />
+          </div>
+        </form>
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <nav aria-label={t("list.filters")} className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:flex-wrap md:px-0">
             <FilterChip active={!category} to={() => { const n = new URLSearchParams(sp); n.delete("category"); n.delete("page"); return n; }} label={t("list.allCategories")}/>
@@ -99,12 +106,20 @@ export default function Listing() {
             </select>
           </div>
         </div>
+        {(q || sorted || (category && activeCat)) && (
+          <div className="mt-4 flex flex-wrap items-center gap-2" role="group" aria-label={t("list.activeFilters")}>
+            {category && activeCat && <button type="button" className="chip gap-1.5 border-line bg-surface hover:border-ink/40" onClick={() => { const n = new URLSearchParams(sp); n.delete("category"); n.delete("page"); setSp(n); }}>{activeCat.name}<CloseIcon size={14} aria-hidden /></button>}
+            {q && <button type="button" className="chip gap-1.5 border-line bg-surface hover:border-ink/40" onClick={() => update({ q: undefined })}>“{q}”<CloseIcon size={14} aria-hidden /></button>}
+            {sorted && <button type="button" className="chip gap-1.5 border-line bg-surface hover:border-ink/40" onClick={() => update({ sort: undefined })}>{t(`sort.${sort}` as "sort.newest")}<CloseIcon size={14} aria-hidden /></button>}
+            <button type="button" className="text-sm font-medium text-brand-ink hover:underline" onClick={() => setSp(new URLSearchParams())}>{t("list.clearAll")}</button>
+          </div>
+        )}
         <div className={`mt-8 transition-opacity duration-300 ${res.isFetching && res.isPlaceholderData ? "opacity-60" : ""}`} aria-busy={res.isFetching}>
           {res.isLoading ? <ProductGridSkeleton /> : res.isError ? <p role="alert" className="py-16 text-center text-muted">{t("list.error")}</p>
             : res.data && res.data.items.length ? <ProductGrid products={res.data.items} /> : (
               <div className="py-20 text-center">
                 <span className="mx-auto grid size-16 place-items-center rounded-full bg-brand-50 text-brand-ink"><SearchIcon size={26} /></span>
-                <p className="mt-5 text-muted">{t("list.empty")}</p>
+                <p className="mt-5 font-medium">{q ? t("list.emptyFor", { q }) : t("list.empty")}</p><p className="mt-1 text-sm text-muted">{t("list.emptyHint")}</p>
                 <Link to="/products" className="btn-primary mt-6">{t("list.allCategories")}</Link>
               </div>
             )}
