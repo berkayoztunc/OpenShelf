@@ -29,7 +29,7 @@ export default function Orders() {
     <>
       <PageHeader title={t("orders.title")} description={t("orders.description")} guide="orders#siparis-durumlari" />
       <Card>
-        <div className="mb-5 grid gap-3 sm:grid-cols-3">
+        <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <TextField label={t("common.search")} type="search" placeholder={t("orders.filter.searchPlaceholder")} hint={t("orders.filter.search.hint")} help="orders.search" value={q} onChange={(e) => { setQ(e.target.value); upd("q", e.target.value); }} />
           <SelectField label={t("common.status")} hint={t("orders.filter.status.hint")} help="orders.status" value={status} onChange={(e) => upd("status", e.target.value)}><option value="">{t("common.all")}</option>{ORDER_STATUSES.map((s) => <option key={s} value={s}>{enumLabel("status", s)}</option>)}</SelectField>
           <SelectField label={t("orders.filter.source")} hint={t("orders.filter.source.hint")} help="orders.source" value={source} onChange={(e) => upd("source", e.target.value)}><option value="">{t("common.all")}</option>{ORDER_SOURCES.map((s) => <option key={s} value={s}>{enumLabel("source", s)}</option>)}</SelectField>
@@ -37,13 +37,13 @@ export default function Orders() {
         {list.isPending ? <Loading /> : list.isError ? <ErrorState error={list.error} retry={() => list.refetch()} /> :
           list.data.items.length === 0 ? <EmptyState icon={<ClipboardList size={22} />} title={t("orders.empty.title")} description={t("orders.empty.body")} /> : (
             <>
-              <Table head={[<input key="all" type="checkbox" aria-label={t("orders.col.selectAll")} className="size-4 accent-[var(--color-brand-600)]" checked={allOn} onChange={() => setSel(allOn ? new Set() : new Set(rows.map((o) => o.id)))} />, t("orders.col.order"), t("orders.col.date"), t("orders.col.customer"), t("orders.col.source"), t("orders.col.status"), t("orders.col.total")]} caption={t("orders.table.caption")}>{list.data.items.map((o) => (
+              <Table head={[<input key="all" type="checkbox" aria-label={t("orders.col.selectAll")} className="size-4 accent-[var(--color-brand-600)]" checked={allOn} onChange={() => setSel(allOn ? new Set() : new Set(rows.map((o) => o.id)))} />, t("orders.col.order"), t("orders.col.date"), t("orders.col.customer"), t("orders.col.source"), t("orders.col.status"), <span key="t" className="block text-right">{t("orders.col.total")}</span>]} caption={t("orders.table.caption")}>{list.data.items.map((o) => (
                 <tr key={o.id}>
                   <Td className="w-10"><input type="checkbox" aria-label={t("orders.selectOne", { number: o.number })} className="size-4 accent-[var(--color-brand-600)]" checked={sel.has(o.id)} onChange={() => toggle(o.id)} /></Td>
                   <Td><Link className="font-medium text-brand-ink hover:underline" to={`/orders/${o.id}`}>#{o.number}</Link>{o.isMock && <span className="ml-2"><Badge tone="danger">{t("orders.mockBadge")}</Badge></span>}</Td>
-                  <Td>{dateTime(o.createdAt)}</Td><Td>{o.customerName ?? o.email ?? "-"}</Td>
+                  <Td className="whitespace-nowrap text-muted">{dateTime(o.createdAt)}</Td><Td><span className="block font-medium">{o.customerName ?? o.email ?? "-"}</span>{o.customerName && o.email && <span className="block text-xs text-muted">{o.email}</span>}</Td>
                   <Td><Badge>{enumLabel("source", o.source)}</Badge></Td><Td><Badge tone={statusTone(o.status)}>{enumLabel("status", o.status)}</Badge></Td>
-                  <Td>{money(o.total, o.currency)}</Td>
+                  <Td className="whitespace-nowrap text-right font-medium tabular-nums">{money(o.total, o.currency)}</Td>
                 </tr>
               ))}</Table>
               <Pagination page={list.data.page} pageSize={list.data.pageSize} total={list.data.total} onPage={(n) => upd("page", String(n))} />

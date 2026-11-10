@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Badge, Button, Card, EmptyState, ErrorState, Pagination, Skeleton, cx } from "../../ui";
+import { Badge, Button, Card, EmptyState, ErrorState, Pagination, Skeleton, StatTile, cx } from "../../ui";
 import type { Tone } from "../../ui";
 import { Term } from "../../help/Term";
 import { EnvPill } from "../Chips";
@@ -188,14 +188,8 @@ export function TyPager({ data, onPage }: { data: Paged; onPage: (p: number) => 
   return <Pagination page={data.page + 1} pageSize={data.size} total={data.totalElements} onPage={(p) => onPage(p - 1)} />;
 }
 
-export function Stat({ label, value, hint }: { label: string; value: ReactNode; hint?: string }) {
-  return (
-    <div className="rounded-xl border border-line bg-surface p-4 shadow-soft">
-      <p className="text-xs font-medium text-muted">{label}</p>
-      <p className="mt-1 break-words font-display text-xl font-semibold tabular-nums">{value}</p>
-      {hint && <p className="mt-0.5 text-xs text-muted">{hint}</p>}
-    </div>
-  );
+export function Stat({ label, value, hint, icon, tone }: { label: string; value: ReactNode; hint?: string; icon?: ReactNode; tone?: "brand" | "success" | "warning" | "danger" | "neutral" }) {
+  return <StatTile label={label} value={value} hint={hint} icon={icon} tone={tone} />;
 }
 
 /** Label/value pair for detail panels. */

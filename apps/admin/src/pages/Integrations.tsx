@@ -10,7 +10,7 @@ import { CATEGORIES, CHECKLIST, INTEGRATIONS_KEY, categoryLabel, categoryOf, int
 import type { CategoryId, StatusKind } from "../lib/integrations";
 import { useSettings } from "../lib/settings";
 import type { Integration } from "../lib/types";
-import { Badge, Button, Drawer, EmptyState, ErrorState, PageHeader, Skeleton, Toggle, cx, useToast } from "../components/ui";
+import { Badge, Button, Drawer, EmptyState, ErrorState, PageHeader, Skeleton, StatTile, Toggle, cx, useToast } from "../components/ui";
 import type { Tone } from "../components/ui";
 import { IntegrationForm } from "../components/IntegrationForm";
 import { TestResultPanel } from "../components/TestResult";
@@ -125,15 +125,12 @@ function Summary({ list, mockMode, onTestAll, progress }: { list: Integration[];
   const connected = statuses.filter((s) => s === "connected").length;
   const failing = statuses.filter((s) => s === "error").length;
   const lastAt = list.map((i) => i.health?.at).filter(Boolean).sort().pop();
-  const Stat = ({ label, value, tone }: { label: string; value: string; tone?: string }) => (
-    <div className="rounded-lg bg-canvas px-4 py-3 ring-1 ring-inset ring-line"><p className="text-xs text-muted">{label}</p><p className={cx("mt-0.5 font-display text-xl font-semibold tabular-nums", tone)}>{value}</p></div>
-  );
   return (
     <section aria-label={t("integrations.summary.label")} className="mb-6 flex flex-wrap items-stretch gap-3">
       <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-3">
-        <Stat label={t("integrations.summary.connected")} value={mockMode ? t("integrations.summary.simulated", { n: list.length }) : t("integrations.summary.ofTotal", { c: connected, n: list.length })} />
-        <Stat label={t("integrations.summary.healthy")} value={mockMode ? t("integrations.summary.allMock") : failing ? t("integrations.summary.failing", { c: connected, f: failing }) : `${connected}`} tone={failing ? "text-danger" : undefined} />
-        <Stat label={t("integrations.summary.lastTested")} value={mockMode ? t("integrations.summary.na") : lastAt ? timeAgo(lastAt) : t("integrations.summary.never")} />
+        <StatTile label={t("integrations.summary.connected")} icon={<Plug size={15} />} value={mockMode ? t("integrations.summary.simulated", { n: list.length }) : t("integrations.summary.ofTotal", { c: connected, n: list.length })} />
+        <StatTile label={t("integrations.summary.healthy")} icon={<FlaskConical size={15} />} tone={failing ? "danger" : "success"} value={mockMode ? t("integrations.summary.allMock") : failing ? t("integrations.summary.failing", { c: connected, f: failing }) : `${connected}`} />
+        <StatTile label={t("integrations.summary.lastTested")} icon={<Info size={15} />} tone="neutral" value={mockMode ? t("integrations.summary.na") : lastAt ? timeAgo(lastAt) : t("integrations.summary.never")} />
       </div>
       <div className="flex items-center">
         <Button onClick={onTestAll} loading={!!progress} disabled={!list.some((i) => mockMode || i.enabled)}><FlaskConical size={15} />{progress ? t("integrations.summary.testing", { i: Math.min(progress.done + 1, progress.total), n: progress.total }) : t("integrations.summary.testAll")}</Button>

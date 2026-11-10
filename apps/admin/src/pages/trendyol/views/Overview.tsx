@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
+import { ArrowUpRight, Boxes, PackageX, ShoppingBag, Unlink } from "lucide-react";
 import { Badge, Card } from "../../../components/ui";
 import { KV, Stat, TyErrorBox, TableSkeleton } from "../../../components/trendyol/views/shared";
 import { api } from "../../../lib/api";
@@ -27,13 +28,13 @@ export default function Overview() {
     <div className="space-y-5" data-testid="tdy-overview">
       <p className="rounded-xl border border-line bg-surface px-4 py-3 text-sm text-muted">{t("trendyol.overview.truth")}</p>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label={t("trendyol.overview.orders")} value={h.orders.total} hint={t("trendyol.overview.ordersWeek", { n: h.orders.last7d })} />
-        <Stat label={t("trendyol.overview.noCargo")} value={<span className={warn(h.orders.withoutCargo)}>{h.orders.withoutCargo}</span>} hint={t("trendyol.overview.noCargoHint")} />
-        <Stat label={t("trendyol.overview.drift")} value={<span className={warn(h.stock.drift)}>{h.stock.drift}</span>} hint={t("trendyol.overview.driftHint")} />
-        <Stat label={t("trendyol.overview.unmapped")} value={<span className={warn(h.orders.unmappedLines)}>{h.orders.unmappedLines}</span>} hint={t("trendyol.overview.unmappedHint")} />
+        <Stat label={t("trendyol.overview.orders")} icon={<ShoppingBag size={15} />} value={h.orders.total} hint={t("trendyol.overview.ordersWeek", { n: h.orders.last7d })} />
+        <Stat label={t("trendyol.overview.noCargo")} icon={<PackageX size={15} />} tone={h.orders.withoutCargo > 0 ? "warning" : "success"} value={h.orders.withoutCargo} hint={t("trendyol.overview.noCargoHint")} />
+        <Stat label={t("trendyol.overview.drift")} icon={<Boxes size={15} />} tone={h.stock.drift > 0 ? "warning" : "success"} value={h.stock.drift} hint={t("trendyol.overview.driftHint")} />
+        <Stat label={t("trendyol.overview.unmapped")} icon={<Unlink size={15} />} tone={h.orders.unmappedLines > 0 ? "warning" : "success"} value={h.orders.unmappedLines} hint={t("trendyol.overview.unmappedHint")} />
       </div>
       <Card title={t("trendyol.overview.sync")}>
-        <dl className="grid gap-4 sm:grid-cols-3">
+        <dl className="grid gap-x-6 gap-y-5 sm:grid-cols-3 [&>div]:rounded-lg [&>div]:bg-canvas [&>div]:p-3">
           <KV label={t("trendyol.overview.lastReconcile")}>{h.reconcile.lastRunAt ? dateTime(h.reconcile.lastRunAt) : ""}</KV>
           <KV label={t("trendyol.overview.lastOrder")}>{h.orders.lastAt ? dateTime(h.orders.lastAt) : ""}</KV>
           <KV label={t("trendyol.overview.lastPush")}>{h.stock.lastPushAt ? dateTime(h.stock.lastPushAt) : ""}</KV>
@@ -42,9 +43,9 @@ export default function Overview() {
           <KV label={t("trendyol.overview.import")}>{h.import ? <Badge tone={h.import.state === "done" ? "success" : h.import.state === "error" ? "danger" : "info"}>{h.import.state}</Badge> : ""}</KV>
         </dl>
         <div className="mt-4 flex flex-wrap gap-3 text-sm">
-          <Link className="text-brand-ink underline" to="/trendyol/orders">{t("trendyol.overview.goOrders")}</Link>
-          <Link className="text-brand-ink underline" to="/trendyol/products">{t("trendyol.overview.goProducts")}</Link>
-          <Link className="text-brand-ink underline" to="/trendyol/explorer">{t("trendyol.overview.goExplorer")}</Link>
+          <Link className="inline-flex items-center gap-1 font-medium text-brand-ink hover:underline" to="/trendyol/orders">{t("trendyol.overview.goOrders")}<ArrowUpRight size={14} /></Link>
+          <Link className="inline-flex items-center gap-1 font-medium text-brand-ink hover:underline" to="/trendyol/products">{t("trendyol.overview.goProducts")}<ArrowUpRight size={14} /></Link>
+          <Link className="inline-flex items-center gap-1 font-medium text-brand-ink hover:underline" to="/trendyol/explorer">{t("trendyol.overview.goExplorer")}<ArrowUpRight size={14} /></Link>
         </div>
       </Card>
       <Card title={t("trendyol.overview.errors")}>

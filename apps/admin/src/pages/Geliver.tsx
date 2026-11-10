@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Check, ExternalLink, RefreshCw, X } from "lucide-react";
 import type { GeliverCallResult, GeliverOperation } from "@openshelf/shared";
-import { Badge, Button, Card, EmptyState, ErrorState, Modal, PageHeader, Skeleton, SelectField, Table, Tabs, Td, TextArea, TextField } from "../components/ui";
+import { Badge, Banner, Button, Card, Drawer, EmptyState, ErrorState, FilterBar, PageHeader, Skeleton, SelectField, Table, Tabs, Td, TextArea, TextField } from "../components/ui";
 import { fmtDate, gloc, moneyStr, offersOf, place, rowsOf, statusTone, useGeliverCall, type GeliverInput, type OfferView } from "../lib/geliver";
 import { JsonPanel } from "../components/geliver/JsonPanel";
 import { OffersTable } from "../components/geliver/Offers";
@@ -18,26 +18,24 @@ function StatusBar({ cat }: { cat: ReturnType<typeof useGeliverCall>["cat"] }) {
   if (cat.isPending) return <Skeleton className="mb-5 h-14" />;
   if (cat.error || !cat.mode) return null;
   if (cat.mode === "mock") return (
-    <div role="status" data-testid="gl-mode" className="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-danger-line bg-danger-soft px-4 py-3 text-danger">
-      <Badge tone="danger">{t("geliver.mode.mock")}</Badge><p className="min-w-0 flex-1 text-sm font-medium">{t("geliver.mode.mockBody")}</p>
-    </div>
+    <Banner tone="danger" testId="gl-mode"><Badge tone="danger">{t("geliver.mode.mock")}</Badge><p className="min-w-0 flex-1 text-sm font-medium">{t("geliver.mode.mockBody")}</p></Banner>
   );
   if (cat.mode === "live") return (
-    <div role="status" data-testid="gl-mode" className="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3">
+    <Banner tone="success" testId="gl-mode">
       <Badge tone="success">{t("geliver.mode.live")}</Badge>
       <Badge tone={cat.test ? "info" : "warning"}>{cat.test ? t("geliver.mode.test") : t("geliver.mode.notTest")}</Badge>
       {cat.senderAddressId && <p className="text-sm text-muted">{t("geliver.mode.sender")}: <span className="font-mono text-ink">{cat.senderAddressId}</span></p>}
-    </div>
+    </Banner>
   );
   return (
-    <div role="status" data-testid="gl-mode" className="mb-5 space-y-3 rounded-xl border border-warn-line bg-warn-soft px-4 py-3 text-warn">
-      <div className="flex items-center gap-2"><Badge tone="warning">{t("geliver.mode.disabled")}</Badge><p className="text-sm font-medium">{t(cat.reason === "integration_disabled" ? "geliver.mode.disabledOff" : "geliver.mode.disabledNotConfigured")}</p></div>
-      <p className="text-sm">{t("geliver.mode.disabledBody")}</p>
-      <div className="flex flex-wrap gap-2">
-        <Link to="/integrations?configure=geliver" className="inline-flex h-8 items-center rounded-lg bg-brand-600 px-3 text-[13px] font-medium text-white hover:bg-brand-700">{t("geliver.mode.configure")}</Link>
-        {owner && <Link to="/settings/system" className="inline-flex h-8 items-center rounded-lg border border-line bg-surface px-3 text-[13px] font-medium text-ink hover:bg-canvas">{t("trendyol.mode.enableMock")}</Link>}
-      </div>
-    </div>
+    <Banner tone="warning" testId="gl-mode" actions={<>
+      <Link to="/integrations?configure=geliver" className="inline-flex h-8 items-center rounded-lg bg-brand-600 px-3 text-[13px] font-medium text-white hover:bg-brand-700">{t("geliver.mode.configure")}</Link>
+      {owner && <Link to="/settings/system" className="inline-flex h-8 items-center rounded-lg border border-line bg-surface px-3 text-[13px] font-medium text-ink hover:bg-canvas">{t("trendyol.mode.enableMock")}</Link>}
+    </>}>
+      <Badge tone="warning">{t("geliver.mode.disabled")}</Badge>
+      <p className="text-sm font-medium">{t(cat.reason === "integration_disabled" ? "geliver.mode.disabledOff" : "geliver.mode.disabledNotConfigured")}</p>
+      <p className="basis-full text-sm">{t("geliver.mode.disabledBody")}</p>
+    </Banner>
   );
 }
 
@@ -153,12 +151,12 @@ function Shipments({ call }: { call: ReturnType<typeof useGeliverCall> }) {
   const d = (detail?.response.body as any)?.data;
   return (
     <Card title={t("geliver.ship.title")} actions={<Button size="sm" variant="secondary" loading={busy} disabled={!call.cat.canSend} onClick={() => { setPage(1); void load(1); }}><RefreshCw size={13} />{t(res ? "geliver.ship.refresh" : "geliver.ship.load")}</Button>}>
-      <div className="mb-3 grid gap-3 sm:grid-cols-2">
+      <FilterBar>
         <SelectField label={t("geliver.col.status")} value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="">—</option>{["PRE_TRANSIT", "TRANSIT", "DELIVERED", "RETURNED", "CANCELED"].map((x) => <option key={x} value={x}>{x}</option>)}
         </SelectField>
-        <TextField label={t("geliver.col.order")} value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} />
-      </div>
+        <TextField label={t("geliver.col.order")} value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { setPage(1); void load(1); } }} />
+      </FilterBar>
       {!res ? <EmptyState title={t("geliver.ship.title")} description={t("geliver.ship.empty")} /> : res.error ? <p className="text-sm text-danger">{res.error.message}</p> : !rows.length ? <EmptyState title={t("geliver.ship.empty")} /> : (
         <div className="space-y-3" data-testid="gl-ships">
           <Table caption={t("geliver.ship.title")} head={[t("geliver.col.date"), t("geliver.col.carrier"), t("geliver.col.tracking"), t("geliver.col.status"), t("geliver.col.recipient"), t("geliver.col.price"), <span key="a" className="sr-only">{t("geliver.col.actions")}</span>]}>
@@ -186,9 +184,9 @@ function Shipments({ call }: { call: ReturnType<typeof useGeliverCall> }) {
           </div>
         </div>
       )}
-      <Modal open={!!detail} onClose={() => setDetail(null)} title={t("geliver.ship.detailsTitle", { id: String(d?.id ?? "") })} wide>
+      <Drawer open={!!detail} onClose={() => setDetail(null)} title={t("geliver.ship.detailsTitle", { id: String(d?.id ?? "") })}>
         {detail && (detail.ok && d ? <ShipmentDetail s={d} raw={detail.response.body} /> : <><p className="mb-2 text-sm text-danger">{detail.error?.message}</p><JsonPanel value={detail.response.body} /></>)}
-      </Modal>
+      </Drawer>
     </Card>
   );
 }
@@ -280,7 +278,7 @@ export default function Geliver() {
       {call.cat.error ? <ErrorState error={call.cat.error} retry={call.cat.refetch} /> : (
         <div className="space-y-5">
           <Tabs<TabId> tabs={TABS.map((x) => ({ id: x, label: t(`geliver.tab.${x}`) }))} value={tab} onChange={setTab} label={t("geliver.tabs.label")} />
-          {tab === "check" && <div className="space-y-5"><ConnectionCard call={call} /><QuoteCard call={call} /><FlowCard call={call} /></div>}
+          {tab === "check" && <div className="grid gap-5 lg:grid-cols-2"><ConnectionCard call={call} /><QuoteCard call={call} /><div className="lg:col-span-2"><FlowCard call={call} /></div></div>}
           {tab === "shipments" && <Shipments call={call} />}
           {tab === "explorer" && !call.cat.isPending && <Explorer call={call} />}
         </div>

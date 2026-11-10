@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
-import { AlertCircle, CheckCircle2, Eye, EyeOff, Info, Inbox, X } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, Eye, EyeOff, FlaskConical, Info, Inbox, X } from "lucide-react";
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 import { HelpTip } from "./help/HelpTip";
 import { PageHelp } from "./help/PageHelp";
@@ -95,14 +95,55 @@ export function Toggle({ checked, onChange, label, hint, hideLabel, help, guide 
 }
 
 /* ---------- Layout bits ---------- */
-export function Card({ title, actions, children, className, testId }: { title?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string; testId?: string }) {
+export function Card({ title, description, actions, children, className, testId }: { title?: ReactNode; description?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string; testId?: string }) {
   return (
     <section data-testid={testId} className={cx("rounded-xl border border-line bg-surface shadow-soft", className)}>
-      {(title || actions) && <header className="flex min-h-14 items-center justify-between gap-3 border-b border-line px-5 py-3"><h2 className="text-sm font-semibold">{title}</h2>{actions}</header>}
+      {(title || actions) && (
+        <header className="flex min-h-14 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-line px-5 py-3">
+          <div className="min-w-0"><h2 className="text-sm font-semibold">{title}</h2>{description && <p className="mt-0.5 text-xs text-muted">{description}</p>}</div>
+          {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+        </header>
+      )}
       <div className="p-5">{children}</div>
     </section>
   );
 }
+
+/** KPI tile: label, big value, optional icon chip + hint. `tone` colours the icon chip and (for warn/danger) the value. */
+const statTones = { brand: "bg-brand-50 text-brand-ink", success: "bg-success-soft text-success", warning: "bg-warn-soft text-warn", danger: "bg-danger-soft text-danger", neutral: "bg-hover text-muted" };
+export function StatTile({ label, value, hint, icon, tone = "brand" }: { label: string; value: ReactNode; hint?: ReactNode; icon?: ReactNode; tone?: keyof typeof statTones }) {
+  return (
+    <div className="rounded-xl border border-line bg-surface p-4 shadow-soft transition duration-200 hover:border-line-strong">
+      <div className="flex items-start justify-between gap-2"><p className="text-xs font-medium text-muted">{label}</p>{icon && <span aria-hidden className={cx("grid size-7 shrink-0 place-items-center rounded-lg", statTones[tone])}>{icon}</span>}</div>
+      <p className={cx("mt-1.5 break-words font-display text-2xl font-semibold tabular-nums", tone === "warning" && "text-warn", tone === "danger" && "text-danger")}>{value}</p>
+      {hint && <p className="mt-0.5 text-xs text-muted">{hint}</p>}
+    </div>
+  );
+}
+
+/** Full-width status strip for integration consoles (mock / live / needs setup). Keeps role=status for screen readers. */
+const bannerTones = {
+  danger: "border-danger-line bg-danger-soft text-danger",
+  warning: "border-warn-line bg-warn-soft text-warn",
+  success: "border-success-line bg-success-soft/40 text-ink",
+  neutral: "border-line bg-surface text-ink",
+};
+export function Banner({ tone = "neutral", icon, children, actions, testId, className }: { tone?: keyof typeof bannerTones; icon?: ReactNode; children: ReactNode; actions?: ReactNode; testId?: string; className?: string }) {
+  const Icon = icon ?? (tone === "danger" ? <FlaskConical size={18} /> : tone === "warning" ? <AlertTriangle size={18} /> : tone === "success" ? <CheckCircle2 size={18} /> : <Info size={18} />);
+  return (
+    <div role="status" data-testid={testId} className={cx("mb-5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border px-4 py-3 shadow-soft", bannerTones[tone], className)}>
+      <span aria-hidden className="shrink-0">{Icon}</span>
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1.5">{children}</div>
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+    </div>
+  );
+}
+
+/** Inline filter row (selects/inputs/buttons) used above tables. */
+export function FilterBar({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cx("mb-4 flex flex-wrap items-end gap-3 [&>*]:min-w-40 [&>*]:flex-1 sm:[&>*]:flex-none sm:[&>*]:basis-48", className)}>{children}</div>;
+}
+
 /** `guide="section#anchor"` adds the "How do I use this page?" button that opens that guide section. */
 export function PageHeader({ title, description, actions, guide }: { title: string; description?: string; actions?: ReactNode; guide?: string }) {
   return (
@@ -185,20 +226,23 @@ export function Pagination({ page, pageSize, total, onPage }: { page: number; pa
 }
 
 /* ---------- Tabs (link-less, controlled) ---------- */
-export function Tabs<T extends string>({ tabs, value, onChange, label }: { tabs: { id: T; label: string }[]; value: T; onChange: (t: T) => void; label: string }) {
+export function Tabs<T extends string>({ tabs, value, onChange, label }: { tabs: { id: T; label: string; count?: number }[]; value: T; onChange: (t: T) => void; label: string }) {
   return (
-    <div role="tablist" aria-label={label} className="mb-6 flex gap-1 overflow-x-auto border-b border-line"
-      onKeyDown={(e) => {
-        const i = tabs.findIndex((t) => t.id === value);
-        if (e.key === "ArrowRight") onChange(tabs[(i + 1) % tabs.length]!.id);
-        if (e.key === "ArrowLeft") onChange(tabs[(i - 1 + tabs.length) % tabs.length]!.id);
-      }}>
-      {tabs.map((t) => (
-        <button key={t.id} role="tab" aria-selected={value === t.id} tabIndex={value === t.id ? 0 : -1} onClick={() => onChange(t.id)}
-          className={cx("whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium -mb-px transition-colors", value === t.id ? "border-brand-600 text-brand-ink" : "border-transparent text-muted hover:text-ink")}>
-          {t.label}
-        </button>
-      ))}
+    <div className="-mx-4 mb-6 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden">
+      <div role="tablist" aria-label={label} className="inline-flex min-w-full gap-1 rounded-xl border border-line bg-canvas p-1 sm:min-w-0"
+        onKeyDown={(e) => {
+          const i = tabs.findIndex((t) => t.id === value);
+          if (e.key === "ArrowRight") onChange(tabs[(i + 1) % tabs.length]!.id);
+          if (e.key === "ArrowLeft") onChange(tabs[(i - 1 + tabs.length) % tabs.length]!.id);
+        }}>
+        {tabs.map((t) => (
+          <button key={t.id} role="tab" aria-selected={value === t.id} tabIndex={value === t.id ? 0 : -1} onClick={() => onChange(t.id)}
+            className={cx("inline-flex items-center gap-2 whitespace-nowrap rounded-lg px-3.5 py-1.5 text-[13px] font-medium transition focus-visible:outline-2 focus-visible:outline-brand-600",
+              value === t.id ? "bg-surface text-brand-ink shadow-soft ring-1 ring-line" : "text-muted hover:bg-hover hover:text-ink")}>
+            {t.label}{t.count != null && <span className={cx("rounded-full px-1.5 text-[11px] tabular-nums", value === t.id ? "bg-brand-50" : "bg-hover")}>{t.count}</span>}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

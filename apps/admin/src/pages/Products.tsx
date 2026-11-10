@@ -27,7 +27,7 @@ export default function Products() {
     <>
       <PageHeader title={t("catalog.products.title")} description={t("catalog.products.description")} guide="catalog#urun-ekleme" actions={<Link to="/products/new"><Button><Plus size={16} />{t("catalog.products.new")}</Button></Link>} />
       <Card>
-        <div className="mb-5 grid gap-3 sm:grid-cols-3">
+        <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <TextField label={t("catalog.products.searchLabel")} help="catalog.productSearch" hint={t("catalog.products.searchHint")} type="search" placeholder={t("catalog.products.searchPlaceholder")} value={q} onChange={(e) => { setQ(e.target.value); upd("q", e.target.value); }} />
           <SelectField label={t("common.status")} help="catalog.productStatus" value={status} onChange={(e) => upd("status", e.target.value)}><option value="">{t("common.all")}</option>{(["active", "draft", "archived"] as const).map((s) => <option key={s} value={s}>{enumLabel("productStatus", s)}</option>)}</SelectField>
           <SelectField label={t("catalog.product.category.label")} value={category} onChange={(e) => upd("category", e.target.value)}><option value="">{t("common.all")}</option>{cats.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</SelectField>
@@ -45,8 +45,8 @@ export default function Products() {
                     <Td><Link to={`/products/${p.id}`} className="flex items-center gap-3 font-medium hover:text-brand-ink">
                       {src ? <img src={src} alt="" className="size-11 rounded-lg object-cover ring-1 ring-ink/[.07]" /> : <span className="grid size-11 place-items-center rounded-lg bg-hover text-faint" aria-hidden><Package size={18} /></span>}{p.name}</Link></Td>
                     <Td><Badge tone={statusTone(p.status)}>{enumLabel("productStatus", p.status)}</Badge></Td>
-                    <Td>{p.variants.length}</Td>
-                    <Td>{prices.length ? (Math.min(...prices) === Math.max(...prices) ? money(prices[0]) : `${money(Math.min(...prices))} - ${money(Math.max(...prices))}`) : "-"}</Td>
+                    <Td className="tabular-nums text-muted">{p.variants.length}</Td>
+                    <Td className="whitespace-nowrap tabular-nums">{prices.length ? (Math.min(...prices) === Math.max(...prices) ? money(prices[0]) : `${money(Math.min(...prices))} - ${money(Math.max(...prices))}`) : "-"}</Td>
                     <Td className="tabular-nums">{stock <= 5 ? <Badge tone={stock <= 0 ? "danger" : "warning"}>{stock}</Badge> : stock}</Td>
                   </tr>
                 );
