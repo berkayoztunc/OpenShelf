@@ -170,9 +170,15 @@ adminMedia.post("/upload-ticket", requireRole("admin"), async (c) => {
     uploadUrl: `${origin}/mcp/upload`, method: "PUT", kind: b.kind, count: b.count, tickets,
     expiresInSeconds: Math.floor(TICKET_TTL_MS / 1000), usage: "one ticket = one image; send raw bytes with the ticket in the X-Upload-Ticket header",
     maxBytes: limitFor(c.env, b.kind),
+    checkFirst: `curl -sS -m 8 -o /dev/null -w "%{http_code}" ${origin}/health   (prints 200 when your sandbox can reach this store; run it BEFORE generating images or uploading)`,
     example: `curl -sS -X PUT -H "X-Upload-Ticket: ${tickets[0]}" -H "Content-Type: image/png" --data-binary @./image.png ${origin}/mcp/upload`,
     afterUpload: "the response has the media id: attach it with add_product_images (mediaId) or set_store_image",
-    ifItFails: "if curl cannot connect (this environment blocks the store's domain) do NOT retry: use import_attached_files (ChatGPT attachments), a public link, or ask the human to drop the files in the admin panel under Katalog → Medya",
+    hostToAllow: new URL(origin).hostname,
+    ifItFails: "If checkFirst/curl fails with 'Could not resolve host', 'connection refused/blocked' or a timeout, your code sandbox's network is restricted to an allow-list of domains: this is NOT a server problem and retrying cannot help. STOP and tell the person (tellTheHuman). Do not suggest import_attached_files unless you are in ChatGPT (it only works with files attached in ChatGPT), and do not try IP addresses or other tricks around the restriction.",
+    tellTheHuman: {
+      tr: `Kod ortamım ${new URL(origin).hostname} alan adına bağlanamıyor (ağı kısıtlı). İki seçenek: (1) kullandığınız uygulamanın kod ortamı/ağ ayarlarında ${new URL(origin).hostname} alan adına izin verin (bir kez), sonra yeniden deneyeyim; (2) görselleri yönetim panelinde Katalog → Medya sayfasına bırakın, ben bulup ürüne bağlarım.`,
+      en: `My code sandbox cannot reach ${new URL(origin).hostname} (its network is restricted). Two options: (1) allow ${new URL(origin).hostname} in your app's code-execution / network settings (one time) and I will retry; or (2) drop the images on Katalog → Medya in the admin panel and I will find them and attach them to the product.`,
+    },
   }, 201);
 });
 
@@ -260,13 +266,18 @@ adminMedia.get("/upload-help", requireRole("staff"), (c) => {
   return c.json({
     chooseByWhatYouHave: [
       { you_have: "a public https link to the image (generated image URL, CDN, Google Drive / Dropbox share link)", use: "upload_media_from_url (up to 10 links per call) or, to also attach it, add_product_images / set_store_image with `url`", cost: "cheapest: a few tokens, full size" },
-      { you_have: "image files the person ATTACHED to the conversation in ChatGPT", use: "import_attached_files (the app passes download links; pass productId to attach in the same call)", cost: "no tokens spent on bytes, original quality" },
-      { you_have: "a code sandbox / script with internet and the image files (chat apps with code execution, e.g. images you generated or the person uploaded) but NOT the MCP token", use: "create_upload_link (count = number of images) then `curl -X PUT -H \"X-Upload-Ticket: …\" --data-binary @file …` for each ticket; then attach the returned media ids", cost: "no tokens spent on bytes, original quality. If curl cannot connect the sandbox blocks this domain: fall back, do not loop" },
+      { you_have: "image files the person ATTACHED to the conversation in ChatGPT", use: "import_attached_files (ChatGPT ONLY: the app passes download links for files attached in the chat; pass productId to attach in the same call)", cost: "no tokens spent on bytes, original quality" },
+      { you_have: "a code sandbox / script with internet and the image files (chat apps with code execution, e.g. images you generated or the person uploaded) but NOT the MCP token", use: "run the preflight command below first; if it prints 200, create_upload_link (count = number of images) then `curl -X PUT -H \"X-Upload-Ticket: …\" --data-binary @file …` for each ticket; then attach the returned media ids", cost: "no tokens spent on bytes, original quality. If curl cannot connect the sandbox blocks this domain: fall back, do not loop" },
       { you_have: "a shell on a machine where you hold the MCP token (Claude Code, Codex, Cursor, scripts)", use: "curl to /mcp/upload with the token (below), then attach with add_product_images / set_store_image using the returned id", cost: "cheap: no base64 in the conversation" },
       { you_have: "none of the above (only a chat window and the human's own files)", use: "ask the human to drop the files into the admin panel: Katalog → Medya. Then call list_media (newest first) and attach the ids", cost: "one human step, no tokens spent on bytes" },
       { you_have: "a tiny image (a few KB, e.g. favicon) only", use: "upload_media (base64). Anything bigger is rejected immediately: do NOT try", cost: "expensive and fragile: last resort" },
     ],
-    sandboxNote: "Some chat apps limit the network of their code-execution sandbox to an allow-list of domains. If curl cannot connect, the person has to allow this store's domain once in that app's code-execution / network settings; until then use another way (do not loop).",
+    preflight: {
+      why: "Many chat apps run code in a sandbox whose network only reaches allow-listed domains. Find out BEFORE you generate images or ask for tickets, it costs one command.",
+      command: `curl -sS -m 8 -o /dev/null -w "%{http_code}" ${origin}/health`, expect: "200",
+      ifNot: "stop using the sandbox route. If the error is 'Could not resolve host' the sandbox blocks this domain: tell the person to allow " + new URL(origin).hostname + " in the app's code-execution / network settings (one time), or to drop the files on Katalog → Medya (admin panel); then use list_media and attach the ids. import_attached_files only works with files attached in ChatGPT: do not offer it elsewhere.",
+    },
+    sandboxNote: "Some chat apps limit the network of their code-execution sandbox to an allow-list of domains. Run the preflight command first; if it fails, the person has to allow this store's domain once in that app's code-execution / network settings, or use Katalog → Medya. Do not loop and do not try to get around the restriction.",
     shellUpload: {
       url: `${origin}/mcp/upload`, method: "POST", auth: "Authorization: Bearer <your MCP token osk_…>, level write or higher",
       example: `curl -sS -H "Authorization: Bearer $OPENSHELF_TOKEN" -F kind=product -F alt="Short description" -F file=@./photo.jpg ${origin}/mcp/upload`,

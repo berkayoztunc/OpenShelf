@@ -48,6 +48,10 @@ describe("create_upload_link + PUT /mcp/upload with a ticket (no MCP token)", ()
     const m = await mint({ kind: "product", alt: "Ön görsel", count: 2 });
     expect(m.tickets).toHaveLength(2); expect(m.expiresInSeconds).toBe(600); expect(m.uploadUrl).toBe("http://api.test/mcp/upload");
     expect(m.example).toContain("X-Upload-Ticket"); expect(m.example).not.toContain("osk_");
+    // a sandbox that cannot resolve the store's domain must learn it cheaply and tell the person what to do
+    expect(m.checkFirst).toContain("api.test/health"); expect(m.hostToAllow).toBe("api.test");
+    expect(m.ifItFails).toMatch(/Could not resolve host/); expect(m.ifItFails).toMatch(/Do not suggest import_attached_files unless you are in ChatGPT/);
+    expect(m.tellTheHuman.tr).toContain("api.test"); expect(m.tellTheHuman.tr).toContain("Katalog → Medya"); expect(m.tellTheHuman.en).toContain("allow api.test");
     const img = png(1600, 2000, 120_000);                                                   // ~120 KB: far more than a chat can carry as base64
     const res = await put(m.tickets[0], img, "image/png", "?kind=logo&alt=ignored");        // client-supplied kind/alt must not matter
     expect(res.status).toBe(201);
@@ -130,6 +134,16 @@ describe("upload_help lists every way, in order of cost", () => {
     const h = data(await tool("upload_help"));
     const uses = h.chooseByWhatYouHave.map((x: any) => x.use as string).join("\n");
     expect(uses).toContain("import_attached_files"); expect(uses).toContain("create_upload_link"); expect(uses).toContain("/mcp/upload"); expect(uses).toContain("Katalog → Medya"); expect(uses).toContain("upload_media (base64)");
-    expect(h.sandboxNote).toMatch(/allow-list/);
+    expect(h.sandboxNote).toMatch(/allow-list/); expect(h.sandboxNote).toMatch(/preflight/);
+    expect(h.preflight.command).toContain("api.test/health"); expect(h.preflight.expect).toBe("200"); expect(h.preflight.ifNot).toMatch(/Could not resolve host/);
+    expect(h.preflight.ifNot).toMatch(/only works with files attached in ChatGPT/);
+    const attached = h.chooseByWhatYouHave.find((x: any) => /import_attached_files/.test(x.use)); expect(attached.use).toMatch(/ChatGPT ONLY/);
+    expect(h.chooseByWhatYouHave.find((x: any) => /create_upload_link/.test(x.use)).use).toMatch(/preflight command below first/);
+  });
+});
+
+describe("the preflight command points at a real public endpoint", () => {
+  it("/health is reachable without any credential, which is all the preflight needs", async () => {
+    const res = await call("/health"); expect(res.status).toBe(200);
   });
 });
