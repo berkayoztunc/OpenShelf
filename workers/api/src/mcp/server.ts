@@ -139,15 +139,16 @@ const jsonRes = (body: unknown, status = 200, extra: Record<string, string> = {}
 
 /** Streamable HTTP (stateless). POST = JSON-RPC (single or batch); answers JSON, or one SSE event when the client only accepts text/event-stream. */
 export function mountMcp(app: Hono<AppEnv>) {
-  // Two ways to present the token: `Authorization: Bearer osk_…` on /mcp, or the token as the last URL segment (/mcp/osk_…) for chat apps
-  // (Grok, ChatGPT, Claude.ai connectors…) whose "add MCP server" form only takes a URL. The URL form is a secret: it is redacted from error logs.
-  app.all("/mcp/:token?", async (c) => {
+  // Bearer token = an OAuth access token (osk_…, 1 h, from /oauth/token) or a personal access token (osk_…, created in Settings -> MCP).
+  // A token in the URL is deliberately NOT supported: URLs end up in logs, history and screenshots.
+  app.all("/mcp", async (c) => {
     if (c.req.method !== "POST") return new Response("MCP endpoint: POST JSON-RPC (Streamable HTTP, stateless)", { status: 405, headers: { Allow: "POST" } });
     const db = c.get("db");
     const auth = c.req.header("Authorization") ?? "";
-    const raw = /^bearer\s+/i.test(auth) ? auth.replace(/^bearer\s+/i, "").trim() : (c.req.param("token") ?? "");
+    const raw = /^bearer\s+/i.test(auth) ? auth.replace(/^bearer\s+/i, "").trim() : "";
     const who = raw ? await authenticateToken(db, raw) : null;
-    if (!who) return jsonRes(rpcError(null, -32001, "Unauthorized: send Authorization: Bearer osk_… or use the connector URL /mcp/osk_… (create a token in Settings → MCP)"), 401, { "WWW-Authenticate": 'Bearer realm="openshelf-mcp"' });
+    if (!who) return jsonRes(rpcError(null, -32001, "Unauthorized: authorize this app via OAuth (see resource_metadata) or send Authorization: Bearer osk_… (token from Settings → MCP)"), 401,
+      { "WWW-Authenticate": `Bearer realm="openshelf-mcp", resource_metadata="${new URL(c.req.url).origin}/.well-known/oauth-protected-resource"` });
     const r = await hit(c.env.DB, `mcp:${who.tokenId}`, 60);
     if (r.count > MCP_RATE_PER_MIN) return jsonRes(rpcError(null, -32000, "Rate limit exceeded"), 429, { "Retry-After": String(r.resetIn) });
     const policy = await loadPolicy(db);

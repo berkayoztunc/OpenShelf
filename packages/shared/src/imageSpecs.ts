@@ -19,7 +19,7 @@ export interface ImageSpec {
   usage: string;
   /** generation guidance: composition / safe area / what NOT to bake in */
   guidance: string;
-  /** how to attach it after upload_media */
+  /** how to attach it after uploading it (upload_media_from_url) */
   attach: string;
 }
 

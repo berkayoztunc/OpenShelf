@@ -316,8 +316,30 @@ export const apiTokens = sqliteTable("api_tokens", {
   tokenHash: text("token_hash").notNull(), prefix: text("prefix").notNull(), // sha256 of the token; prefix = first chars, display only
   level: text("level").notNull().default("read"), // read|write|full
   expiresAt: integer("expires_at", { mode: "timestamp" }), lastUsedAt: integer("last_used_at", { mode: "timestamp" }), revokedAt: integer("revoked_at", { mode: "timestamp" }),
+  /** set for OAuth access tokens: revoking the grant kills them */
+  grantId: text("grant_id"),
   createdAt: createdAt(),
 }, (t) => ({ h: uniqueIndex("api_tokens_hash_u").on(t.tokenHash), a: index("api_tokens_admin_idx").on(t.adminId) }));
+
+// ---------- OAuth 2.1 for MCP (chat apps connect with login + consent instead of a pasted token) ----------
+export const oauthClients = sqliteTable("oauth_clients", {
+  clientId: text("client_id").primaryKey(), name: text("name").notNull(), redirectUris: text("redirect_uris", { mode: "json" }).$type<string[]>().notNull(),
+  secretHash: text("secret_hash"), // sha256 of the client secret (manual confidential clients); null = public client (PKCE only)
+  kind: text("kind").notNull().default("dynamic"), // dynamic (self-registered) | manual (created by an admin)
+  createdBy: text("created_by"), createdAt: createdAt(), lastUsedAt: integer("last_used_at", { mode: "timestamp" }), disabledAt: integer("disabled_at", { mode: "timestamp" }),
+});
+export const oauthCodes = sqliteTable("oauth_codes", {
+  codeHash: text("code_hash").primaryKey(), clientId: text("client_id").notNull(), adminId: text("admin_id").notNull(), redirectUri: text("redirect_uri").notNull(),
+  codeChallenge: text("code_challenge").notNull(), level: text("level").notNull(), resource: text("resource"),
+  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(), usedAt: integer("used_at", { mode: "timestamp" }),
+  /** grant created when the code was redeemed (a replayed code revokes it) */
+  grantId: text("grant_id"),
+});
+export const oauthGrants = sqliteTable("oauth_grants", {
+  id: id(), clientId: text("client_id").notNull(), adminId: text("admin_id").notNull(), level: text("level").notNull(),
+  refreshHash: text("refresh_hash").notNull(), prevRefreshHash: text("prev_refresh_hash"), refreshExpiresAt: integer("refresh_expires_at", { mode: "timestamp" }).notNull(),
+  createdAt: createdAt(), lastUsedAt: integer("last_used_at", { mode: "timestamp" }), revokedAt: integer("revoked_at", { mode: "timestamp" }),
+}, (t) => ({ r: uniqueIndex("oauth_grants_refresh_u").on(t.refreshHash), p: index("oauth_grants_prev_idx").on(t.prevRefreshHash), c: index("oauth_grants_client_idx").on(t.clientId) }));
 
 /** Per-tool MCP switches set by the owner. Only DISABLED tools have a row (default = allowed); tool "*" disabled = MCP master switch off. */
 export const mcpToolSettings = sqliteTable("mcp_tool_settings", {

@@ -18,6 +18,7 @@ const InvoiceEditor = lazy(() => import("./pages/InvoiceEditor"));
 const Emails = lazy(() => import("./pages/Emails"));
 const EmailCompose = lazy(() => import("./pages/EmailCompose"));
 const PrintPage = lazy(() => import("./pages/print/PrintPage"));
+const OauthConsent = lazy(() => import("./pages/OauthConsent"));
 const Coupons = lazy(() => import("./pages/Coupons"));
 const Settings = lazy(() => import("./pages/settings/Settings"));
 const Integrations = lazy(() => import("./pages/Integrations"));
@@ -40,6 +41,7 @@ export function App() {
         <Route path="/setup" element={<SetupPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="print/:kind" element={<RequireAuth><PrintPage /></RequireAuth>} />
+        <Route path="oauth/authorize" element={<RequireAuth><OauthConsent /></RequireAuth>} />
         <Route element={<RequireAuth><Layout /></RequireAuth>}>
           <Route index element={<Dashboard />} />
           <Route path="products" element={<Products />} />

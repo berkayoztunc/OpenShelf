@@ -32,6 +32,8 @@ import { unsubscribeRoutes } from "./routes/unsubscribe";
 import { campaignSendJob } from "./lib/campaigns";
 import { encryptionKeyProblem } from "./lib/origins";
 import { mountMcp } from "./mcp/server";
+import { mountOauth } from "./oauth/routes";
+import { adminOauth } from "./routes/admin-oauth";
 import { adminTokens } from "./routes/admin-tokens";
 import { adminMcp } from "./routes/admin-mcp";
 import { notificationJobHandlers } from "./lib/notify";
@@ -69,9 +71,11 @@ admin.route("/", adminGeliver);
 admin.route("/", adminCampaigns);
 admin.route("/", adminTokens);
 admin.route("/", adminMcp);
+admin.route("/", adminOauth);
 admin.route("/media", adminMedia);
 app.route("/api/admin", admin);
-mountMcp(app); // MCP over Streamable HTTP at /mcp (Bearer API token)
+mountOauth(app); // OAuth 2.1 for MCP clients: /.well-known/*, /oauth/register|authorize|token|revoke (+ CORS for /mcp)
+mountMcp(app); // MCP over Streamable HTTP at /mcp (Bearer: OAuth access token or personal access token)
 app.route("/api/store/payment/callback", paymentCallback);
 app.route("/api/store", store);
 app.route("/webhooks", webhooks);
@@ -123,6 +127,9 @@ export async function runScheduled(env: Env, now = new Date()) {
       env.DB.prepare("DELETE FROM rate_limits WHERE window_start < ?1").bind(t - 86400),
       env.DB.prepare("DELETE FROM login_attempts WHERE at < ?1").bind(t - 7 * 86400),
       env.DB.prepare("DELETE FROM admin_sessions WHERE expires_at < ?1").bind(t),
+      env.DB.prepare("DELETE FROM oauth_codes WHERE expires_at < ?1 - 86400").bind(t),
+      env.DB.prepare("DELETE FROM oauth_grants WHERE (revoked_at IS NOT NULL AND revoked_at < ?1 - 30 * 86400) OR refresh_expires_at < ?1 - 30 * 86400").bind(t),
+      env.DB.prepare("DELETE FROM oauth_clients WHERE kind = 'dynamic' AND last_used_at IS NULL AND created_at < ?1 - 7 * 86400").bind(t),
       env.DB.prepare("DELETE FROM api_tokens WHERE (expires_at IS NOT NULL AND expires_at < ?1 - 30 * 86400) OR (revoked_at IS NOT NULL AND revoked_at < ?1 - 30 * 86400)").bind(t),
       env.DB.prepare("DELETE FROM carts WHERE updated_at < ?1 AND id NOT IN (SELECT cart_id FROM inventory_reservations WHERE cart_id IS NOT NULL AND status = 'active')").bind(t - 30 * 86400),
       env.DB.prepare("DELETE FROM outbox_jobs WHERE status = 'done' AND updated_at < ?1").bind(t - 14 * 86400),

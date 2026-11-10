@@ -289,24 +289,18 @@ describe("tool registry integrity", () => {
   });
 });
 
-describe("connector URL (token in the path, for URL-only clients)", () => {
-  it("works like the Bearer header; wrong/revoked tokens are refused; header wins; GET stays 405", async () => {
+describe("no token in the URL", () => {
+  it("/mcp/<token> is not an MCP endpoint any more (tokens in URLs leak into logs)", async () => {
     const t = await mkToken("read");
-    const ping = { jsonrpc: "2.0", id: 1, method: "ping" };
-    const viaUrl = (tok: string, extra: Record<string, string> = {}) => call(`/mcp/${tok}`, { method: "POST", json: ping, origin: null, headers: extra });
-    expect((await viaUrl(t.token)).status).toBe(200);
-    expect((await viaUrl("osk_wrongwrongwrongwrongwrong")).status).toBe(401);
-    expect((await viaUrl(t.token, { Authorization: "Bearer osk_wrongwrongwrongwrongwrong" })).status).toBe(401); // the header is authoritative
-    expect((await call("/mcp", { method: "POST", json: ping, origin: null, headers: { Authorization: `bearer ${t.token}` } })).status).toBe(200); // scheme is case-insensitive
-    expect((await call(`/mcp/${t.token}`, { method: "GET" })).status).toBe(405);
-    const tools = await j<any>(await call(`/mcp/${t.token}`, { method: "POST", json: { jsonrpc: "2.0", id: 2, method: "tools/list" }, origin: null }));
-    expect(tools.result.tools.length).toBeGreaterThan(10);
-    await admin(owner, `/tokens/${t.id}`, "DELETE");
-    expect((await viaUrl(t.token)).status).toBe(401);
+    const r = await call(`/mcp/${t.token}`, { method: "POST", json: { jsonrpc: "2.0", id: 1, method: "tools/list" }, origin: null });
+    expect(r.status).not.toBe(200);
+    expect(await r.text()).not.toContain("tools");
+    // the Bearer header keeps working, the scheme is case-insensitive
+    expect((await call("/mcp", { method: "POST", json: { jsonrpc: "2.0", id: 1, method: "ping" }, origin: null, headers: { Authorization: `bearer ${t.token}` } })).status).toBe(200);
   });
-  it("the URL is only a transport: level and tool permissions still apply", async () => {
-    const t = await mkToken("read");
-    const r = await j<any>(await call(`/mcp/${t.token}`, { method: "POST", json: { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "create_category", arguments: { body: { slug: "x-url", nameTr: "x" } } } }, origin: null }));
-    expect(r.result.isError).toBe(true);
+  it("the 401 points OAuth clients at the protected-resource metadata", async () => {
+    const r = await call("/mcp", { method: "POST", json: { jsonrpc: "2.0", id: 1, method: "ping" }, origin: null });
+    expect(r.status).toBe(401);
+    expect(r.headers.get("www-authenticate")).toMatch(/resource_metadata="https?:\/\/[^"]+\/\.well-known\/oauth-protected-resource"/);
   });
 });

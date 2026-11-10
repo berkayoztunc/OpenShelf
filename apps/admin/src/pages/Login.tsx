@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, errMsg } from "../lib/api";
 import type { Admin } from "../lib/types";
@@ -9,6 +9,7 @@ import { Button, PasswordField, TextField } from "../components/ui";
 import { LocaleSwitch } from "../components/LocaleSwitch";
 import { GuideLink } from "../components/help/GuideLink";
 import { useT } from "../i18n";
+import { safeNext } from "../lib/next";
 
 export function AuthShell({ title, subtitle, children, footer }: { title: string; subtitle: string; children: ReactNode; footer?: ReactNode }) {
   const { t } = useT();
@@ -53,6 +54,7 @@ export function AuthShell({ title, subtitle, children, footer }: { title: string
 export function LoginPage() {
   const { t } = useT();
   const nav = useNavigate();
+  const [sp] = useSearchParams();
   const qc = useQueryClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -69,7 +71,7 @@ export function LoginPage() {
       if (res.mfaRequired) { setMfa(true); setError(""); return; }
       api.setCsrf(res.csrfToken);
       qc.setQueryData(["me"], { admin: res.admin, csrfToken: res.csrfToken });
-      nav("/", { replace: true });
+      nav(safeNext(sp.get("next")), { replace: true });
     },
     onError: (e) => setError(e instanceof ApiError && e.status === 429 ? t("auth.login.tooMany") : errMsg(e)),
   });

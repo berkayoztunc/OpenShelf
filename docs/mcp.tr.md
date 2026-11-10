@@ -12,8 +12,10 @@ OpenShelf'in tüm yönetimi `https://<adresiniz>/mcp` adresinde bir **MCP sunucu
 
 Sunucu JSON döner; istemci yalnızca SSE kabul ediyorsa tek bir `text/event-stream` olayı döner. Durumsuzdur (oturum yok), sade bir Worker'da çalışır.
 
-### Yalnızca URL kabul eden uygulamalar (Grok, ChatGPT, Claude.ai…)
-Bazı sohbet uygulamaları `Authorization` başlığı gönderemez ("MCP sunucusu ekle" formunda yalnızca URL vardır). Anahtar oluştururken bir kez gösterilen **bağlayıcı adresini** kullanın: `https://<adres>/mcp/osk_…` (anahtar yolun son parçasıdır; başlık gerekmez). Adres sırrı içerir: paylaşmayın, `read` anahtarı tercih edin, aynı sekmeden iptal edin. Hata logları bunu gizler, ancak kendi hesabınızdaki Cloudflare istek logları URL'leri gösterir.
+### Grok, ChatGPT, Claude.ai ve diğer AI uygulamalarını bağlayın (OAuth)
+Yapıştıracak anahtar yok: özel bir MCP sunucusu / bağlayıcı ekleyip `https://<adres>/mcp` adresini verin. Uygulama girişi kendisi bulur (OAuth 2.1 + PKCE, `/.well-known/oauth-protected-resource`), sizi yönetim paneline **giriş yapıp onaylamaya** yönlendirir (okuma / yazma / tam seçersiniz) ve 1 saatlik erişim anahtarı ile dönen 30 günlük yenileme anahtarı alır. Uygulamaları **Ayarlar → MCP → Bağlı uygulamalar** bölümünde görür ve **bağlantısını kesersiniz**.
+- Kendini kaydeden uygulamalar (dinamik istemci kaydı) doğrudan çalışır. Bazıları (ör. Grok) bunun yerine **Client ID ve Client secret** ister: **Bağlı uygulamalar → Elle oluşturulan OAuth istemcileri** bölümünde (yalnızca owner) uygulamanın gösterdiği geri dönüş adresiyle bir tane oluşturun ve değerleri uygulamaya yapıştırın.
+- Güvenlik: PKCE (S256) zorunludur, redirect adresleri birebir eşleşmelidir (https veya localhost), kodlar tek kullanımlıktır (5 dk), tekrar kullanılan kod veya yenileme anahtarı tüm bağlantıyı iptal eder, her bağlantı owner/admin onayı ister; onay ekranı uygulamanın (doğrulanmamış) adını ve döneceği adresi gösterir. Araç izinleri ve ana şalter yine geçerlidir. URL'de anahtar bilerek desteklenmez.
 
 ## Seviyeler
 | Seviye | Yapabilir |
@@ -30,6 +32,9 @@ Bazı sohbet uygulamaları `Authorization` başlığı gönderemez ("MCP sunucus
 ## Ayar ve SEO araçları
 - **Mağaza ayarları** (PATCH: yalnızca gönderdiğiniz alanlar değişir, iç içe nesneler birleşir, birleşmiş grup bütün olarak doğrulanır): `update_store_profile` (mağaza adı, slogan, iletişim, para birimi, vergi), `update_seo_settings`, `update_branding`, `update_legal_pages`, `update_checkout_settings`, `update_tracking_settings`, `update_notification_settings`; tek grup okumak için `get_settings_group`.
 - **SEO**: `seo_audit` (site geneli anahtarlar + her ürün/kategori eksiği: başlık/açıklama yok, noindex, alt metinsiz görsel, tekrar eden başlık), `update_product_seo` / `update_category_seo` (yalnızca arama ve sosyal alanlar), `seo_preview` (Google/sosyal ağların tam olarak ne göreceği).
+
+### Görsel yükleme (büyük dosyalar)
+Sohbet istemcileri uzun araç argümanlarını keser; büyük bir base64 metni kesik (bozuk, minik) bir dosya olarak gelir. Şu sırayla kullanın: **`upload_media_from_url`** (herkese açık https bağlantısı verin; sunucu tam görseli indirir, SSRF korumalı, yönlendirmeler yeniden denetlenir, boyut sınırlı), **`create_upload_link`** (tek kullanımlık 10 dakikalık bağlantı: `curl -X PUT --data-binary @image.png "<bağlantı>"`), yalnızca çok küçük dosyalar için `upload_media` (base64). Hepsi id, boyut, genişlik/yükseklik ve uygunluk uyarılarını döner.
 
 ## MCP'den asla erişilemeyenler
 Kullanıcı/şifre/MFA, anahtar oluşturma, entegrasyon **sırlarını** yazma, mock modu anahtarı, fabrika sıfırlama, mock gelen kutusu, Trendyol geçmişi silme. Yeni bir admin rotası ne araç ne de hariç tutma listesinde ise `mcp.test.ts` kırılır (`workers/api/src/mcp/tools.ts`).

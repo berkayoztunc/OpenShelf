@@ -7,6 +7,7 @@ import { useAdmin } from "../../lib/auth";
 import { useT } from "../../i18n";
 import { Badge, Button, Card, ConfirmDialog, EmptyState, ErrorState, Loading, Modal, SelectField, Table, Tabs, Td, TextField, useToast } from "../../components/ui";
 import McpTools from "./McpTools";
+import OauthApps from "./OauthApps";
 
 type Level = "read" | "write" | "full";
 interface TokenRow { id: string; name: string; prefix: string; level: Level; createdAt: string | number; lastUsedAt: string | number | null; expiresAt: string | number | null; revokedAt: string | number | null }
@@ -30,7 +31,7 @@ function CopyBox({ label, value }: { label: string; value: string }) {
 
 /** Settings → MCP: personal access tokens for AI clients (Claude, etc.) that manage the store through the MCP endpoint. */
 export default function ApiTokens() {
-  const { t } = useT(); const [tab, setTab] = useState<"tokens" | "tools">("tokens"); const toast = useToast(); const qc = useQueryClient(); const admin = useAdmin();
+  const { t } = useT(); const [tab, setTab] = useState<"tokens" | "tools" | "apps">("tokens"); const toast = useToast(); const qc = useQueryClient(); const admin = useAdmin();
   const [name, setName] = useState(""); const [level, setLevel] = useState<Level>("read"); const [days, setDays] = useState("90");
   const [created, setCreated] = useState<Created | null>(null); const [revoke, setRevoke] = useState<TokenRow | null>(null);
   const allowed = admin?.role === "owner" || admin?.role === "admin";
@@ -49,8 +50,8 @@ export default function ApiTokens() {
   const status = (r: TokenRow) => r.revokedAt ? <Badge tone="neutral">{t("mcp.status.revoked")}</Badge> : r.expiresAt && new Date(r.expiresAt).getTime() < Date.now() ? <Badge tone="warning">{t("mcp.status.expired")}</Badge> : <Badge tone="success">{t("mcp.status.active")}</Badge>;
   return (
     <div>
-    <Tabs tabs={[{ id: "tokens" as const, label: t("mcp.tab.tokens") }, { id: "tools" as const, label: t("mcp.tab.tools") }]} value={tab} onChange={setTab} label={t("mcp.tab.label")} />
-    {tab === "tools" ? <McpTools /> : (
+    <Tabs tabs={[{ id: "tokens" as const, label: t("mcp.tab.tokens") }, { id: "apps" as const, label: t("mcp.tab.apps") }, { id: "tools" as const, label: t("mcp.tab.tools") }]} value={tab} onChange={setTab} label={t("mcp.tab.label")} />
+    {tab === "tools" ? <McpTools /> : tab === "apps" ? <OauthApps /> : (
     <div className="space-y-6">
       <Card title={t("mcp.about.title")}>
         <p className="max-w-prose text-sm text-muted">{t("mcp.about.body")}</p>
@@ -92,8 +93,6 @@ export default function ApiTokens() {
             <p role="alert" className="rounded-lg border border-warn-line bg-warn-soft px-3 py-2 text-sm text-warn">{t("mcp.created.once")}</p>
             <CopyBox label={t("mcp.created.token")} value={created.token} />
             <CopyBox label={t("mcp.created.url")} value={created.mcpUrl} />
-            <CopyBox label={t("mcp.created.connector")} value={`${created.mcpUrl}/${created.token}`} />
-            <p className="-mt-2 text-xs text-warn">{t("mcp.created.connector.warn")}</p>
             <CopyBox label={t("mcp.created.claude")} value={claudeCommand(created.mcpUrl, created.token)} />
             <CopyBox label={t("mcp.created.json")} value={jsonConfig(created.mcpUrl, created.token)} />
           </div>
