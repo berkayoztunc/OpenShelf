@@ -21,6 +21,7 @@ const PrintPage = lazy(() => import("./pages/print/PrintPage"));
 const OauthConsent = lazy(() => import("./pages/OauthConsent"));
 const Coupons = lazy(() => import("./pages/Coupons"));
 const Settings = lazy(() => import("./pages/settings/Settings"));
+const Media = lazy(() => import("./pages/Media"));
 const Storefront = lazy(() => import("./pages/storefront/Storefront"));
 const Integrations = lazy(() => import("./pages/Integrations"));
 const IntegrationEvents = lazy(() => import("./pages/IntegrationEvents"));
@@ -49,6 +50,7 @@ export function App() {
           <Route path="products/new" element={<ProductEdit />} />
           <Route path="products/:id" element={<ProductEdit />} />
           <Route path="categories" element={<Categories />} />
+          <Route path="media" element={<Media />} />
           <Route path="orders" element={<Orders />} />
           <Route path="orders/:id" element={<OrderDetail />} />
           <Route path="invoices" element={<Invoices />} />

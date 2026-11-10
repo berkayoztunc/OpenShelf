@@ -11,6 +11,7 @@ export const nav = {
   "nav.emails": "E-postalar",
   "nav.products": "Ürünler",
   "nav.storefront": "Vitrin",
+  "nav.media": "Medya",
   "nav.categories": "Kategoriler",
   "nav.customers": "Müşteriler",
   "nav.coupons": "Kuponlar",

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { applyBrandTheme } from "@openshelf/ui";
-import { Truck, ShoppingBag, BookOpen, BarChart3, ChevronRight, ClipboardList, Database, LayoutDashboard, LogOut, Menu, Package, Plug, Settings, ShieldCheck, Store, Tags, Ticket, Users, X, Zap, Inbox, FileText, Mail, Megaphone, MessageSquare, LayoutTemplate } from "lucide-react";
+import { Truck, ShoppingBag, BookOpen, BarChart3, ChevronRight, ClipboardList, Database, LayoutDashboard, LogOut, Menu, Package, Plug, Settings, ShieldCheck, Store, Tags, Ticket, Users, X, Zap, Inbox, FileText, Mail, Megaphone, MessageSquare, LayoutTemplate, Images } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { api } from "../lib/api";
 import { useAdmin } from "../lib/auth";
@@ -32,6 +32,7 @@ export const NAV_GROUPS: { id: string; titleKey?: MessageKey; items: NavItem[] }
   { id: "catalog", titleKey: "nav.group.catalog", items: [
     { to: "/products", labelKey: "nav.products", icon: Package },
     { to: "/categories", labelKey: "nav.categories", icon: Tags },
+    { to: "/media", labelKey: "nav.media", icon: Images },
     { to: "/storefront", labelKey: "nav.storefront", icon: LayoutTemplate },
   ] },
   { id: "communication", titleKey: "nav.group.communication", items: [

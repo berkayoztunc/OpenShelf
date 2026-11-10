@@ -15,7 +15,7 @@ describe("sidebar structure", () => {
     expect(NAV_GROUPS.map((g) => [g.id, g.items.map((i) => i.to)])).toEqual([
       ["home", ["/"]],
       ["sales", ["/orders", "/customers", "/invoices", "/coupons"]],
-      ["catalog", ["/products", "/categories", "/storefront"]],
+      ["catalog", ["/products", "/categories", "/media", "/storefront"]],
       ["communication", ["/campaigns", "/emails", "/sms"]],
       ["channels", ["/trendyol", "/geliver"]],
       ["integrations", ["/integrations", "/integration-events", "/mock-inbox"]],
