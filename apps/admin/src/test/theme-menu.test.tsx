@@ -7,12 +7,15 @@ import { getThemeMode, initThemeMode } from "@openshelf/ui";
 beforeEach(() => { localStorage.clear(); document.documentElement.removeAttribute("data-theme"); });
 
 describe("ThemeMenu (System / Light / Dark)", () => {
-  it("defaults to system and offers three radio options", async () => {
+  it("defaults to light (not the OS setting) and offers three radio options", async () => {
     const u = userEvent.setup(); render(<ThemeMenu />);
-    expect(screen.getByTestId("theme-trigger")).toHaveAccessibleName("Theme: System");
+    expect(screen.getByTestId("theme-trigger")).toHaveAccessibleName("Theme: Light");
     await u.click(screen.getByTestId("theme-trigger"));
     expect(screen.getAllByRole("menuitemradio").map((e) => e.textContent)).toEqual(["System", "Light", "Dark"]);
-    expect(screen.getByRole("menuitemradio", { name: "System" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("menuitemradio", { name: "Light" })).toHaveAttribute("aria-checked", "true");
+    expect(getThemeMode()).toBe("light");
+    initThemeMode(); // nothing stored: light is applied even if the OS prefers dark
+    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
   });
   it("applies and persists dark, then light, then system", async () => {
     const u = userEvent.setup(); render(<ThemeMenu />);

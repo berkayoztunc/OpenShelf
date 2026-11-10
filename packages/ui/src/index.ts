@@ -15,9 +15,11 @@ export const THEME_MODES: readonly ThemeMode[] = ["system", "light", "dark"];
 const THEME_KEY = "os-theme";
 const isMode = (m: unknown): m is ThemeMode => m === "light" || m === "dark" || m === "system";
 
-/** Stored preference (defaults to "system"). */
+/** Applied until the visitor picks something else: always light, whatever the OS prefers. */
+export const DEFAULT_THEME_MODE: ThemeMode = "light";
+/** Stored preference (defaults to light; "system" only when the visitor chose it). */
 export function getThemeMode(): ThemeMode {
-  try { const m = localStorage.getItem(THEME_KEY); return isMode(m) ? m : "system"; } catch { return "system"; }
+  try { const m = localStorage.getItem(THEME_KEY); return isMode(m) ? m : DEFAULT_THEME_MODE; } catch { return DEFAULT_THEME_MODE; }
 }
 /** The theme actually in effect right now. */
 export function resolvedTheme(root: HTMLElement = document.documentElement): "light" | "dark" {

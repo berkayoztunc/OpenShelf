@@ -22,8 +22,8 @@
     </style>
     <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
     <script>
-      // Apply stored theme before paint to avoid a flash.
-      try { var m = localStorage.getItem("os-theme"); if (m && m !== "system") document.documentElement.setAttribute("data-theme", m); } catch (e) {}
+      // Apply the theme before paint to avoid a flash. Default is light; only an explicit choice (dark / system) changes it.
+      try { var m = localStorage.getItem("os-theme"); if (m !== "system") document.documentElement.setAttribute("data-theme", m === "dark" ? "dark" : "light"); } catch (e) { document.documentElement.setAttribute("data-theme", "light"); }
     </script>
   </head>
   <body>
