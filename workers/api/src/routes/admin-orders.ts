@@ -264,6 +264,76 @@ function startOfDay(now: Date, tz: string): Date {
     return new Date(now.getTime() - sinceMidnightMs);
   } catch { const d = new Date(now); d.setUTCHours(0, 0, 0, 0); return d; }
 }
+const REVENUE_STATUSES = ["paid", "fulfilling", "shipped", "delivered"] as const;
+const DAY = 86400;
+const ymd = (unix: number, tz: string) => { try { return new Date(unix * 1000).toLocaleDateString("en-CA", { timeZone: tz }); } catch { return new Date(unix * 1000).toISOString().slice(0, 10); } };
+
+/**
+ * Dashboard analytics for the last `days` days (7|30|90) in the store time zone, compared with the same-length period before it.
+ * Revenue/orders count paid-or-later orders and exclude mock-mode orders (no real money moved).
+ */
+adminOrders.get("/dashboard/insights", requireRole("staff"), async (c) => {
+  const days = Number(c.req.query("days") ?? 30);
+  if (![7, 30, 90].includes(days)) throw new ApiError(400, "validation_error", "days must be 7, 30 or 90");
+  const db = c.get("db"); const now = new Date();
+  const tz = (await getSettings(db, "general")).timezone;
+  const today = Math.floor(startOfDay(now, tz).getTime() / 1000);
+  const start = today - (days - 1) * DAY; const prevStart = start - days * DAY; const end = today + DAY;
+  const real = sql`o.status IN ('paid','fulfilling','shipped','delivered') AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.order_id = o.id AND p.is_mock = 1)`;
+
+  // one row per (day index since prevStart, channel)
+  const daily = await db.all<{ idx: number; source: string; revenue: number; n: number }>(sql`
+    SELECT CAST((o.created_at - ${prevStart}) / ${DAY} AS INTEGER) AS idx, o.source AS source, COALESCE(SUM(o.total), 0) AS revenue, COUNT(*) AS n
+    FROM orders o WHERE o.created_at >= ${prevStart} AND o.created_at < ${end} AND ${real} GROUP BY idx, o.source`);
+  const series = Array.from({ length: days }, (_, i) => ({ date: ymd(start + i * DAY + 3600, tz), revenue: 0, orders: 0, website: 0, trendyol: 0 }));
+  const previous = Array.from({ length: days }, (_, i) => ({ date: ymd(prevStart + i * DAY + 3600, tz), revenue: 0, orders: 0 }));
+  const channels = { website: { revenue: 0, orders: 0 }, trendyol: { revenue: 0, orders: 0 } };
+  const cur = { revenue: 0, orders: 0 }; const prev = { revenue: 0, orders: 0 };
+  for (const r of daily) {
+    if (r.idx < 0) continue;
+    const key: "website" | "trendyol" = r.source === "trendyol" ? "trendyol" : "website";
+    if (r.idx >= days) { const row = series[r.idx - days]; if (!row) continue; row.revenue += r.revenue; row.orders += r.n; row[key] += r.revenue; cur.revenue += r.revenue; cur.orders += r.n; channels[key].revenue += r.revenue; channels[key].orders += r.n; }
+    else { const row = previous[r.idx]; if (!row) continue; row.revenue += r.revenue; row.orders += r.n; prev.revenue += r.revenue; prev.orders += r.n; }
+  }
+  const units = await db.all<{ cur: number; qty: number }>(sql`
+    SELECT (o.created_at >= ${start}) AS cur, COALESCE(SUM(oi.quantity), 0) AS qty FROM order_items oi JOIN orders o ON o.id = oi.order_id
+    WHERE o.created_at >= ${prevStart} AND o.created_at < ${end} AND ${real} GROUP BY cur`);
+  const unitsOf = (isCur: number) => units.find((u) => u.cur === isCur)?.qty ?? 0;
+  const topProducts = await db.all<{ id: string | null; name: string; qty: number; revenue: number }>(sql`
+    SELECT p.id AS id, COALESCE(p.name_tr, oi.name) AS name, SUM(oi.quantity) AS qty, SUM(oi.quantity * oi.unit_price) AS revenue
+    FROM order_items oi JOIN orders o ON o.id = oi.order_id LEFT JOIN product_variants v ON v.id = oi.variant_id LEFT JOIN products p ON p.id = v.product_id
+    WHERE o.created_at >= ${start} AND o.created_at < ${end} AND ${real} GROUP BY COALESCE(p.id, oi.sku), COALESCE(p.name_tr, oi.name) ORDER BY revenue DESC LIMIT 6`);
+  const topCities = await db.all<{ city: string | null; n: number; revenue: number }>(sql`
+    SELECT json_extract(o.shipping_address, '$.city') AS city, COUNT(*) AS n, COALESCE(SUM(o.total), 0) AS revenue FROM orders o
+    WHERE o.created_at >= ${start} AND o.created_at < ${end} AND ${real} AND json_extract(o.shipping_address, '$.city') IS NOT NULL GROUP BY city ORDER BY n DESC, revenue DESC LIMIT 5`);
+  const cust = await db.all<{ cur: number; n: number }>(sql`SELECT (created_at >= ${start}) AS cur, COUNT(*) AS n FROM customers WHERE created_at >= ${prevStart} AND created_at < ${end} AND anonymized_at IS NULL GROUP BY cur`);
+  const custOf = (isCur: number) => cust.find((x) => x.cur === isCur)?.n ?? 0;
+  const [a] = await db.all<Record<string, number>>(sql`SELECT
+    (SELECT COUNT(*) FROM orders o WHERE o.source = 'website' AND o.status IN ('paid','fulfilling') AND NOT EXISTS (SELECT 1 FROM shipments s WHERE s.order_id = o.id)) AS to_ship,
+    (SELECT COUNT(*) FROM orders o WHERE o.status IN ('pending','awaiting_payment')) AS awaiting_payment,
+    (SELECT COUNT(*) FROM orders o WHERE o.source = 'website' AND o.status IN ('paid','fulfilling','shipped','delivered') AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.order_id = o.id)) AS to_invoice,
+    (SELECT COUNT(*) FROM outbox_jobs WHERE status = 'dead') AS failed_jobs,
+    (SELECT COUNT(*) FROM inventory i JOIN product_variants v ON v.id = i.variant_id JOIN products p ON p.id = v.product_id WHERE v.active = 1 AND p.status = 'active' AND i.total - i.reserved - i.safety_stock <= 0) AS out_of_stock,
+    (SELECT COUNT(*) FROM inventory i JOIN product_variants v ON v.id = i.variant_id JOIN products p ON p.id = v.product_id WHERE v.active = 1 AND p.status = 'active' AND i.total - i.reserved - i.safety_stock BETWEEN 1 AND 5) AS low_stock,
+    (SELECT COUNT(*) FROM products p WHERE p.status = 'active' AND NOT EXISTS (SELECT 1 FROM product_images im WHERE im.product_id = p.id)) AS no_image,
+    (SELECT COUNT(*) FROM products WHERE status = 'draft') AS drafts`);
+  const activity = await db.all<{ id: number; action: string; entity: string | null; entity_id: string | null; at: number; admin_name: string | null }>(sql`
+    SELECT l.id AS id, l.action AS action, l.entity AS entity, l.entity_id AS entity_id, l.created_at AS at, ad.name AS admin_name FROM audit_logs l LEFT JOIN admins ad ON ad.id = l.admin_id ORDER BY l.id DESC LIMIT 8`);
+  const aov = (x: { revenue: number; orders: number }) => (x.orders ? Math.round(x.revenue / x.orders) : 0);
+  return c.json({
+    range: { days, timezone: tz, from: ymd(start + 3600, tz), to: ymd(today + 3600, tz) },
+    kpis: {
+      revenue: { cur: cur.revenue, prev: prev.revenue }, orders: { cur: cur.orders, prev: prev.orders }, aov: { cur: aov(cur), prev: aov(prev) },
+      units: { cur: unitsOf(1), prev: unitsOf(0) }, customers: { cur: custOf(1), prev: custOf(0) },
+    },
+    series, previous, channels,
+    topProducts: topProducts.map((t) => ({ productId: t.id, name: t.name, units: t.qty, revenue: t.revenue })),
+    topCities: topCities.map((t) => ({ city: t.city, orders: t.n, revenue: t.revenue })),
+    attention: { toShip: a?.to_ship ?? 0, awaitingPayment: a?.awaiting_payment ?? 0, toInvoice: a?.to_invoice ?? 0, failedJobs: a?.failed_jobs ?? 0, outOfStock: a?.out_of_stock ?? 0, lowStock: a?.low_stock ?? 0, noImage: a?.no_image ?? 0, drafts: a?.drafts ?? 0 },
+    activity: activity.map((x) => ({ id: x.id, action: x.action, entity: x.entity, entityId: x.entity_id, at: new Date(x.at * 1000).toISOString(), admin: x.admin_name })),
+  });
+});
+
 adminOrders.get("/dashboard", requireRole("staff"), async (c) => {
   const db = c.get("db"); const now = new Date();
   const general = await getSettings(db, "general");

@@ -43,6 +43,8 @@ export const TOOLS: ToolDef[] = [
   /* ================= overview / read ================= */
   t({ name: "store_overview", title: "Store overview", level: "read", method: "GET", path: "/dashboard", shape: {},
     description: "Dashboard numbers: orders by status, revenue, low stock and recent activity. Start here for 'how is the store doing?'. Money values are minor units (kuruş: 1999 = 19.99 TRY)." }),
+  t({ name: "store_insights", title: "Sales insights", level: "read", method: "GET", path: "/dashboard/insights", query: ["days"], shape: { days: z.union([z.literal(7), z.literal(30), z.literal(90)]).optional().describe("period length in days: 7, 30 (default) or 90") },
+    description: "Sales analytics for the last N days compared with the previous N days: revenue, orders, average order value, units sold, new customers (current and previous), a per-day series, website vs Trendyol split, top 6 products by revenue, top cities, and a work queue (orders to ship, awaiting payment, missing invoices, failed jobs, sold-out/low-stock variants, active products without images, drafts). Money is in minor units (kuruş). Mock-mode orders are excluded. Use it for 'how are sales this month / what should I do today?'." }),
   t({ name: "list_orders", title: "List orders", level: "read", method: "GET", path: "/orders", query: ["q", "status", "source", "payment", "shipping", "invoice", "from", "to", "minTotal", "maxTotal", "page", "pageSize"],
     shape: {
       q: q("search order number, customer name/e-mail/phone/city, product name or SKU, or shipment tracking number"),
