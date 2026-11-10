@@ -3,7 +3,7 @@ import { stripHeaderChars } from "@openshelf/shared";
 import type {
   AdapterDeps, AdapterFactory, EmailMessage, EmailProvider, HealthResult, IntegrationCredentials, IntegrationManifest,
 } from "@openshelf/integration-sdk";
-import { assertAllowed, sendUrl, verifyAccountTokenUrl } from "./endpoints";
+import { assertAllowed, sendUrl, verifyAccountTokenUrl, verifyTokenUrl } from "./endpoints";
 
 export const cfEmailSchema = z.object({
   config: z.object({
@@ -39,12 +39,17 @@ export class CfEmail implements EmailProvider {
 
   async healthCheck(): Promise<HealthResult> {
     try {
-      const url = verifyAccountTokenUrl(this.p.config.accountId);
-      assertAllowed(url);
-      const res = await this.deps.fetch(url, { method: "GET", headers: this.headers() });
-      if (!res.ok) return { ok: false, detail: res.status === 401 || res.status === 403 ? "token rejected" : `HTTP ${res.status}` };
-      const j = (await res.json().catch(() => ({}))) as { success?: boolean; result?: { status?: string } };
-      return j.success && j.result?.status === "active" ? { ok: true, detail: "token active (sending permission not verified)" } : { ok: false, detail: `token status: ${String(j.result?.status ?? "unknown").slice(0, 30)}` };
+      // Account-owned tokens verify at /accounts/:id/tokens/verify; user-owned tokens only at /user/tokens/verify.
+      let last: HealthResult = { ok: false, detail: "token rejected" };
+      for (const url of [verifyAccountTokenUrl(this.p.config.accountId), verifyTokenUrl]) {
+        assertAllowed(url);
+        const res = await this.deps.fetch(url, { method: "GET", headers: this.headers() });
+        if (!res.ok) { last = { ok: false, detail: res.status === 401 || res.status === 403 ? "token rejected" : `HTTP ${res.status}` }; continue; }
+        const j = (await res.json().catch(() => ({}))) as { success?: boolean; result?: { status?: string } };
+        if (j.success && j.result?.status === "active") return { ok: true, detail: "token active (sending permission not verified)" };
+        last = { ok: false, detail: `token status: ${String(j.result?.status ?? "unknown").slice(0, 30)}` };
+      }
+      return last;
     } catch (e) { return { ok: false, detail: e instanceof Error ? e.message : "network error" }; }
   }
 
@@ -60,7 +65,7 @@ export class CfEmail implements EmailProvider {
     const res = await this.deps.fetch(url, {
       method: "POST", headers: this.headers(),
       body: JSON.stringify({
-        to: msg.to, from: name ? `${name} <${from}>` : from, subject, html: msg.html, text: msg.text,
+        to: msg.to, from: name ? { address: from, name } : from, subject, html: msg.html, text: msg.text,
         ...(msg.cc && isPlainEmail(msg.cc) ? { cc: [msg.cc] } : {}), ...(msg.replyTo && isPlainEmail(msg.replyTo) ? { reply_to: msg.replyTo } : {}),
       }),
     });

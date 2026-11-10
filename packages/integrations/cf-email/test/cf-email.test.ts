@@ -15,13 +15,13 @@ describe("cloudflare email", () => {
     const [url, init] = f.mock.calls[0] as any;
     expect(url).toBe(`https://api.cloudflare.com/client/v4/accounts/${ACC}/email/sending/send`);
     expect(init.headers.authorization).toBe("Bearer " + "t".repeat(40));
-    expect(JSON.parse(init.body)).toEqual({ to: "cust@example.com", from: "Shop <orders@shop.com>", subject: "Hi", html: "<p>x</p>", text: "x" });
+    expect(JSON.parse(init.body)).toEqual({ to: "cust@example.com", from: { address: "orders@shop.com", name: "Shop" }, subject: "Hi", html: "<p>x</p>", text: "x" });
   });
   it("strips CR/LF from subject and display name (header injection)", async () => {
     const f = json({ success: true, result: { delivered: [], queued: ["a"], permanent_bounces: [] } });
     await mk(f).send({ ...msg, subject: "Hi\r\nBcc: evil@x.com", fromName: "Shop\r\nBcc: e@x.com" });
     const b = JSON.parse((f.mock.calls[0] as any)[1].body);
-    expect(b.subject).not.toMatch(/[\r\n]/); expect(b.from).not.toMatch(/[\r\n]/);
+    expect(b.subject).not.toMatch(/[\r\n]/); expect(b.from.name).not.toMatch(/[\r\n]/);
   });
   it("rejects recipients with injection characters or multiple addresses", async () => {
     const f = json({});
