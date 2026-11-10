@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { admin, call, ensureOwner, j, type Session } from "./helpers";
 
 let owner: Session; let full = ""; let read = "";
@@ -12,6 +12,9 @@ beforeAll(async () => {
   full = (await j<any>(await admin(owner, "/tokens", "POST", { name: "s-full", level: "full" }))).token;
   read = (await j<any>(await admin(owner, "/tokens", "POST", { name: "s-read", level: "read" }))).token;
 });
+
+// Settings live in the shared test DB: put back what these tests change so file order never matters.
+afterAll(async () => { await admin(owner, "/settings/checkout", "PATCH", { freeShippingThreshold: null, flatShippingFee: 0 }); });
 
 describe("PATCH /settings/:group (merge)", () => {
   it("changes only the sent fields and validates the merged result", async () => {
@@ -91,7 +94,7 @@ describe("per-product / per-category SEO and the audit", () => {
   let pid = ""; let cid = "";
   beforeAll(async () => {
     cid = data(await tool("create_category", { body: { slug: "seo-kat", nameTr: "SEO Kategori" } })).id;
-    const p = data(await tool("create_product", { body: { slug: "seo-urun", nameTr: "SEO Ürün", categoryId: cid, status: "active", descriptionTr: "Uzun bir açıklama metni burada.", variants: [{ sku: "SEO-1", prices: { website: 1000 }, stock: { total: 3 } }], images: [{ url: "https://img.example.com/a.jpg" }] } }));
+    const p = data(await tool("create_product", { body: { slug: "seo-urun", nameTr: "SEO Ürün", categoryId: cid, status: "active", descriptionTr: "Uzun bir açıklama metni burada.", variants: [{ sku: "MCPS-SEO-1", prices: { website: 1000 }, stock: { total: 3 } }], images: [{ url: "https://img.example.com/a.jpg" }] } }));
     pid = p.id;
   });
   it("seo_audit lists site problems and product gaps; fixing them removes the issues", async () => {
@@ -132,7 +135,7 @@ describe("per-product / per-category SEO and the audit", () => {
     expect((await tool("update_category_seo", { id: cid, body: {} })).isError).toBe(true);
   });
   it("duplicate SEO titles are flagged", async () => {
-    const p2 = data(await tool("create_product", { body: { slug: "seo-urun-2", nameTr: "SEO Ürün 2", status: "active", variants: [{ sku: "SEO-2", prices: { website: 1000 } }] } })).id;
+    const p2 = data(await tool("create_product", { body: { slug: "seo-urun-2", nameTr: "SEO Ürün 2", status: "active", variants: [{ sku: "MCPS-SEO-2", prices: { website: 1000 } }] } })).id;
     await tool("update_product_seo", { id: pid, body: { seoTitle: "Aynı Başlık" } });
     await tool("update_product_seo", { id: p2, body: { seoTitle: "aynı başlık" } });
     const a = data(await tool("seo_audit"));
@@ -144,5 +147,47 @@ describe("per-product / per-category SEO and the audit", () => {
     expect((await tool("seo_audit", {}, read)).isError).toBeUndefined();
     const { groupOf, TOOL_BY_NAME } = await import("../src/mcp/tools");
     for (const n of ["seo_audit", "seo_preview", "update_product_seo", "update_category_seo", "update_seo_settings"]) expect(groupOf(TOOL_BY_NAME.get(n)!), n).toBe("seo");
+  });
+});
+
+describe("MCP: storefront menu and product order", () => {
+  it("update_menu builds a manual menu (arrays replace) and the storefront config reflects it", async () => {
+    const cat = await j<any>(await admin(owner, "/categories", "POST", { slug: "mcp-menu-cat", nameTr: "Menü Kategori" }));
+    const r = await tool("update_menu", { body: { auto: false, showProductsLink: false, items: [
+      { id: "m1", type: "category", categoryId: cat.id, label: "Vitrin" },
+      { id: "m2", type: "link", label: "Kampanyalar", url: "/page/kampanyalar" },
+    ] } });
+    expect(r.isError).toBeUndefined();
+    expect(await group("menu")).toMatchObject({ auto: false, showProductsLink: false });
+    expect((await group("menu")).items.map((i: any) => i.label)).toEqual(["Vitrin", "Kampanyalar"]);
+    const cfg = await j<any>(await call("/api/store/config"));
+    expect(cfg.menu.items).toHaveLength(2);
+    expect((await tool("update_menu", { body: { items: [{ id: "x", type: "link", label: "Kötü", url: "javascript:alert(1)" }] } })).isError).toBe(true);
+    expect((await group("menu")).items).toHaveLength(2); // nothing saved
+    expect((await tool("update_menu", { body: { auto: true, showProductsLink: true, items: [] } })).isError).toBeUndefined();
+    await admin(owner, `/categories/${cat.id}`, "DELETE");
+  });
+  it("update_merchandising pins products and sets the default order; list_products sort=sold works", async () => {
+    const p = await j<any>(await admin(owner, "/products", "POST", { slug: "mcp-pin-1", nameTr: "Sabit Ürün", status: "active", variants: [{ sku: "MCP-PIN-1", position: 0, active: true, prices: { website: 1000 }, stock: { total: 5 } }], images: [] }));
+    const r = await tool("update_merchandising", { body: { defaultSort: "featured", pinned: [p.id], inStockFirst: true } });
+    expect(r.isError).toBeUndefined();
+    expect(await group("merchandising")).toMatchObject({ defaultSort: "featured", pinned: [p.id], inStockFirst: true });
+    expect((await tool("update_merchandising", { body: { defaultSort: "random" } })).isError).toBe(true);
+    const sold = await tool("list_products", { sort: "sold", pageSize: 5 });
+    expect(sold.isError).toBeUndefined();
+    const store = await j<any>(await call("/api/store/products?pageSize=60"));
+    expect(store.items[0].slug).toBe("mcp-pin-1");
+    await tool("update_merchandising", { body: { defaultSort: "newest", pinned: [], inStockFirst: false } });
+    await admin(owner, `/products/${p.id}`, "DELETE");
+  });
+  it("read-level tokens can read both groups but not change them; guided prompts exist", async () => {
+    expect((await tool("get_settings_group", { group: "menu" }, read)).isError).toBeUndefined();
+    expect((await tool("get_settings_group", { group: "merchandising" }, read)).isError).toBeUndefined();
+    for (const name of ["update_menu", "update_merchandising"]) {
+      const d = await tool(name, { body: { inStockFirst: true } }, read);
+      expect(d.isError).toBe(true); expect(d.content[0]!.text).toContain('needs level "write"');
+    }
+    const pl = await j<any>(await rpc(full, { jsonrpc: "2.0", id: 9, method: "prompts/list" }));
+    expect(pl.result.prompts.map((x: any) => x.name)).toEqual(expect.arrayContaining(["build_menu", "arrange_storefront"]));
   });
 });

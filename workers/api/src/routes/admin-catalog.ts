@@ -72,8 +72,9 @@ const LOW_STOCK = 5;
 // SQL fragments over products (correlated sub-selects keep list filters/sorts in one query)
 const MIN_PRICE = sql`(SELECT MIN(cp.price) FROM channel_prices cp JOIN product_variants v ON v.id = cp.variant_id WHERE v.product_id = ${products.id} AND v.active = 1 AND cp.channel = 'website')`;
 const AVAILABLE = sql`COALESCE((SELECT SUM(i.total - i.reserved) FROM inventory i JOIN product_variants v ON v.id = i.variant_id WHERE v.product_id = ${products.id} AND v.active = 1), 0)`;
+const SOLD30 = sql`COALESCE((SELECT SUM(oi.quantity) FROM order_items oi JOIN product_variants v ON v.id = oi.variant_id JOIN orders o ON o.id = oi.order_id WHERE v.product_id = ${products.id} AND o.created_at >= unixepoch() - 2592000 AND o.status IN ('paid','fulfilling','shipped','delivered')), 0)`;
 const SORTS = {
-  newest: desc(products.createdAt), oldest: sql`${products.createdAt} ASC`, updated: desc(products.updatedAt),
+  sold: sql`${SOLD30} DESC`, newest: desc(products.createdAt), oldest: sql`${products.createdAt} ASC`, updated: desc(products.updatedAt),
   name: sql`${products.nameTr} COLLATE NOCASE ASC`, "name-desc": sql`${products.nameTr} COLLATE NOCASE DESC`,
   price: sql`${MIN_PRICE} ASC`, "price-desc": sql`${MIN_PRICE} DESC`, stock: sql`${AVAILABLE} ASC`, "stock-desc": sql`${AVAILABLE} DESC`,
 } as const;
