@@ -16,6 +16,17 @@ Sol menüden **Siparişler**'e tıklayın. Liste en yeni sipariş en üstte olac
 
 **Genel bakış** ekranındaki "Duruma göre siparişler" çubuğundaki bir duruma tıklarsanız bu listeye o filtre uygulanmış olarak gelirsiniz.
 
+## Sipariş listesi
+
+**Siparişler** sayfası tüm kanallardaki siparişleri sürecin hangi aşamada olduğunu gösterecek şekilde listeler.
+
+- **Aşama sekmeleri (sayaçlı):** Tümü, Ödeme bekleyen, Hazırlanacak, Kargoda, Teslim edilen, İptal/iade. Sayaçlar seçili filtrelere göre güncellenir.
+- **Süreç sütunları:** Her satırda ürünler (ilk üçü ve adetleri), ödeme, kargo (firma ve tıklanabilir takip numarası) ve fatura durumu görünür. Ödenmiş ama kargosu açılmamış web siparişinde **Kargo bekliyor**, faturası kesilmemişte **Fatura kesilmedi** uyarısı çıkar.
+- **Arama:** Sipariş numarası, müşteri adı, e-posta, telefon, il, ürün adı veya stok kodu ve kargo takip numarasıyla arayabilirsiniz.
+- **Filtreler:** Kaynak (web / Trendyol), ödeme, kargo ve fatura durumu (**Henüz yok** seçeneğiyle eksik olanları bulursunuz), tarih aralığı ve tutar aralığı ("Daha fazla filtre"). Filtreler adres çubuğunda saklanır; bağlantıyı paylaşabilirsiniz.
+- **Hızlı bakış:** Satıra tıklayın ya da gözlük simgesine basın; sağda müşteri ve adres, ürünler, ödeme/kargo/fatura ve durum düğmeleri açılır. Sayfadan ayrılmanız gerekmez.
+- **Toplu işlemler:** Satırları işaretleyince alt çubukta etiket, paket fişi ve fatura yazdırma ile birlikte **toplu durum değiştirme**, **toplu kargo oluşturma** (hepsi için aynı kargo hizmeti kimliği) ve **toplu fatura kesme** çıkar. Onay penceresi kaç siparişin uygun olduğunu ve kaçının atlanacağını söyler; her sipariş sunucuda ayrıca doğrulanır ve başarısız olanlar nedenleriyle listelenir.
+
 ## Sipariş durumları
 
 Her sipariş, sekiz durumdan birindedir ve yalnızca izin verilen geçişler yapılabilir. Sistem geçersiz bir geçişe izin vermez ("Geçersiz durum geçişi" uyarısı verir).

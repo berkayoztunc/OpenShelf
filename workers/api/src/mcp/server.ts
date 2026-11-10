@@ -6,18 +6,23 @@ import type { Role } from "@openshelf/shared";
 import type { AppEnv, Db } from "../env";
 import { sha256Hex } from "../lib/crypto";
 import { hit } from "../middleware/security";
-import { GUIDE, GUIDE_URI, PROMPTS } from "./guide";
+import { GUIDE, GUIDE_URI, HELP_URI, PROMPTS } from "./guide";
 import { INTERNAL_HEADER, signInternal } from "./internal";
 import { LEVEL_RANK, TOOLS, TOOL_BY_NAME, inputSchema, type Level, type ToolDef } from "./tools";
 import { loadPolicy, type ToolPolicy } from "./policy";
+import { helpRead, helpTopics, type HelpLang } from "../lib/help";
+import { getSettings } from "../lib/settings";
+import { R2_LIMIT } from "../lib/media";
 
 export const TOKEN_PREFIX = "osk_";
 export const MCP_RATE_PER_MIN = 120;
 export const MAX_RESULT_BYTES = 100_000;
+/** Longest base64 string upload_media accepts (~21 KB of image). Bigger ones are cut off by chat clients anyway: refuse before decoding. */
+export const BASE64_MAX_CHARS = 28_000;
 const PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 type Ctx = Parameters<Hono<AppEnv>["fetch"]>[2];
 const SERVER_INFO = { name: "openshelf", version: "1.0.0" };
-const INSTRUCTIONS = "OpenShelf store management. Read the openshelf://guide resource first (units, channels, safety rules). Money is in minor units (kuruş). Destructive tools need confirm: true; ask the human before confirming.";
+const INSTRUCTIONS = "OpenShelf store management. Read the openshelf://guide resource first (units, channels, safety rules). Money is in minor units (kuruş). Destructive tools need confirm: true; ask the human before confirming. To get a file into the store call upload_help first (never paste big base64). When unsure how a feature or setting works, search the built-in user guide with help_search / help_read instead of guessing.";
 
 interface Principal { tokenId: string; adminId: string; role: Role; level: Level; ip: string }
 
@@ -81,6 +86,7 @@ export async function callTool(app: Hono<AppEnv>, env: AppEnv["Bindings"], ctx: 
   let body: BodyInit | undefined;
   if (def.upload === "csv") { const f = new FormData(); f.set("file", new File([String(args["csv"])], "import.csv", { type: "text/csv" })); body = f; }
   else if (def.upload === "base64") {
+    if (String(args["data"]).length > BASE64_MAX_CHARS) return text(`Refused: this image is too large to send as base64 (over ~20 KB). Do not retry this way. Call upload_help: use upload_media_from_url / add_product_images with a public https link, a curl upload to /mcp/upload from a shell, or ask the human to drop the file in the admin panel (Katalog → Medya).`, true);
     let bytes: Uint8Array;
     try { bytes = Uint8Array.from(atob(String(args["data"]).replace(/^data:[^,]*,/, "").replace(/\s+/g, "")), (ch) => ch.charCodeAt(0)); }
     catch { return text("Invalid arguments: data is not valid base64", true); }
@@ -94,7 +100,12 @@ export async function callTool(app: Hono<AppEnv>, env: AppEnv["Bindings"], ctx: 
     if (key in def.shape) { headers.set("content-type", "application/json"); body = JSON.stringify((def.rawBody ? (rawArgs as Record<string, unknown> | undefined)?.[key] : args[key]) ?? {}); }
   }
   const res = await app.fetch(new Request(`${origin}/api/admin${path}`, { method: def.method, headers, body }), env, ctx);
-  const raw = await res.text();
+  if (def.name === "view_image" && res.ok) { // hand the picture to the model as an image block, not as a wall of base64 text
+    const { base64, ...meta } = (await res.json()) as { base64: string; mime: string } & Record<string, unknown>;
+    return { content: [{ type: "image", data: base64, mimeType: meta.mime }, { type: "text", text: JSON.stringify({ ...meta, ...(typeof meta["proxyUrl"] === "string" ? { proxyUrl: `${origin}${meta["proxyUrl"]}` } : {}) }) }] };
+  }
+  // links in results must be usable outside the store (AI sandboxes, designs): make our own relative links absolute
+  const raw = (await res.text()).replace(/("(?:proxyUrl|url)"\s*:\s*")(\/(?:img|media)\/)/g, `$1${origin}$2`);
   let out: string;
   try { out = JSON.stringify(JSON.parse(raw), null, 1); } catch { out = raw; }
   return text(truncate(res.ok ? (out || `OK (${res.status})`) : `HTTP ${res.status}: ${out}`), !res.ok);
@@ -120,10 +131,24 @@ async function handle(app: Hono<AppEnv>, env: AppEnv["Bindings"], ctx: Ctx, db: 
       await audit(db, p, name, (r as { isError?: boolean }).isError ? "error" : "ok");
       return rpcResult(id, r);
     }
-    case "resources/list": return rpcResult(id, { resources: [{ uri: GUIDE_URI, name: "OpenShelf guide", description: "Units, channels, safety rules and workflows", mimeType: "text/markdown" }] });
-    case "resources/read":
-      if (params.uri !== GUIDE_URI) return rpcError(id, -32002, "Resource not found");
-      return rpcResult(id, { contents: [{ uri: GUIDE_URI, mimeType: "text/markdown", text: GUIDE }] });
+    case "resources/list": {
+      const lang = (await getSettings(db, "general")).defaultLocale;
+      return rpcResult(id, { resources: [
+        { uri: GUIDE_URI, name: "OpenShelf guide", description: "Units, channels, safety rules and workflows", mimeType: "text/markdown" },
+        ...helpTopics(lang).map((t) => ({ uri: `${HELP_URI}${t.slug}`, name: `Admin guide: ${t.title}`, description: `Chapter of the store's user guide (${t.language}). Add ?lang=tr|en for the other language; the help_read tool reads single sections.`, mimeType: "text/markdown" })),
+      ] });
+    }
+    case "resources/read": {
+      const uri = String(params.uri ?? "");
+      if (uri === GUIDE_URI) return rpcResult(id, { contents: [{ uri: GUIDE_URI, mimeType: "text/markdown", text: GUIDE }] });
+      if (uri.startsWith(HELP_URI)) {
+        const [slug = "", query = ""] = uri.slice(HELP_URI.length).split("?");
+        const l = new URLSearchParams(query).get("lang"); const lang: HelpLang = l === "en" || l === "tr" ? l : (await getSettings(db, "general")).defaultLocale;
+        const r = helpRead(lang, slug);
+        if ("markdown" in r) return rpcResult(id, { contents: [{ uri, mimeType: "text/markdown", text: r.markdown }] });
+      }
+      return rpcError(id, -32002, "Resource not found");
+    }
     case "prompts/list": return rpcResult(id, { prompts: PROMPTS.map((x) => ({ name: x.name, description: x.description })) });
     case "prompts/get": {
       const pr = PROMPTS.find((x) => x.name === params.name);
@@ -139,6 +164,45 @@ const jsonRes = (body: unknown, status = 200, extra: Record<string, string> = {}
 
 /** Streamable HTTP (stateless). POST = JSON-RPC (single or batch); answers JSON, or one SSE event when the client only accepts text/event-stream. */
 export function mountMcp(app: Hono<AppEnv>) {
+  /**
+   * File upload for agents that can run a shell (Claude Code, Codex, Cursor, scripts): multipart (file, kind, alt) or a raw image body with ?kind=&alt=.
+   * Same Bearer token as /mcp (level write+, respects the owner's tool switches), same validation and audit as the admin upload. The bytes never
+   * pass through the conversation, so no tokens are spent on them and nothing gets truncated.
+   */
+  app.post("/mcp/upload", async (c) => {
+    const db = c.get("db");
+    const auth = c.req.header("Authorization") ?? "";
+    const raw = /^bearer\s+/i.test(auth) ? auth.replace(/^bearer\s+/i, "").trim() : "";
+    const who = raw ? await authenticateToken(db, raw) : null;
+    if (!who) return jsonRes({ error: { code: "unauthorized", message: "Send Authorization: Bearer osk_… (token from Settings → MCP)" } }, 401);
+    const r = await hit(c.env.DB, `mcp:${who.tokenId}`, 60);
+    if (r.count > MCP_RATE_PER_MIN) return jsonRes({ error: { code: "rate_limited", message: "Rate limit exceeded" } }, 429, { "Retry-After": String(r.resetIn) });
+    const policy = await loadPolicy(db);
+    if (!policy.masterEnabled) return jsonRes({ error: { code: "mcp_disabled", message: "MCP access is switched off by the store owner (Settings → MCP)." } }, 403);
+    if (policy.disabled.has("upload_media")) return jsonRes({ error: { code: "tool_disabled", message: "Uploads are disabled by the store owner (Settings → MCP → Tools: upload_media)." } }, 403);
+    if (LEVEL_RANK[who.level] < LEVEL_RANK.write) return jsonRes({ error: { code: "forbidden", message: `This token has level "${who.level}"; uploading needs "write" or higher.` } }, 403);
+    const max = R2_LIMIT + 64 * 1024;
+    if (Number(c.req.header("Content-Length") ?? 0) > max) return jsonRes({ error: { code: "payload_too_large", message: "File too large" } }, 413);
+    const ct = c.req.header("Content-Type") ?? "";
+    let bytes: Uint8Array; let kind = ""; let alt = ""; let filename = "upload";
+    try {
+      if (ct.toLowerCase().startsWith("multipart/form-data")) {
+        const fd = await c.req.formData(); const f = fd.get("file");
+        if (!(f instanceof File)) return jsonRes({ error: { code: "validation_error", message: "multipart field `file` is required (curl -F file=@photo.jpg)" } }, 400);
+        bytes = new Uint8Array(await f.arrayBuffer()); filename = f.name || filename; kind = String(fd.get("kind") ?? ""); alt = String(fd.get("alt") ?? "");
+      } else if (ct.toLowerCase().startsWith("image/")) {
+        bytes = new Uint8Array(await c.req.arrayBuffer()); kind = c.req.query("kind") ?? ""; alt = c.req.query("alt") ?? ""; filename = c.req.query("filename") ?? filename;
+      } else return jsonRes({ error: { code: "unsupported_media_type", message: "Send multipart/form-data (file, kind, alt) or a raw image body (Content-Type: image/jpeg|png|webp|gif|avif) with ?kind=" } }, 415);
+    } catch { return jsonRes({ error: { code: "validation_error", message: "Malformed request body" } }, 400); }
+    if (bytes.byteLength > max) return jsonRes({ error: { code: "payload_too_large", message: "File too large" } }, 413);
+    const f = new FormData(); f.set("file", new File([bytes as BlobPart], filename, { type: sniffMime(bytes) })); f.set("kind", kind); if (alt) f.set("alt", alt);
+    const origin = new URL(c.req.url).origin;
+    const headers = new Headers({ [INTERNAL_HEADER]: await signInternal(c.env, { aid: who.adminId, role: who.role, lvl: who.level, tid: who.tokenId }), "CF-Connecting-IP": c.get("ip"), "user-agent": "openshelf-mcp-upload" });
+    const res = await app.fetch(new Request(`${origin}/api/admin/media`, { method: "POST", headers, body: f }), c.env, c.executionCtx as unknown as Ctx);
+    await audit(db, { ...who, ip: c.get("ip") }, "upload_media(file)", res.ok ? "ok" : "error");
+    return new Response(await res.text(), { status: res.status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
+  });
+
   // Bearer token = an OAuth access token (osk_…, 1 h, from /oauth/token) or a personal access token (osk_…, created in Settings -> MCP).
   // A token in the URL is deliberately NOT supported: URLs end up in logs, history and screenshots.
   app.all("/mcp", async (c) => {

@@ -28,37 +28,37 @@ export const IMAGE_SPECS: Record<MediaKind, ImageSpec> = {
     kind: "product", title: "Product photo", width: 1600, height: 2000, aspect: "4:5 (portrait)", minWidth: 800, minHeight: 1000, transparent: false, preferredFormats: ["webp", "jpeg"],
     usage: "Product page main image (4:5 on desktop, 1:1 on mobile, zoom on hover), product cards (4:5), square thumbnails, cart/checkout thumbnails (64-96 px), category tiles (cropped to 4:3 desktop / 3:4 mobile), Google Merchant feed and the default social preview. The FIRST image of a product is the cover.",
     guidance: "Subject centred with ~10% margin on every side (square and 4:3 crops cut the top/bottom). Clean, evenly lit neutral background (white/light grey) for consistent catalogue look. No text, logos, watermarks or borders baked in. Same framing and lighting across a product's images. sRGB.",
-    attach: "Product `images: [{ mediaId, alt }]` (update_product). Put the best shot first. Up to 30 images per product. Write a short alt text.",
+    attach: "add_product_images (productId, images: [{ mediaId or url, alt }], mode append|prepend|replace): one call, no need to resend the product. Put the best shot first. Up to 30 images per product. Write a short alt text.",
   },
   banner: {
     kind: "banner", title: "Home hero banner", width: 2400, height: 1050, aspect: "16:7 (wide)", minWidth: 1600, minHeight: 700, transparent: false, preferredFormats: ["webp", "jpeg"],
     usage: "Home page hero carousel: 16:7 on tablet/desktop (max height 640 px), 4:5 on phones, cropped with object-cover from the centre. A dark gradient and the store's title/subtitle/button are overlaid (left side on desktop, bottom on mobile).",
     guidance: "Keep the key subject inside the central ~35% width (phones show only that strip) and vertically centred. Leave the left third calm/low-detail for the overlaid text. No text or buttons in the image. Darker or mid-tone images read best under the overlay. Up to 6 banners rotate.",
-    attach: "Branding settings `bannerMediaIds: [id, …]` (update_settings group branding: get_settings first and send the whole group). Title/subtitle/CTA are separate fields (bannerTitle, bannerSubtitle, bannerCtaLabel, bannerCtaUrl).",
+    attach: "set_store_image (slot banner, mediaId or url): appended to the carousel, max 6. Title/subtitle/CTA are separate fields (bannerTitle, bannerSubtitle, bannerCtaLabel, bannerCtaUrl).",
   },
   og: {
     kind: "og", title: "Social share image (Open Graph)", width: 1200, height: 630, aspect: "1.91:1", minWidth: 1200, minHeight: 630, transparent: false, preferredFormats: ["jpeg", "png"],
     usage: "Link previews on WhatsApp, Facebook, X/Twitter, LinkedIn, Slack, iMessage. Used by a product or category when its own SEO image is set, otherwise the first product image or the store default.",
     guidance: "Exactly 1.91:1. Keep everything important inside the central 1000×500 area (platforms crop edges). Large, legible, high-contrast; text is allowed here (brand or offer) but keep it big and short. Under ~300 KB loads fastest. JPEG/PNG are the most widely supported.",
-    attach: "Product `seoOgMediaId` (update_product) or store-wide default via seo settings; a product/category can also use `seoOgImageUrl` (https URL).",
+    attach: "set_store_image (slot og) for the store-wide default; for one product use update_product_seo `seoOgMediaId`; a product/category can also use `seoOgImageUrl` (https URL).",
   },
   logo: {
     kind: "logo", title: "Logo (light theme)", width: 600, height: 144, aspect: "free, wide wordmark up to 5:1", minWidth: 240, minHeight: 72, transparent: true, preferredFormats: ["png", "webp"],
     usage: "Header and footer, rendered 36 px high with automatic width (so generate it 4× that, 144 px high, for sharp retina screens). Shown on light backgrounds.",
     guidance: "Transparent background, tight crop (no empty padding), dark/brand colours that contrast on white. Horizontal lockup preferred (icon + name); width up to ~600 px. No drop shadows or gradients baked into the background.",
-    attach: "Branding settings `logoMediaId` (update_settings group branding).",
+    attach: "set_store_image (slot logo, mediaId or url).",
   },
   logo_dark: {
     kind: "logo_dark", title: "Logo (dark theme)", width: 600, height: 144, aspect: "same as the light logo", minWidth: 240, minHeight: 72, transparent: true, preferredFormats: ["png", "webp"],
     usage: "Same places as the logo, swapped in when the visitor uses dark mode.",
     guidance: "Same artwork and proportions as the light logo, recoloured to be light/white so it reads on a dark background. Transparent background.",
-    attach: "Branding settings `logoDarkMediaId`.",
+    attach: "set_store_image (slot logo_dark).",
   },
   favicon: {
     kind: "favicon", title: "Favicon / site icon", width: 512, height: 512, aspect: "1:1 (square)", minWidth: 48, minHeight: 48, transparent: true, preferredFormats: ["png"],
     usage: "Browser tab, bookmarks and home-screen icon; shown tiny (16-48 px) so only a simple shape survives.",
     guidance: "Square, simple mark or single letter, bold shapes, high contrast, ~10% padding. No small text or fine detail. PNG with transparency (or solid brand-colour background).",
-    attach: "Branding settings `faviconMediaId`.",
+    attach: "set_store_image (slot favicon).",
   },
 };
 

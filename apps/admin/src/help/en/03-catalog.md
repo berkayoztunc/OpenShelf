@@ -165,6 +165,15 @@ If **Trendyol price** is left empty, no Trendyol price is defined for that varia
 
 The shipping fee and the free shipping threshold are independent of the channel price; they are set under **Settings → Checkout**.
 
+## Product list and bulk actions {#urun-listesi-ve-toplu-islemler}
+
+The **Products** page shows price and stock in one list and lets you fix most things without opening the product.
+
+- **Columns:** product (image, name, brand, SKU for single-variant products), category, status, channels (Web / Trendyol), number of variants, price, sellable stock, last update. The arrow next to a multi-variant product opens its variants with SKUs and stock.
+- **Inline editing:** click a price or a stock number, type the new value and press Enter (Esc cancels). Stock editing changes the **total** and is written to the stock ledger; the sellable stock shown already has reserved units taken off. Editing prices is for admins and the owner only. A strike-through price is kept as long as it stays above the new price.
+- **Filters and sorting:** status tabs, category (including Uncategorised), stock (sold out / running low / in stock), channel (on Trendyol / website only), "only products without images". Sort by name, price, stock or last update. Search covers name, brand, SKU and barcode.
+- **Bulk actions (admins):** tick rows and the bottom bar offers **status change**, **category assignment** and **percentage price change** (e.g. 10 = +10%, -15 = -15%; applied to the website price and strike-through price of every active variant and pushed to Trendyol automatically). A price change cannot be undone; to revert apply the opposite percentage (rounding may leave small differences).
+
 ## Product images {#urun-gorselleri}
 
 From the **Images** card you can add up to 30 photos to your product. The first image is the product's cover photo; it appears first on the storefront and in social sharing.
@@ -187,6 +196,12 @@ From the **Images** card you can add up to 30 photos to your product. The first 
 - Keep the background plain and the light good; 3–5 photos showing the product from different angles are ideal.
 - Shrink files before uploading. Files over 1.5 MB are rejected.
 - Adding an image by URL from someone else's site means the image disappears if that site removes it; upload the file where possible.
+
+### Media library and adding images with an AI
+
+On **Katalog → Medya** you can upload images in bulk: drag files in, pick them or paste from the clipboard (Ctrl/Cmd+V). Choose the type first under "What for?" (product photo, banner, logo…); after upload you get a warning if the size does not fit. In the library you can edit alt text in place, copy an id and delete a file (a deleted file shows as broken wherever it was used; it cannot be recovered).
+
+With an AI connected through MCP just say “add the images I just uploaded to this product”: the file bytes never enter the conversation, so no credits are spent. If the AI has a public link it can pass that directly; if it has a shell it sends the file to `/mcp/upload`. Details: "Uploading images and files" in the MCP document.
 
 ## Categories {#kategoriler}
 

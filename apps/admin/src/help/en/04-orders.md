@@ -16,6 +16,17 @@ Click **Orders** in the left menu. The list shows the newest order at the top.
 
 If you click a status in the "Orders by status" bar on the **Dashboard**, you land on this list with that filter applied.
 
+## Order list {#siparis-listesi}
+
+The **Orders** page lists orders from every channel and shows which stage of the process each one is in.
+
+- **Stage tabs (with counts):** All, Awaiting payment, To prepare, Shipped, Delivered, Cancelled/refunded. The counts follow the active filters.
+- **Process columns:** each row shows the items (first three and quantities), payment, shipment (carrier and a clickable tracking number) and invoice state. A paid website order without a shipment gets **Needs shipping**, one without an invoice gets **Not invoiced**.
+- **Search:** order number, customer name, e-mail, phone, city, product name or SKU and shipment tracking number.
+- **Filters:** source (website / Trendyol), payment, shipment and invoice state (use **None yet** to find what is missing), date range and amount range ("More filters"). Filters are kept in the address bar, so you can share the link.
+- **Quick view:** click a row or the eye icon; a side panel shows customer and address, items, payment/shipment/invoice and the status buttons, without leaving the page.
+- **Bulk actions:** tick rows and the bottom bar offers label, packing slip and invoice printing plus **bulk status change**, **bulk shipment creation** (one carrier service id for all) and **bulk invoicing**. The confirmation says how many orders are eligible and how many will be skipped; every order is validated again on the server and failures are listed with their reason.
+
 ## Order statuses {#siparis-durumlari}
 
 Every order is in one of eight statuses, and only the allowed transitions can be made. The system does not allow an invalid transition (it shows a warning that the status change is not possible).

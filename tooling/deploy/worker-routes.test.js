@@ -31,5 +31,5 @@ test("every path the Worker serves outside /api is listed in run_worker_first", 
 });
 
 test("the paths that broke in production are listed", () => {
-  for (const p of ["/mcp", "/unsubscribe/c/t", "/health", "/webhooks/x", "/media/x", "/mock/pay/x", "/.well-known/oauth-protected-resource", "/.well-known/oauth-authorization-server/mcp", "/oauth/token", "/oauth/register", "/oauth/authorize", "/oauth/revoke"]) assert.ok(covered(p), p);
+  for (const p of ["/mcp", "/unsubscribe/c/t", "/health", "/webhooks/x", "/media/x", "/img/p/x", "/mock/pay/x", "/.well-known/oauth-protected-resource", "/.well-known/oauth-authorization-server/mcp", "/oauth/token", "/oauth/register", "/oauth/authorize", "/oauth/revoke"]) assert.ok(covered(p), p);
 });

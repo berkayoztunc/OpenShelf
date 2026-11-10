@@ -1,13 +1,14 @@
 import { asc, eq, inArray } from "drizzle-orm";
 import { channelPrices, inventory, productImages, productVariants, products } from "@openshelf/db";
 import type { Db } from "../env";
+import { proxyPath } from "./imageProxy";
 
 export interface VariantView {
   id: string; sku: string; barcode: string | null; title: string | null; options: Record<string, string> | null; weightGrams: number | null; position: number; active: boolean;
   prices: { website: number | null; trendyol: number | null }; compareAtPrice: number | null;
   stock: { total: number; reserved: number; safetyStock: number };
 }
-export interface ImageView { id: string; mediaId: string | null; url: string; alt: string | null; position: number }
+export interface ImageView { id: string; mediaId: string | null; url: string; alt: string | null; position: number; /** same image served through this store (Trendyol-hosted photos only) */ proxyUrl: string | null }
 
 /** Batched hydration of variants/prices/stock/images for a set of product rows. */
 export async function hydrateProducts(db: Db, rows: (typeof products.$inferSelect)[]) {
@@ -36,7 +37,7 @@ export async function hydrateProducts(db: Db, rows: (typeof products.$inferSelec
       prices: { website: priceBy.get(v.id)?.website ?? null, trendyol: priceBy.get(v.id)?.trendyol ?? null }, compareAtPrice: priceBy.get(v.id)?.compare ?? null,
       stock: { total: invBy.get(v.id)?.total ?? 0, reserved: invBy.get(v.id)?.reserved ?? 0, safetyStock: invBy.get(v.id)?.safetyStock ?? 0 },
     })),
-    images: imgs.filter((i) => i.productId === p.id).map((i): ImageView => ({ id: i.id, mediaId: i.mediaId, url: i.mediaId ? `/media/${i.mediaId}` : i.url ?? "", alt: i.alt, position: i.position })),
+    images: imgs.filter((i) => i.productId === p.id).map((i): ImageView => ({ id: i.id, mediaId: i.mediaId, url: i.mediaId ? `/media/${i.mediaId}` : i.url ?? "", alt: i.alt, position: i.position, proxyUrl: proxyPath(i) })),
   }));
 }
 export type ProductView = Awaited<ReturnType<typeof hydrateProducts>>[number];

@@ -8,12 +8,13 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "turbo run build && node tooling/deploy/assemble-site.mjs",
+    "build": "node tooling/deploy/gen-help-docs.mjs && turbo run build && node tooling/deploy/assemble-site.mjs",
+    "gen:help": "node tooling/deploy/gen-help-docs.mjs",
     "build:packages": "turbo run build",
     "dev": "turbo run dev --parallel",
     "dev:site": "pnpm build && wrangler dev -c wrangler.jsonc --local",
     "preview": "wrangler dev -c wrangler.jsonc --local",
-    "deploy": "wrangler d1 migrations apply DB --remote && wrangler deploy",
+    "deploy": "node tooling/deploy/gen-help-docs.mjs && wrangler d1 migrations apply DB --remote && wrangler deploy",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
     "test": "turbo run test",

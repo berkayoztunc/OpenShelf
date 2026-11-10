@@ -42,8 +42,40 @@ Users/passwords/MFA, creating tokens, integration **secrets** (write), mock-mode
 - **Store settings** (PATCH, only the fields you send change; nested objects merge, the merged group is validated as a whole): `update_store_profile` (store name, tagline, contact, currency, tax), `update_seo_settings`, `update_branding`, `update_legal_pages`, `update_checkout_settings`, `update_tracking_settings`, `update_notification_settings`; read one group with `get_settings_group`.
 - **SEO**: `seo_audit` (site-wide switches + every product/category gap: missing title/description, noindex, images without alt, duplicate titles), `update_product_seo` / `update_category_seo` (search & social fields only), `seo_preview` (exactly what Google/social will see).
 
-### Uploading images
-Chat clients cut long tool arguments, so a big base64 string arrives truncated. The server **rejects truncated images** (`incomplete_image`, 422: PNG without its end chunk, cut JPEG/GIF/WebP) instead of storing a broken file. Use **`upload_media_from_url`** (a public https link; the server downloads the full image: SSRF-guarded, redirects re-checked, size-capped) for anything big; `upload_media` (base64) is only for tiny files. With no URL, upload in the admin panel (product images, Settings → Branding) and let the assistant find the id with `list_media(kind)`. There are deliberately **no public upload links**. `list_media` flags suspiciously small files (`suspect`) so old broken uploads can be found and deleted.
+### Uploading images and files
+Chat clients cut long tool arguments, so a big base64 string arrives truncated (and costs a lot of tokens). Pick the way that matches what the AI has; the **`upload_help`** tool tells it which, with a ready-to-run command for the real host:
+
+| The AI has | Use | Cost |
+|---|---|---|
+| a public https link (generated image URL, CDN, Google Drive / Dropbox share link) | `add_product_images` / `set_store_image` with `url` (imports **and** attaches in one call); `upload_media_from_url` takes up to 10 links | a few tokens, full size |
+| a shell (Claude Code, Codex, Cursor, scripts) | `curl` to **`POST /mcp/upload`** with the MCP token (multipart `file`, `kind`, `alt`, or a raw image body with `?kind=`), then attach by `mediaId` | no bytes in the conversation |
+| only a chat window | the human drops the files in the admin panel under **Katalog → Medya**; the AI calls `list_media` and attaches the ids | one human step |
+| a tiny image (< ~20 KB, e.g. a favicon) | `upload_media` (base64). Longer data is refused immediately, without being read | last resort |
+
+```sh
+curl -sS -H "Authorization: Bearer $OPENSHELF_TOKEN" -F kind=product -F alt="Short description" -F file=@./photo.jpg https://YOUR-STORE/mcp/upload
+```
+`/mcp/upload` uses the same token, level (write or higher) and owner switches as `/mcp` (disable `upload_media` under Settings → MCP to turn it off), the same validation as the admin upload (real file type, size limits, truncated images rejected) and is audited. It is **not** a public link: nothing can be uploaded without a token.
+
+**Attaching** never needs the whole product: `add_product_images` (mode `append`, `prepend` or `replace`; items are `mediaId`, `url` or `imageId` of an image already on the product) and `set_store_image` (slot `logo`, `logo_dark`, `favicon`, `og` or `banner`). Imports report `warnings` (wrong aspect ratio, too small) so the AI can regenerate. `update_media_alt` edits alt text.
+
+### Marketplace (Trendyol) photos
+
+Products imported from Trendyol keep their photos on Trendyol's CDN. AI sandboxes (design environments, code runners) usually cannot download from it, so the AI reports an "access blocked" error. Two things solve it:
+
+- **`view_image`** shows a picture to the AI **through the MCP connection itself** (an image block), for uploaded media and for CDN-hosted product photos (`mediaId`, or `productId` + `imageId` from `get_product`; up to ~1 MB). No download, no network access needed on the AI's side.
+- **`proxyUrl`**: every Trendyol-hosted image in `get_product` / `list_products` also carries `proxyUrl`, an absolute public link on the store's own domain (`/img/p/<image id>?v=…`). Put it in the `<img>` tag of a design, page or message. The store downloads the photo once with its own honest user agent, checks that it really is an image and serves it with a one-year edge cache.
+
+`/img/p/:id` is **not an open proxy**: the link names an image that is registered on one of the store's products (never a URL), only Trendyol CDN hosts (`dsmcdn.com`, `trendyol.com`) are served, upstream content types are not trusted (the real type is detected from the bytes), cache misses are rate limited, and images the store already hosts redirect to `/media/…`. Absolute links also appear in MCP results for uploaded media (`url`).
+
+### The user guide over MCP
+
+The whole admin guide (the Rehber, `apps/admin/src/help`) is available to AI clients, so an assistant looks up how a feature works instead of guessing:
+
+- **Tools:** `help_topics` (chapters with their section ids), `help_search` (full-text, accent-insensitive: "kargo etiketi" finds "Kargo oluşturma"), `help_read` (`topic`, optional `section`, `lang`; whole chapters are capped at 60 KB, sections are cheap).
+- **Resources:** every chapter is also `openshelf://help/<chapter>` (add `?lang=en|tr`) for clients that support MCP resources.
+- Turkish and English; the default is the store's language. Markdown is cleaned for AI use (screenshots become a short note, glossary links keep their text, internal links point at `help_read`).
+- The guide is bundled into the Worker as a snapshot (`workers/api/src/mcp/helpDocs.generated.ts`), regenerated by `pnpm build` / `pnpm deploy` (`pnpm gen:help`). A test fails when a guide page changes without regenerating it.
 
 ## Images
 The `get_image_specs` tool tells the AI the exact size, aspect ratio, safe area and file limit for every image slot (product 1600×2000, banner 2400×1050, social 1200×630, logo, favicon), and `upload_media` uploads generated images (base64) and answers with the real width/height plus warnings when the image does not fit. Specs live in `packages/shared/src/imageSpecs.ts`.

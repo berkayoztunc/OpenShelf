@@ -165,6 +165,15 @@ Aynı ürünü farklı satış kanallarında farklı fiyata satabilirsiniz. Her 
 
 Kargo ücreti ve ücretsiz kargo eşiği kanal fiyatından bağımsızdır; **Mağaza ayarları → Ödeme ve sipariş**'ten ayarlanır.
 
+## Ürün listesi ve toplu işlemler
+
+**Ürünler** sayfası fiyat ve stok durumunu tek listede gösterir ve çoğu düzeltmeyi ürünü açmadan yapmanızı sağlar.
+
+- **Sütunlar:** Ürün (görsel, ad, marka, tek varyantlıysa stok kodu), kategori, durum, kanallar (Web / Trendyol), varyant sayısı, fiyat, satılabilir stok, son güncelleme. Birden çok varyantı olan ürünün yanındaki oka basınca varyantlar, stok kodları ve stokları açılır.
+- **Satır içi düzenleme:** Fiyatın ya da stoğun üzerine tıklayın, yeni değeri yazıp Enter'a basın (Esc vazgeçer). Stok düzenlemesi **toplam** stoğu değiştirir ve stok defterine yazılır; rezerve adet düşülerek gösterilen satılabilir stok ayrıca görünür. Fiyat düzenleme yalnızca yönetici (admin) ve sahip rolündedir. Üstü çizili fiyat, yeni fiyatın üzerinde kaldığı sürece korunur.
+- **Filtreler ve sıralama:** Durum sekmeleri, kategori (Kategorisiz dahil), stok (tükendi / az kaldı / stokta), kanal (Trendyol'da / yalnızca web), "yalnızca görseli olmayanlar". Ada, fiyata, stoğa ve güncelleme tarihine göre sıralayabilirsiniz. Arama ad, marka, stok kodu ve barkodu kapsar.
+- **Toplu işlemler (yönetici):** Satırları işaretleyince alt çubuktan **durum değiştirme**, **kategori atama** ve **yüzde ile fiyat değiştirme** (örn. 10 = %10 zam, -15 = %15 indirim; tüm aktif varyantların web fiyatına ve üstü çizili fiyata uygulanır, Trendyol'a otomatik gönderilir) yapılır. Fiyat değişikliği geri alınamaz; geri almak için ters yüzde uygulanır (yuvarlama nedeniyle küçük farklar olabilir).
+
 ## Ürün görselleri
 
 **Görseller** kartından ürününüze en fazla 30 fotoğraf ekleyebilirsiniz. Birinci görsel ürünün kapak fotoğrafıdır; vitrinde ve sosyal medya paylaşımında ilk o görünür.
@@ -187,6 +196,12 @@ Kargo ücreti ve ücretsiz kargo eşiği kanal fiyatından bağımsızdır; **Ma
 - Arka plan sade ve ışık yeterli olsun; ürünü farklı açılardan gösteren 3–5 fotoğraf idealdir.
 - Dosyaları yüklemeden önce küçültün. 1,5 MB'ı aşan dosyalar reddedilir.
 - Başkasının sitesinden URL ile görsel eklemek, o site görseli kaldırırsa görselin kaybolmasına yol açar; mümkünse dosyayı yükleyin.
+
+### Medya kütüphanesi ve yapay zekâ ile görsel ekleme
+
+**Katalog → Medya** sayfasından görselleri toplu yükleyebilirsiniz: dosyaları sürükleyin, seçin ya da panodan yapıştırın (Ctrl/Cmd+V). Önce "Ne için?" alanından türü (ürün fotoğrafı, afiş, logo…) seçin; yüklemeden sonra ölçü uygun değilse uyarı görürsünüz. Kütüphanede alt metni yerinde düzenleyebilir, kimliği kopyalayabilir ve dosyayı silebilirsiniz (silinen dosya kullanıldığı yerde kırık görünür, geri alınamaz).
+
+MCP ile bağlı bir yapay zekâya “son yüklediğim görselleri şu ürüne ekle” demeniz yeterlidir: dosya baytları konuşmaya girmediği için kredi harcanmaz. Yapay zekânın elinde herkese açık bir bağlantı varsa doğrudan o bağlantıyı da verebilir; bir kabuğu varsa dosyayı `/mcp/upload` adresine gönderir. Ayrıntı: MCP belgesinde "Görsel ve dosya yükleme".
 
 ## Kategoriler
 

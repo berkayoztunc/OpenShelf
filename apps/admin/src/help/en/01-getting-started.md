@@ -188,6 +188,17 @@ These rules are enforced by the system and cannot be bypassed:
 
 Before you start real selling, turn the switch off on the **System** tab and delete the `ALLOW_MOCK` variable from Cloudflare. Once it is off, real integrations are used again with their saved keys; unpaid mock orders can no longer be completed. For the checklist, see the [Going live](/help/going-live#mock-u-kapatma) section.
 
+## Overview screen {#genel-bakis-ekrani}
+
+The **Overview** page that opens after you sign in shows how the store is doing at a glance.
+
+- **Period switch (7 / 30 / 90 days):** every number is computed for the chosen period and compared with the previous period of the same length. Change is shown with an arrow and a sign (not by colour alone). When the previous period had no data it says "New" instead of a percentage.
+- **To do today:** orders to ship, orders awaiting payment, orders without an invoice, failed background jobs, sold-out and low stock, active products without images and drafts. Each row opens the matching filtered list. When nothing is waiting it says so.
+- **Cards:** revenue, orders, average order value, units sold and new customers. Revenue and order counts include paid orders only; demo (mock) orders are excluded.
+- **Revenue chart:** this period and the previous one on the same axis. Hover, or use the left/right arrow keys, to see one day; the **Table** button gives the same data as a table.
+- **Other cards:** sales channels (website vs Trendyol share), best-selling products, top cities by orders, recent activity (admin actions), recent orders, integration health and low stock.
+- The **First 10 steps** card shows only the next steps to do; **Show all steps** opens the full list.
+
 ## First 10 steps {#ilk-10-adim}
 
 Follow this order before opening a new store to real customers. The link next to each step takes you to the relevant section.

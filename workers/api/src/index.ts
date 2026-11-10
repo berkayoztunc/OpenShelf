@@ -12,6 +12,8 @@ import { adminAuth } from "./routes/admin-auth";
 import { adminSettings } from "./routes/admin-settings";
 import { mockAdmin, mockRoutes } from "./routes/mock";
 import { adminMedia, mediaPublic } from "./routes/media";
+import { adminHelp } from "./routes/admin-help";
+import { imgProxy } from "./routes/imgproxy";
 import { adminCatalog } from "./routes/admin-catalog";
 import { adminOrders } from "./routes/admin-orders";
 import { adminData } from "./routes/admin-data";
@@ -73,6 +75,7 @@ admin.route("/", adminTokens);
 admin.route("/", adminMcp);
 admin.route("/", adminOauth);
 admin.route("/media", adminMedia);
+admin.route("/", adminHelp);
 app.route("/api/admin", admin);
 mountOauth(app); // OAuth 2.1 for MCP clients: /.well-known/*, /oauth/register|authorize|token|revoke (+ CORS for /mcp)
 mountMcp(app); // MCP over Streamable HTTP at /mcp (Bearer: OAuth access token or personal access token)
@@ -81,6 +84,7 @@ app.route("/api/store", store);
 app.route("/webhooks", webhooks);
 app.route("/mock", mockRoutes); // 404 unless system.mockMode
 app.route("/media", mediaPublic);
+app.route("/img", imgProxy); // product photos hosted on the marketplace CDN, served via our own domain
 app.route("/", unsubscribeRoutes);
 app.route("/", publicRoutes);
 app.route("/", siteRoutes);

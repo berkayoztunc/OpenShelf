@@ -51,7 +51,8 @@ describe("upload_media_from_url (MCP)", () => {
     expect(r).toMatchObject({ mime: "image/png", size: img.length, width: 1600, height: 2000, warnings: [] });
     const stored = await env.DB.prepare("SELECT size, alt, kind FROM media WHERE id = ?1").bind(r.id).first<any>();
     expect(stored).toMatchObject({ size: img.length, alt: "Vazo", kind: "product" });
-    expect((await call(r.url)).status).toBe(200);
+    expect(r.url).toMatch(/^http:\/\/api\.test\/media\//); // MCP results carry absolute links
+    expect((await call(new URL(r.url).pathname)).status).toBe(200);
   });
   it("wrong ratio comes back as a warning; non-images, oversize and bad URLs are refused", async () => {
     fetchMock.get("https://img.example.com").intercept({ path: "/square.png" }).reply(200, Buffer.from(png(1000, 1000)));
@@ -74,7 +75,7 @@ describe("upload_media_from_url (MCP)", () => {
     const res = (await j<any>(await call("/mcp", { method: "POST", json: { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "upload_media_from_url", arguments: { body: { kind: "product", url: "https://img.example.com/a.png" } } } }, origin: null, headers: { Authorization: `Bearer ${rt}` } }))).result;
     expect(res.isError).toBe(true);
     const list = (await j<any>(await rpc({ jsonrpc: "2.0", id: 2, method: "tools/list" }))).result.tools;
-    expect(list.find((t: any) => t.name === "upload_media").description).toMatch(/ONLY for small images/);
+    expect(list.find((t: any) => t.name === "upload_media").description).toMatch(/LAST RESORT.*tiny images/);
     expect(list.find((t: any) => t.name === "upload_media_from_url").description).toMatch(/BEST WAY/);
     expect(list.map((t: any) => t.name)).not.toContain("create_upload_link"); // no public upload links
   });

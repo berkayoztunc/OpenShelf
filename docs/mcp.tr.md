@@ -33,8 +33,40 @@ Yapıştıracak anahtar yok: özel bir MCP sunucusu / bağlayıcı ekleyip `http
 - **Mağaza ayarları** (PATCH: yalnızca gönderdiğiniz alanlar değişir, iç içe nesneler birleşir, birleşmiş grup bütün olarak doğrulanır): `update_store_profile` (mağaza adı, slogan, iletişim, para birimi, vergi), `update_seo_settings`, `update_branding`, `update_legal_pages`, `update_checkout_settings`, `update_tracking_settings`, `update_notification_settings`; tek grup okumak için `get_settings_group`.
 - **SEO**: `seo_audit` (site geneli anahtarlar + her ürün/kategori eksiği: başlık/açıklama yok, noindex, alt metinsiz görsel, tekrar eden başlık), `update_product_seo` / `update_category_seo` (yalnızca arama ve sosyal alanlar), `seo_preview` (Google/sosyal ağların tam olarak ne göreceği).
 
-### Görsel yükleme
-Sohbet istemcileri uzun araç argümanlarını keser; büyük bir base64 metni kesik gelir. Sunucu **kesik görselleri reddeder** (`incomplete_image`, 422: bitiş parçası olmayan PNG, kesik JPEG/GIF/WebP) ve bozuk dosya saklamaz. Büyük dosyalar için **`upload_media_from_url`** kullanın (herkese açık https bağlantısı; sunucu tam görseli indirir: SSRF korumalı, yönlendirmeler yeniden denetlenir, boyut sınırlı); `upload_media` (base64) yalnızca çok küçük dosyalar içindir. URL yoksa yönetim panelinden yükleyin (ürün görselleri, Ayarlar → Marka) ve asistan id'yi `list_media(kind)` ile bulsun. Bilerek **herkese açık yükleme bağlantısı yoktur**. `list_media` şüpheli derecede küçük dosyaları (`suspect`) işaretler; eski bozuk yüklemeler bulunup silinebilir.
+### Görsel ve dosya yükleme
+Sohbet istemcileri uzun araç argümanlarını keser; büyük bir base64 metni eksik gelir (ve çok token harcar). Yapay zekâda ne varsa ona uygun yolu seçin; **`upload_help`** aracı hangisinin uygun olduğunu, gerçek adresle çalıştırılmaya hazır komutlarla birlikte söyler:
+
+| Yapay zekâda olan | Kullanılacak | Maliyet |
+|---|---|---|
+| herkese açık https bağlantısı (üretilmiş görsel URL'si, CDN, Google Drive / Dropbox paylaşım bağlantısı) | `url` ile `add_product_images` / `set_store_image` (içe aktarır **ve** bağlar, tek çağrıda); `upload_media_from_url` tek çağrıda 10 bağlantı alır | birkaç token, tam boyut |
+| kabuk (Claude Code, Codex, Cursor, betikler) | MCP anahtarıyla **`POST /mcp/upload`** adresine `curl` (multipart `file`, `kind`, `alt` ya da `?kind=` ile ham görsel gövdesi); sonra `mediaId` ile bağlama | konuşmada dosya baytı yok |
+| yalnızca sohbet penceresi | insan dosyaları yönetim panelinde **Katalog → Medya** sayfasına bırakır; yapay zekâ `list_media` ile bulup kimlikleri bağlar | tek insan adımı |
+| çok küçük görsel (< ~20 KB, örn. favicon) | `upload_media` (base64). Daha uzun veri okunmadan hemen reddedilir | son çare |
+
+```sh
+curl -sS -H "Authorization: Bearer $OPENSHELF_TOKEN" -F kind=product -F alt="Kısa açıklama" -F file=@./foto.jpg https://MAGAZANIZ/mcp/upload
+```
+`/mcp/upload`, `/mcp` ile aynı anahtarı, seviyeyi (write ve üstü) ve sahip anahtarlarını kullanır (kapatmak için Ayarlar → MCP'de `upload_media`'yı devre dışı bırakın); yönetim panelindeki yüklemeyle aynı doğrulamayı yapar (gerçek dosya türü, boyut sınırları, kesik görsel reddi) ve kayda geçer. **Herkese açık bir bağlantı değildir:** anahtarsız yükleme yapılamaz.
+
+**Bağlamak** için tüm ürünü göndermek gerekmez: `add_product_images` (`append`, `prepend` ya da `replace` modu; öğeler `mediaId`, `url` veya üründe zaten olan görselin `imageId`'si) ve `set_store_image` (`logo`, `logo_dark`, `favicon`, `og` ya da `banner`). İçe aktarmalar `warnings` döndürür (yanlış oran, çok küçük), böylece yapay zekâ yeniden üretebilir. `update_media_alt` alt metni değiştirir.
+
+### Pazaryeri (Trendyol) fotoğrafları
+
+Trendyol'dan içe aktarılan ürünlerin fotoğrafları Trendyol'un CDN'inde kalır. Yapay zekâ ortamları (tasarım ortamı, kod çalıştırıcılar) genelde oradan indiremez ve "erişim engellendi" hatası verir. İki şey çözer:
+
+- **`view_image`**, görseli yapay zekâya **MCP bağlantısının içinden** gösterir (görsel bloğu); yüklenen medya ve CDN'deki ürün fotoğrafları için çalışır (`mediaId` ya da `get_product`'tan `productId` + `imageId`; en fazla ~1 MB). İndirme ya da yapay zekâ tarafında ağ erişimi gerekmez.
+- **`proxyUrl`**: `get_product` / `list_products` sonuçlarında Trendyol'da barındırılan her görselin `proxyUrl` alanı da vardır: mağazanın kendi alan adında, herkese açık, mutlak bir bağlantı (`/img/p/<görsel kimliği>?v=…`). Tasarımın, sayfanın ya da mesajın `<img>` etiketine bunu koyun. Mağaza fotoğrafı bir kez kendi açık kimliğiyle indirir, gerçekten görsel olduğunu doğrular ve bir yıl boyunca uçta önbelleğe alarak sunar.
+
+`/img/p/:id` **açık bir proxy değildir**: bağlantı bir adres değil, mağazanın ürünlerinden birine kayıtlı görselin kimliğini söyler; yalnızca Trendyol CDN alan adları (`dsmcdn.com`, `trendyol.com`) sunulur, karşı tarafın içerik türüne güvenilmez (gerçek tür baytlardan anlaşılır), önbellekte olmayan istekler hız sınırına tabidir ve mağazanın zaten barındırdığı görseller `/media/…` adresine yönlenir. MCP sonuçlarında yüklenen medya bağlantıları da (`url`) artık mutlaktır.
+
+### Kullanıcı rehberi MCP üzerinden
+
+Yönetim panelindeki rehberin tamamı (`apps/admin/src/help`) yapay zekâ istemcilerine de açıktır; asistan bir özelliğin nasıl çalıştığını tahmin etmek yerine rehberden öğrenir:
+
+- **Araçlar:** `help_topics` (bölümler ve alt başlık kimlikleri), `help_search` (tam metin, aksan duyarsız: "kargo etiketi" araması "Kargo oluşturma"yı bulur), `help_read` (`topic`, isteğe bağlı `section`, `lang`; bütün bölümler 60 KB ile sınırlıdır, alt başlık okumak ucuzdur).
+- **Kaynaklar:** MCP kaynaklarını destekleyen istemciler için her bölüm `openshelf://help/<bölüm>` adresindedir (`?lang=en|tr` eklenebilir).
+- Türkçe ve İngilizce; varsayılan mağazanın dilidir. Markdown yapay zekâ için temizlenir (ekran görüntüleri kısa bir nota dönüşür, sözlük bağlantıları yalnızca metnini korur, iç bağlantılar `help_read`'e yönlenir).
+- Rehber Worker'a anlık görüntü olarak gömülür (`workers/api/src/mcp/helpDocs.generated.ts`); `pnpm build` / `pnpm deploy` ile yeniden üretilir (`pnpm gen:help`). Bir rehber sayfası yeniden üretilmeden değişirse test başarısız olur.
 
 ## MCP'den asla erişilemeyenler
 Kullanıcı/şifre/MFA, anahtar oluşturma, entegrasyon **sırlarını** yazma, mock modu anahtarı, fabrika sıfırlama, mock gelen kutusu, Trendyol geçmişi silme. Yeni bir admin rotası ne araç ne de hariç tutma listesinde ise `mcp.test.ts` kırılır (`workers/api/src/mcp/tools.ts`).

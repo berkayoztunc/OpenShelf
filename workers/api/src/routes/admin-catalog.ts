@@ -1,6 +1,7 @@
 import { Hono } from "hono";
-import { and, desc, eq, inArray, like, notInArray, or, sql } from "drizzle-orm";
-import { categories, channelPrices, slugRedirects, coupons, inventory, orderItems, productImages, productMappings, productVariants, products } from "@openshelf/db";
+import { and, asc, desc, eq, inArray, like, notInArray, or, sql } from "drizzle-orm";
+import { z } from "zod";
+import { categories, channelPrices, media, slugRedirects, coupons, inventory, orderItems, productImages, productMappings, productVariants, products } from "@openshelf/db";
 import { adjustInventory, enqueueJob, InsufficientStockError } from "@openshelf/core";
 import { CategoryInput, CouponInput, InventoryAdjustBody, ProductBulkBody, ProductInput, VariantPriceBody } from "@openshelf/shared";
 import type { AppEnv, Db } from "../env";
@@ -8,6 +9,7 @@ import { ApiError, body, likeEscape, notFound, paged, paging } from "../lib/http
 import { audit } from "../lib/audit";
 import { requireRole } from "../middleware/auth";
 import { hydrateProducts } from "../lib/catalog";
+import { importImage } from "./media";
 import { getSettings } from "../lib/settings";
 
 export const adminCatalog = new Hono<AppEnv>();
@@ -226,6 +228,54 @@ export async function writeProduct(db: Db, d1: D1Database, id: string | null, b:
   void d1; void notInArray; void like;
   return pid;
 }
+
+const ImageItem = z.object({ mediaId: z.string().min(1).max(60).optional(), url: z.string().min(8).max(2000).optional(), imageId: z.string().min(1).max(60).optional(), alt: z.string().max(300).optional() })
+  .refine((i) => [i.mediaId, i.url, i.imageId].filter(Boolean).length === 1, { message: "each image needs exactly one of mediaId, url or imageId", path: ["mediaId"] });
+const ProductImagesBody = z.object({ images: z.array(ImageItem).min(1).max(10), mode: z.enum(["append", "prepend", "replace"]).default("append") });
+/**
+ * Add/replace a product's images WITHOUT resending the product. Each item is an uploaded image (mediaId), a public link (url: downloaded
+ * and stored server-side as a product photo) or an image already on the product (imageId, to keep or reorder it in `replace` mode).
+ * append/prepend skip images that are already on the product. Returns the final gallery plus fit warnings for new imports.
+ */
+adminCatalog.post("/products/:id/images", requireRole("admin"), async (c) => {
+  const id = c.req.param("id"); const b = await body(c, ProductImagesBody); const db = c.get("db"); const adminId = c.get("admin")!.id;
+  const [prod] = await db.select({ id: products.id }).from(products).where(eq(products.id, id)).limit(1);
+  if (!prod) throw notFound("Product");
+  const current = await db.select().from(productImages).where(eq(productImages.productId, id)).orderBy(asc(productImages.position));
+  const warnings: { index: number; warnings: string[] }[] = [];
+  const next: { mediaId: string | null; url: string | null; alt: string | null; keepId?: string }[] = [];
+  for (const [i, it] of b.images.entries()) {
+    if (it.imageId) {
+      const ex = current.find((x) => x.id === it.imageId);
+      if (!ex) throw new ApiError(404, "not_found", `Image ${it.imageId} is not on this product`);
+      next.push({ mediaId: ex.mediaId, url: ex.url, alt: it.alt ?? ex.alt, keepId: ex.id });
+    } else if (it.mediaId) {
+      const [m] = await db.select({ id: media.id, alt: media.alt }).from(media).where(eq(media.id, it.mediaId)).limit(1);
+      if (!m) throw new ApiError(404, "not_found", `Media ${it.mediaId} not found: check the id with list_media`);
+      next.push({ mediaId: m.id, url: null, alt: it.alt ?? m.alt });
+    } else {
+      const r = await importImage(c, "product", it.url!, it.alt ?? null, adminId);
+      if (r.warnings.length) warnings.push({ index: i, warnings: r.warnings });
+      next.push({ mediaId: r.id, url: null, alt: it.alt ?? null });
+    }
+  }
+  const sameAs = (x: { mediaId: string | null; url: string | null }, y: { mediaId: string | null; url: string | null }) => (x.mediaId ? x.mediaId === y.mediaId : !!x.url && x.url === y.url);
+  let finalList: { mediaId: string | null; url: string | null; alt: string | null }[];
+  if (b.mode === "replace") finalList = next;
+  else {
+    const fresh = next.filter((n) => !current.some((e) => sameAs(e, n)));
+    const existing = current.map((e) => ({ mediaId: e.mediaId, url: e.url, alt: e.alt }));
+    finalList = b.mode === "prepend" ? [...fresh, ...existing] : [...existing, ...fresh];
+  }
+  if (finalList.length > 30) throw new ApiError(409, "too_many_images", "A product can have at most 30 images");
+  const keep = new Map(next.filter((n) => n.keepId).map((n) => [n.mediaId ?? n.url, n.keepId!]));
+  await db.delete(productImages).where(eq(productImages.productId, id));
+  await db.insert(productImages).values(finalList.map((im, i) => ({ id: keep.get(im.mediaId ?? im.url) ?? crypto.randomUUID(), productId: id, mediaId: im.mediaId, url: im.mediaId ? null : im.url, alt: im.alt, position: i })));
+  await db.update(products).set({ updatedAt: new Date() }).where(eq(products.id, id));
+  await audit(c, "product.images", "product", id, { mode: b.mode, added: next.length, total: finalList.length });
+  const rows = await db.select().from(productImages).where(eq(productImages.productId, id)).orderBy(asc(productImages.position));
+  return c.json({ productId: id, images: rows.map((r) => ({ id: r.id, mediaId: r.mediaId, url: r.mediaId ? `/media/${r.mediaId}` : r.url, alt: r.alt, position: r.position })), ...(warnings.length ? { warnings } : {}) });
+});
 
 /** Inline price edit: website channel price (+ optional compare-at) of one variant. */
 adminCatalog.patch("/variants/:variantId/price", requireRole("admin"), async (c) => {

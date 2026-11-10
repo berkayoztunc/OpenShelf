@@ -188,6 +188,17 @@ Bu kurallar sistem tarafından uygulanır; atlatılamaz:
 
 Gerçek satışa başlamadan önce **Sistem** sekmesinde anahtarı kapatın ve Cloudflare'den `ALLOW_MOCK` değişkenini silin. Kapatınca gerçek entegrasyonlar kayıtlı anahtarlarla yeniden kullanılır; ödenmemiş deneme siparişleri artık tamamlanamaz. Kontrol listesi için [Yayına geçiş](/help/going-live#mock-u-kapatma) bölümüne bakın.
 
+## Genel bakış ekranı
+
+Giriş yaptığınızda açılan **Genel bakış** sayfası mağazanın o günkü durumunu tek bakışta gösterir.
+
+- **Dönem seçici (7 / 30 / 90 gün):** Tüm rakamlar seçilen dönem için hesaplanır ve bir önceki aynı uzunluktaki dönemle karşılaştırılır. Değişim oku ve işaretle gösterilir (renge bağlı değil). Önceki dönemde veri yoksa yüzde yerine "Yeni" yazar.
+- **Bugün yapılacaklar:** Kargolanacak siparişler, ödeme bekleyenler, faturası kesilmemişler, başarısız arka plan işleri, tükenen ve azalan stok, görseli olmayan aktif ürünler ve taslaklar. Her satıra tıklayınca ilgili filtreli liste açılır. Bekleyen iş yoksa bunu söyler.
+- **Kartlar:** Ciro, sipariş, ortalama sepet, satılan adet ve yeni müşteri. Ciro ve sipariş sayısına yalnızca ödenmiş siparişler dahildir; deneme (mock) siparişler hariçtir.
+- **Ciro grafiği:** Bu dönem ve önceki dönem aynı eksende çizilir. Üzerine gelince ya da sol/sağ ok tuşlarıyla bir günün ayrıntısı görünür; **Tablo** düğmesi aynı veriyi tablo olarak verir.
+- **Diğer kartlar:** Satış kanalları (web ve Trendyol payı), en çok satan ürünler, en çok sipariş gelen iller, son hareketler (yönetici işlemleri), son siparişler, entegrasyon sağlığı ve azalan stok.
+- **İlk 10 adım** kartı yalnızca yapılacak ilk adımları gösterir; **Tüm adımları göster** ile hepsini açabilirsiniz.
+
 ## İlk 10 adım
 
 Yeni bir mağazayı gerçek müşteriye açmadan önce şu sırayı izleyin. Her adımın yanındaki bağlantı, ilgili bölüme götürür.

@@ -75,7 +75,7 @@ describe("MCP image tools", () => {
 
   it("upload_media stores the image and reports size + fit warnings", async () => {
     const ok = JSON.parse((await tool("upload_media", { kind: "product", data: b64(png(1600, 2000)), filename: "p.png", alt: "Kırmızı vazo" })).content[0]!.text);
-    expect(ok).toMatchObject({ mime: "image/png", width: 1600, height: 2000, warnings: [] }); expect(ok.url).toMatch(/^\/media\//);
+    expect(ok).toMatchObject({ mime: "image/png", width: 1600, height: 2000, warnings: [] }); expect(ok.url).toMatch(/^http:\/\/api\.test\/media\//);
     const square = JSON.parse((await tool("upload_media", { kind: "product", data: b64(png(1000, 1000)) })).content[0]!.text);
     expect(square.warnings.join()).toMatch(/Aspect ratio/);
     const small = JSON.parse((await tool("upload_media", { kind: "favicon", data: b64(png(16, 16)) })).content[0]!.text);
@@ -85,7 +85,7 @@ describe("MCP image tools", () => {
     const list = await j<any>(await admin(owner, "/media?kind=product"));
     expect(list.items.some((m: any) => m.id === ok.id)).toBe(true);
     // served publicly
-    expect((await call(ok.url)).status).toBe(200);
+    expect((await call(new URL(ok.url).pathname)).status).toBe(200);
   });
 
   it("rejects non-images, SVG, bad base64 and unknown kinds with readable errors", async () => {

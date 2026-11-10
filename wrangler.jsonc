@@ -15,7 +15,7 @@
     "not_found_handling": "single-page-application",
     // These paths always hit the Worker first; everything else is served straight from static assets.
     "run_worker_first": [
-      "/api/*", "/webhooks/*", "/media/*", "/feeds/*", "/mock/*",
+      "/api/*", "/webhooks/*", "/media/*", "/img/*", "/feeds/*", "/mock/*",
       "/sitemap.xml", "/sitemap-*", "/robots.txt", "/health", "/admin", "/admin/*",
       // MCP endpoint (Bearer header or /mcp/<token> connector URL) and the public marketing unsubscribe page
       "/mcp", "/mcp/*", "/unsubscribe/*",

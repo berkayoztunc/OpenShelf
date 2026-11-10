@@ -7,3 +7,4 @@ export * from "./manual";
 export * from "./trendyol";
 export * from "./geliver";
 export * from "./imageSpecs";
+export * from "./helpDocs";

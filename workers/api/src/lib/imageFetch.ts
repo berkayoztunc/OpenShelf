@@ -8,6 +8,21 @@ export function blockedHost(host: string): boolean {
   return false;
 }
 
+/**
+ * Turns "share" links of common file hosts into direct-download links, so a person can paste what they copied from the browser:
+ * Google Drive (/file/d/ID/view, open?id=ID), Dropbox (?dl=0 -> ?raw=1). Anything else is returned unchanged.
+ */
+export function normalizeImageUrl(raw: string): string {
+  let u: URL;
+  try { u = new URL(raw.trim()); } catch { return raw.trim(); }
+  if (u.hostname === "drive.google.com") {
+    const id = /\/file\/d\/([\w-]+)/.exec(u.pathname)?.[1] ?? (u.pathname === "/open" || u.pathname === "/uc" ? u.searchParams.get("id") : null);
+    if (id) return `https://drive.google.com/uc?export=download&id=${id}`;
+  }
+  if (u.hostname === "www.dropbox.com" || u.hostname === "dropbox.com") { u.searchParams.delete("dl"); u.searchParams.set("raw", "1"); return u.toString(); }
+  return u.toString();
+}
+
 /** Validates an https image URL for server-side fetching. */
 export function checkImportUrl(raw: string): URL {
   let u: URL;
@@ -22,7 +37,7 @@ export function checkImportUrl(raw: string): URL {
 const MAX_REDIRECTS = 3; const TIMEOUT_MS = 15_000;
 /** Fetches an image over https with redirect re-validation, a timeout and a hard byte cap (aborts as soon as it is exceeded). No cookies/credentials are sent. */
 export async function fetchImageBytes(raw: string, maxBytes: number, fetcher: typeof fetch = fetch): Promise<Uint8Array<ArrayBuffer>> {
-  let url = checkImportUrl(raw);
+  let url = checkImportUrl(normalizeImageUrl(raw));
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     let res: Response;
     try { res = await fetcher(url.toString(), { redirect: "manual", signal: AbortSignal.timeout(TIMEOUT_MS), headers: { Accept: "image/*", "User-Agent": "OpenShelf-media-import/1.0" } }); }
