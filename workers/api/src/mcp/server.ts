@@ -97,6 +97,7 @@ export async function callTool(app: Hono<AppEnv>, env: AppEnv["Bindings"], ctx: 
     f.set("kind", String(args["kind"])); if (args["alt"]) f.set("alt", String(args["alt"]));
     body = f;
   }
+  else if (def.flatBody) { headers.set("content-type", "application/json"); body = JSON.stringify(args); }
   else if (def.method !== "GET" && def.method !== "DELETE") {
     const key = def.bodyArg ?? "body";
     if (key in def.shape) { headers.set("content-type", "application/json"); body = JSON.stringify((def.rawBody ? (rawArgs as Record<string, unknown> | undefined)?.[key] : args[key]) ?? {}); }

@@ -182,7 +182,7 @@ adminMedia.post("/upload-ticket", requireRole("admin"), async (c) => {
   }, 201);
 });
 
-const OpenAIFile = z.object({ download_url: z.string().min(8).max(4000), file_id: z.string().max(200), mime_type: z.string().max(100).optional(), file_name: z.string().max(300).optional() });
+const OpenAIFile = z.object({ download_url: z.string().max(4000), file_id: z.string().max(200), mime_type: z.string().max(100).optional(), file_name: z.string().max(300).optional() });
 const AttachedBody = z.object({
   kind: z.enum(MEDIA_KINDS), files: z.array(OpenAIFile).min(1).max(10), alt: z.string().max(300).optional(),
   productId: z.string().min(1).max(60).optional(), mode: z.enum(["append", "prepend"]).default("append"),
@@ -195,6 +195,10 @@ adminMedia.post("/import-files", requireRole("admin"), async (c) => {
   const b = await body(c, AttachedBody); const adminId = c.get("admin")!.id;
   const items: Record<string, unknown>[] = []; const ok: Stored[] = [];
   for (const f of b.files) {
+    if (!/^https:\/\//i.test(f.download_url)) { // ChatGPT sent only a file_id: the app did not hand over a download link, so the bytes cannot be reached from here
+      items.push({ file: f.file_name ?? f.file_id, ok: false, error: { code: "no_download_url", message: "The chat app did not provide a download link for this file (only a file id), so the server cannot fetch it. Do not retry and do not type a link yourself. Use another way: ask the person to drop the file on Katalog → Medya, give a public https link, or (code sandbox with internet) create_upload_link." } });
+      continue;
+    }
     try { const r = await importImage(c, b.kind, f.download_url, b.alt ?? null, adminId); ok.push(r); items.push({ file: f.file_name ?? f.file_id, ok: true, ...r }); await audit(c, "media.import", "media", r.id, { kind: b.kind, via: "attached-file", size: r.size }); }
     catch (e) { items.push({ file: f.file_name ?? f.file_id, ok: false, error: e instanceof ApiError ? { code: e.code, message: e.message } : { code: "failed", message: "import failed" } }); }
   }

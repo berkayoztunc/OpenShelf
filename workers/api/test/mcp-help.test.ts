@@ -115,7 +115,8 @@ describe("the guide and the tool list stay in sync", () => {
       const md = HELP_DOCS[lang].find((d) => d.slug === "mcp")!.md;
       const names = [...new Set([...md.matchAll(/`([a-z]+(?:_[a-z]+)+)`/g)].map((m) => m[1]!))];
       expect(names.length).toBeGreaterThan(15);
-      expect(names.filter((n) => !TOOL_BY_NAME.has(n)), `unknown tool names in ${lang} chapter`).toEqual([]);
+      const PARAMS = new Set(["download_url", "file_id", "mime_type", "file_name"]);   // argument names that are written in backticks too
+      expect(names.filter((n) => !TOOL_BY_NAME.has(n) && !PARAMS.has(n)), `unknown tool names in ${lang} chapter`).toEqual([]);
     }
   });
   it("the same holds for tool names used in the AI guide text", () => {

@@ -100,7 +100,10 @@ describe("import_attached_files (ChatGPT attachments)", () => {
     const list = (await (async () => (await j<any>(await rpc(write, { jsonrpc: "2.0", id: 1, method: "tools/list" }))).result.tools)()) as any[];
     const t = list.find((x) => x.name === "import_attached_files");
     expect(t._meta["openai/fileParams"]).toEqual(["files"]);
-    const item = t.inputSchema.properties.body.properties.files.items;
+    // ChatGPT only resolves TOP-LEVEL arguments listed in openai/fileParams: `files` must not be nested in a `body` wrapper
+    expect(t.inputSchema.properties.body).toBeUndefined(); expect(t.inputSchema.properties.files.type).toBe("array");
+    expect(t.inputSchema.required).toEqual(expect.arrayContaining(["kind", "files"]));
+    const item = t.inputSchema.properties.files.items;
     expect(Object.keys(item.properties).sort()).toEqual(["download_url", "file_id", "file_name", "mime_type"]);
     expect(item.required.sort()).toEqual(["download_url", "file_id"]);
     expect(list.filter((x) => x._meta).map((x) => x.name)).toEqual(["import_attached_files"]);
@@ -110,9 +113,9 @@ describe("import_attached_files (ChatGPT attachments)", () => {
     fetchMock.get("https://files.example.com").intercept({ path: "/a.png" }).reply(200, Buffer.from(png(1600, 2000, 90_000)));
     fetchMock.get("https://files.example.com").intercept({ path: "/b.png" }).reply(200, Buffer.from(png(1600, 2000, 60_000)));
     fetchMock.get("https://files.example.com").intercept({ path: "/gone.png" }).reply(404, "nope");
-    const r = data(await tool("import_attached_files", { body: { kind: "product", productId: product.id, alt: "Eklenen", files: [
+    const r = data(await tool("import_attached_files", { kind: "product", productId: product.id, alt: "Eklenen", files: [
       { download_url: "https://files.example.com/a.png", file_id: "f1", file_name: "a.png" }, { download_url: "https://files.example.com/gone.png", file_id: "f2" }, { download_url: "https://files.example.com/b.png", file_id: "f3", mime_type: "image/png" },
-    ] } }));
+    ] }));
     expect(r).toMatchObject({ imported: 2, failed: 1 });
     expect(r.items.map((i: any) => i.ok)).toEqual([true, false, true]); for (const i of r.items.filter((x: any) => x.ok)) keep(i);
     expect(r.product.images).toHaveLength(2); expect(r.product.images.map((i: any) => i.alt)).toEqual(["Eklenen", "Eklenen"]);
@@ -120,12 +123,26 @@ describe("import_attached_files (ChatGPT attachments)", () => {
   });
   it("without productId it only imports; private hosts and bad input are refused", async () => {
     fetchMock.get("https://files.example.com").intercept({ path: "/c.png" }).reply(200, Buffer.from(png(512, 512)));
-    const ok = data(await tool("import_attached_files", { body: { kind: "favicon", files: [{ download_url: "https://files.example.com/c.png", file_id: "f" }] } }));
+    const ok = data(await tool("import_attached_files", { kind: "favicon", files: [{ download_url: "https://files.example.com/c.png", file_id: "f" }] }));
     expect(ok.imported).toBe(1); expect(ok.product).toBeUndefined(); keep(ok.items[0]);
-    const bad = data(await tool("import_attached_files", { body: { kind: "product", files: [{ download_url: "https://127.0.0.1/a.png", file_id: "x" }] } }));
+    const bad = data(await tool("import_attached_files", { kind: "product", files: [{ download_url: "https://127.0.0.1/a.png", file_id: "x" }] }));
     expect(bad).toMatchObject({ imported: 0, failed: 1 }); expect(bad.items[0].error.code).toBe("invalid_url");
-    expect((await tool("import_attached_files", { body: { kind: "product", files: [] } })).isError).toBe(true);
-    expect((await tool("import_attached_files", { body: { kind: "product", files: [{ download_url: "https://files.example.com/x.png", file_id: "f" }], productId: "ghost" } })).isError).toBeFalsy();
+    expect((await tool("import_attached_files", { kind: "product", files: [] })).isError).toBe(true);
+    expect((await tool("import_attached_files", { kind: "product", files: [{ download_url: "https://files.example.com/x.png", file_id: "f" }], productId: "ghost" })).isError).toBeFalsy();
+  });
+});
+
+describe("import_attached_files when the app sends no download link (the real ChatGPT report)", () => {
+  it("an empty download_url is a clear per-file error, not a cryptic 400, and nothing is fetched", async () => {
+    const r = data(await tool("import_attached_files", { kind: "banner", alt: "Slider", files: [{ file_id: "file_000000009c9081f485f8e807f2c0b381", download_url: "" }] }));
+    expect(r).toMatchObject({ imported: 0, failed: 1 });
+    expect(r.items[0].error.code).toBe("no_download_url");
+    expect(r.items[0].error.message).toMatch(/Katalog → Medya/); expect(r.items[0].error.message).toMatch(/do not retry/i);
+  });
+  it("a good file next to a link-less one still imports", async () => {
+    fetchMock.get("https://files.example.com").intercept({ path: "/ok.png" }).reply(200, Buffer.from(png(1600, 2000, 500)));
+    const r = data(await tool("import_attached_files", { kind: "product", files: [{ file_id: "f1", download_url: "" }, { file_id: "f2", download_url: "https://files.example.com/ok.png" }] }));
+    expect(r).toMatchObject({ imported: 1, failed: 1 }); keep(r.items[1]);
   });
 });
 

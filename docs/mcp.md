@@ -49,7 +49,7 @@ Chat clients cut long tool arguments, so a big base64 string arrives truncated (
 | The AI has | Use | Cost |
 |---|---|---|
 | a public https link (generated image URL, CDN, Google Drive / Dropbox share link) | `add_product_images` / `set_store_image` with `url` (imports **and** attaches in one call); `upload_media_from_url` takes up to 10 links | a few tokens, full size |
-| files the person **attached to the chat in ChatGPT** | **`import_attached_files`** (ChatGPT passes download links via `_meta["openai/fileParams"]`; with `productId` it also attaches them) | no bytes in the conversation |
+| files the person **attached to the chat in ChatGPT** | **`import_attached_files`** (ChatGPT passes download links via `_meta["openai/fileParams"]`; `files` is a top-level argument because ChatGPT only resolves top-level file parameters; with `productId` it also attaches them; a file without a download link gets a clear `no_download_url` error) | no bytes in the conversation |
 | image files in its **own code sandbox** but not the MCP token (chat apps with code execution) | **`create_upload_link`** → single-use tickets → `curl -X PUT -H "X-Upload-Ticket: …" --data-binary @file …/mcp/upload`, then attach by `mediaId` | no bytes in the conversation |
 | a shell where it holds the token (Claude Code, Codex, Cursor, scripts) | `curl` to **`POST /mcp/upload`** with `Authorization: Bearer` | no bytes in the conversation |
 | only a chat window | the human drops the files on **Katalog → Medya**; the AI calls `list_media` and attaches the ids | one human step |

@@ -40,7 +40,7 @@ Sohbet istemcileri uzun araç argümanlarını keser; büyük bir base64 metni e
 | Yapay zekâda olan | Kullanılacak | Maliyet |
 |---|---|---|
 | herkese açık https bağlantısı (üretilmiş görsel URL'si, CDN, Google Drive / Dropbox paylaşım bağlantısı) | `url` ile `add_product_images` / `set_store_image` (içe aktarır **ve** bağlar, tek çağrıda); `upload_media_from_url` tek çağrıda 10 bağlantı alır | birkaç token, tam boyut |
-| kişinin **ChatGPT sohbetine eklediği** dosyalar | **`import_attached_files`** (ChatGPT indirme bağlantılarını `_meta["openai/fileParams"]` ile verir; `productId` ile ürüne de bağlar) | konuşmada dosya baytı yok |
+| kişinin **ChatGPT sohbetine eklediği** dosyalar | **`import_attached_files`** (ChatGPT indirme bağlantılarını `_meta["openai/fileParams"]` ile verir; `files` en üst düzey argümandır çünkü ChatGPT yalnızca en üst düzey dosya parametrelerini çözer; `productId` ile ürüne de bağlar; indirme bağlantısı olmayan dosya için açık bir `no_download_url` hatası döner) | konuşmada dosya baytı yok |
 | **kendi kod ortamında (sandbox)** görsel dosyaları var ama MCP anahtarı yok (kod çalıştıran sohbet uygulamaları) | **`create_upload_link`** → tek kullanımlık biletler → `curl -X PUT -H "X-Upload-Ticket: …" --data-binary @dosya …/mcp/upload`, sonra `mediaId` ile bağlama | konuşmada dosya baytı yok |
 | anahtarın elinde olduğu kabuk (Claude Code, Codex, Cursor, betikler) | `Authorization: Bearer` ile **`POST /mcp/upload`** adresine `curl` | konuşmada dosya baytı yok |
 | yalnızca sohbet penceresi | insan dosyaları **Katalog → Medya** sayfasına bırakır; yapay zekâ `list_media` ile bulup kimlikleri bağlar | tek insan adımı |
