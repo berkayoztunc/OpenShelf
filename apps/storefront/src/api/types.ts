@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { BrandingSettings, GeneralSettings, CheckoutSettings, SeoSettings, TrackingSettings, OrderStatus } from "@openshelf/shared";
+import type { BrandingSettings, GeneralSettings, CheckoutSettings, SeoSettings, TrackingSettings, MenuSettings, OrderStatus, SortKey } from "@openshelf/shared";
 
 /** Response shapes for the frozen API contract (docs/api-contract.md). Fields marked "assumed" go beyond the doc. */
 
@@ -16,6 +16,10 @@ export interface StoreConfig {
   seo: z.infer<typeof SeoSettings> & { defaultOgUrl?: string | null }; // defaultOgUrl assumed
   checkout: z.infer<typeof CheckoutSettings>;
   tracking: z.infer<typeof TrackingSettings>;
+  /** Top menu definition (see lib/menu.ts). Absent on older APIs = automatic menu. */
+  menu?: z.infer<typeof MenuSettings>;
+  /** Storefront ordering: default sort chosen by the merchant. */
+  merchandising?: { defaultSort: SortKey; pinnedCount: number };
   /** "titles only": either a string title or `{ title }` per legal key. Empty = page not available. */
   legal: Partial<Record<LegalKey, string | { title?: string }>>;
   locales?: Locale[];

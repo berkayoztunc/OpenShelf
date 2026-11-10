@@ -5,7 +5,7 @@ import type { SQL } from "drizzle-orm";
 import { cartItems, carts, categories, coupons, customerConsents, customers, marketingEvents, orderItems, orders, payments, products, productVariants, shipments, utmAttributions } from "@openshelf/db";
 import { attachReservations, CouponError, evaluateCoupon, InsufficientStockError, InvalidTransitionError, priceItems, releaseReservationIds, reserveStock, transitionOrder, type PricedCart } from "@openshelf/core";
 import type { ServerEventSink } from "@openshelf/integration-sdk";
-import { CartCouponBody, CartItemBody, CheckoutBody, ConsentBody, EVENT_NAMES, META_EVENT_MAP, TrackBody } from "@openshelf/shared";
+import { CartCouponBody, CartItemBody, CheckoutBody, ConsentBody, EVENT_NAMES, META_EVENT_MAP, SORT_KEYS, TrackBody, type SortKey } from "@openshelf/shared";
 import type { AppEnv, Db } from "../env";
 import { ApiError, body, likeEscape, notFound, paged, paging } from "../lib/http";
 import { enforceRateLimit, verifyTurnstile } from "../middleware/security";
@@ -40,6 +40,10 @@ store.get("/categories", async (c) => {
 });
 
 // ---------- products ----------
+/** Sellable units across active variants (total - reserved - safety stock, never negative per variant). */
+const availableSql = sql`COALESCE((SELECT SUM(MAX(0, i.total - i.reserved - i.safety_stock)) FROM inventory i JOIN product_variants v ON v.id = i.variant_id WHERE v.product_id = products.id AND v.active = 1), 0)`;
+/** Units sold since `sinceUnix` in orders that are paid or beyond. */
+const soldSql = (sinceUnix: number) => sql`COALESCE((SELECT SUM(oi.quantity) FROM order_items oi JOIN product_variants v ON v.id = oi.variant_id JOIN orders o ON o.id = oi.order_id WHERE v.product_id = products.id AND o.created_at >= ${sinceUnix} AND o.status IN ('paid','fulfilling','shipped','delivered')), 0)`;
 const minPriceSql = sql`(SELECT MIN(cp.price) FROM channel_prices cp JOIN product_variants v ON v.id = cp.variant_id WHERE v.product_id = products.id AND v.active = 1 AND cp.channel = 'website')`;
 
 async function localeOf(c: Context<AppEnv>) {
@@ -73,10 +77,19 @@ store.get("/products", async (c) => {
   }
   const q = c.req.query("q")?.trim();
   if (q) { const l = `%${likeEscape(q.slice(0, 80))}%`; conds.push(sql`(${products.nameTr} LIKE ${l} ESCAPE '\\' OR ${products.nameEn} LIKE ${l} ESCAPE '\\' OR ${products.brand} LIKE ${l} ESCAPE '\\')`); }
-  const sort = c.req.query("sort");
-  const order = sort === "price_asc" ? sql`${minPriceSql} ASC` : sort === "price_desc" ? sql`${minPriceSql} DESC` : sort === "name" ? asc(products.nameTr) : desc(products.createdAt);
+  const merch = await getSettings(db, "merchandising");
+  const sortParam = c.req.query("sort");
+  const sort: SortKey = (SORT_KEYS as readonly string[]).includes(sortParam ?? "") ? (sortParam as SortKey) : merch.defaultSort;
+  const order: SQL[] = [];
+  if (merch.inStockFirst) order.push(sql`(${availableSql} > 0) DESC`);
+  if (sort === "featured" && merch.pinned.length) order.push(sql`CASE ${products.id} ${sql.join(merch.pinned.map((id, i) => sql`WHEN ${id} THEN ${i}`), sql` `)} ELSE ${merch.pinned.length} END ASC`);
+  if (sort === "bestselling") order.push(sql`${soldSql(Math.floor(Date.now() / 1000) - merch.bestsellerDays * 86400)} DESC`);
+  if (sort === "price_asc") order.push(sql`${minPriceSql} ASC`);
+  if (sort === "price_desc") order.push(sql`${minPriceSql} DESC`);
+  if (sort === "name") order.push(sql`${products.nameTr} COLLATE NOCASE ASC`);
+  order.push(desc(products.createdAt), asc(products.id));
   const where = and(...conds);
-  const rows = await db.select().from(products).where(where).orderBy(order).limit(p.pageSize).offset(p.offset);
+  const rows = await db.select().from(products).where(where).orderBy(...order).limit(p.pageSize).offset(p.offset);
   const [t] = await db.select({ n: sql<number>`count(*)` }).from(products).where(where);
   cacheable(c, 30);
   return c.json(paged((await hydrateProducts(db, rows)).map((x) => shape(x, locale, false, cx)), t?.n ?? 0, p));

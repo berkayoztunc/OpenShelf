@@ -56,11 +56,11 @@ export const TOOLS: ToolDef[] = [
   t({ name: "order_notifications", title: "Order notifications", level: "read", method: "GET", path: "/orders/:id/notifications", shape: { id: id("order") }, description: "E-mail/SMS notifications sent for an order and their status." }),
   t({ name: "list_customers", title: "List customers", level: "read", method: "GET", path: "/customers", query: ["q", "page", "pageSize"], shape: { q: q("search name/e-mail"), ...page }, description: `List customers. ${SENSITIVE}` }),
   t({ name: "get_customer", title: "Get customer", level: "read", method: "GET", path: "/customers/:id", shape: { id: id("customer") }, description: `Customer with addresses and orders. ${SENSITIVE}` }),
-  t({ name: "list_products", title: "List products", level: "read", method: "GET", path: "/products", query: ["q", "status", "category", "stock", "image", "channel", "sort", "page", "pageSize"],
+  t({ name: "list_products", title: "List products", level: "read", method: "GET", path: "/products", query: ["q", "status", "category", "stock", "image", "channel", "sort", "ids", "page", "pageSize"],
     shape: {
       q: q("search name/slug/brand/sku/barcode"), status: q("draft|active|archived"), category: q("category id, or none for uncategorised"),
       stock: q("out (sold out) | low (1-5 available) | in (more than 5)"), image: q("none = products without any image"), channel: q("trendyol = listed on Trendyol, website_only"),
-      sort: q("newest|oldest|updated|name|name-desc|price|price-desc|stock|stock-desc"), ...page,
+      sort: q("newest|oldest|updated|name|name-desc|price|price-desc|stock|stock-desc"), ids: q("comma-separated product ids (max 100)"), ...page,
     }, description: "List products with variants, stock, category name and whether they are mapped to Trendyol." }),
   t({ name: "get_product", title: "Get product", level: "read", method: "GET", path: "/products/:id", shape: { id: id("product") }, description: "Full product: variants (sku, barcode, prices per channel in minor units, stock), images, SEO." }),
   t({ name: "list_categories", title: "List categories", level: "read", method: "GET", path: "/categories", shape: {}, description: "All categories (tree via parentId)." }),

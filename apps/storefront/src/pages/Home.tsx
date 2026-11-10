@@ -16,7 +16,7 @@ export default function Home() {
   const { config } = useConfig();
   const cats = useQuery({ queryKey: ["categories"], queryFn: api.categories });
   // One wider fetch feeds the featured grid, the hero collage and the category cover images.
-  const featured = useQuery({ queryKey: ["products", "home", 24], queryFn: () => api.products({ sort: "newest", pageSize: 24 }) });
+  const featured = useQuery({ queryKey: ["products", "home", 24, config.merchandising?.defaultSort], queryFn: () => api.products({ pageSize: 24 }) });
   useHead({
     title: pageTitle(config), description: homeDescription(config), image: absUrl(config.seo.defaultOgUrl), url: `${location.origin}/`, ...siteHead(config),
     jsonLd: jsonLdEnabled(config) ? [

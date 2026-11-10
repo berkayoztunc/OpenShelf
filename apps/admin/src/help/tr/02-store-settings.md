@@ -262,6 +262,31 @@ Test gönderimi saatte yönetici başına 5, bağlantı adresi başına 10 ile s
 - **Ülke izin listesine yabancı numara eklemeden SMS beklemek.**
 - **Gönderilen bildirimleri izlemek için** ilgili siparişin sayfasındaki **Bildirimler** kartına bakın; her kanal için Gönderildi/Başarısız/Atlandı durumunu görürsünüz.
 
+## Menü
+
+Vitrinin üst menüsünü bu sekmeden yönetirsiniz.
+
+- **Otomatik menü** açıkken menüde “Tüm ürünler” ve ilk 4 ana kategori görünür. Kategorilerin sırası değişmez.
+- Kapattığınızda kendi menünüzü kurarsınız: kategori ve **özel bağlantı** ekleyebilir, ok düğmeleriyle sıralayabilir, her öğenin adını değiştirebilirsiniz (isteğe bağlı İngilizce ad da girilebilir). En fazla 12 öğe eklenir.
+- **Alt kategorileri açılır menüde göster** seçeneği açıkken, üzerine gelinen kategorinin alt kategorileri bir liste olarak açılır. Telefonda alt kategoriler üst kategorinin yanında sırayla görünür.
+- Özel bağlantı için sitenin içinde `/` ile başlayan bir yol (örn. `/page/kampanyalar`) ya da `https://` ile başlayan tam adres girin. `javascript:` gibi adresler kabul edilmez. Harici adresi yeni sekmede açabilirsiniz.
+- Silinen ya da pasife alınan bir kategori menüde gösterilmez; ayarlarda “Vitrinde gösterilmez” rozeti görürsünüz.
+
+Değişiklik kaydedildikten sonra vitrine yansıması yaklaşık bir dakika sürebilir.
+
+## Vitrin sıralaması
+
+Ürünlerin vitrinde (ana sayfa ve ürün listeleri) hangi sırayla görüneceğini belirler.
+
+- **Varsayılan sıralama:** Müşteri bir sıralama seçmediğinde kullanılır. Seçenekler: Önerilen, En yeniler, Çok satanlar, Fiyat (artan/azalan), Ada göre.
+- **Önerilen:** Sabitlediğiniz ürünler sırayla en başta, ardından diğerleri en yeniden eskiye doğru gelir. Müşteri de listedeki sıralama menüsünden “Önerilen”i seçebilir.
+- **Çok satanlar:** Seçtiğiniz gün aralığında (7–365) en çok adet satılan ürünler önce gelir. Yalnızca ödenmiş ve sonrası siparişler sayılır; bekleyen ve iptal edilenler sayılmaz.
+- **Tükenen ürünler en sonda:** Açıkken her sıralamada stoğu olan ürünler önce, tükenenler en sona gelir.
+- **Sabitlenen ürünler:** Ürünü arayıp **Sabitle**ye basın; ok düğmeleriyle sırayı, çift ok düğmesiyle en başa alma işlemini yapın. En fazla 60 ürün sabitlenebilir. Sabitlenenler yalnızca “Önerilen” sıralamada kullanılır.
+
+> [!NOTE]
+> Ada göre sıralama Türkçe harflere (Ç, Ö, Ş, Ü…) duyarlı değildir; bu harflerle başlayan ürünler listenin sonuna düşebilir.
+
 ## Sistem
 
 ![Sistem sekmesi](help/tr/settings-system.png)

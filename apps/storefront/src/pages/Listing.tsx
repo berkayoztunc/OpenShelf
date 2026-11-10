@@ -12,7 +12,7 @@ import { useConfig } from "../store/ConfigContext";
 import { getConsent, onConsentChange, track } from "../tracking";
 
 const PAGE_SIZE = 12;
-const SORTS = ["newest", "price_asc", "price_desc"] as const;
+const SORTS = ["featured", "newest", "bestselling", "price_asc", "price_desc"] as const;
 
 export default function Listing() {
   const { t } = useI18n();
@@ -20,7 +20,9 @@ export default function Listing() {
   const { slug } = useParams();
   const [sp, setSp] = useSearchParams();
   const q = sp.get("q") ?? "";
-  const sort = sp.get("sort") ?? "newest";
+  const defSort = config.merchandising?.defaultSort ?? "newest";
+  const picked = sp.get("sort");
+  const sort = picked && (SORTS as readonly string[]).includes(picked) ? picked : (SORTS as readonly string[]).includes(defSort) ? defSort : "newest";
   const page = Math.max(1, Number(sp.get("page")) || 1);
   const category = slug ?? sp.get("category") ?? undefined;
 
@@ -33,7 +35,7 @@ export default function Listing() {
   const activeCat = cats.data?.find((c) => c.slug === category);
   const heading = q ? t("list.searchTitle", { q }) : activeCat?.name ?? t("list.title");
   const seo = activeCat?.seo ?? res.data?.seo;
-  const sorted = sp.has("sort") && sort !== "newest";
+  const sorted = sp.has("sort") && sort !== defSort;
   const filtered = !!q || sorted || sp.has("sort");
   // Canonical: clean path (+ ?page=n for pagination); `?category=` on /products canonicalises to /category/:slug.
   const basePath = slug ? `/category/${slug}` : category && activeCat ? `/category/${category}` : "/products";
@@ -101,7 +103,7 @@ export default function Listing() {
           </nav>
           <div className="flex items-center gap-3">
             <label className="sr-only" htmlFor="sort">{t("list.sort")}</label>
-            <select id="sort" className="field !w-auto cursor-pointer !rounded-full !pr-8" value={SORTS.includes(sort as never) ? sort : "newest"} onChange={(e) => update({ sort: e.target.value === "newest" ? undefined : e.target.value })}>
+            <select id="sort" className="field !w-auto cursor-pointer !rounded-full !pr-8" value={sort} onChange={(e) => update({ sort: e.target.value === defSort ? undefined : e.target.value })}>
               {SORTS.map((s) => <option key={s} value={s}>{t(`sort.${s}`)}</option>)}
             </select>
           </div>

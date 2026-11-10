@@ -87,6 +87,8 @@ adminCatalog.get("/products", requireRole("staff"), async (c) => {
   if (channel && !["trendyol", "website_only"].includes(channel)) throw new ApiError(400, "validation_error", "Unknown channel filter");
   if (!(sort in SORTS)) throw new ApiError(400, "validation_error", "Unknown sort");
   const conds = [];
+  const idList = c.req.query("ids")?.split(",").map((x) => x.trim()).filter(Boolean).slice(0, 100);
+  if (idList?.length) conds.push(inArray(products.id, idList));
   if (q) { const l = `%${likeEscape(q)}%`; conds.push(or(sql`${products.nameTr} LIKE ${l} ESCAPE '\\'`, sql`${products.slug} LIKE ${l} ESCAPE '\\'`, sql`${products.brand} LIKE ${l} ESCAPE '\\'`, sql`${products.id} IN (SELECT product_id FROM product_variants WHERE sku LIKE ${l} ESCAPE '\\' OR barcode LIKE ${l} ESCAPE '\\')`)); }
   if (status) conds.push(eq(products.status, status));
   if (category === "none") conds.push(sql`${products.categoryId} IS NULL`); else if (category) conds.push(eq(products.categoryId, category));

@@ -262,6 +262,31 @@ Test sending is limited to 5 per admin per hour and 10 per connecting address. I
 - **Expecting SMS to a foreign number without adding it to the country allow list.**
 - **To monitor sent notifications,** look at the **Notifications** card on the relevant order's page; you will see the Sent/Failed/Skipped status for each channel.
 
+## Menu {#menu}
+
+You manage the storefront's top menu on this tab.
+
+- While **Automatic menu** is on, the menu shows “All products” and the first 4 top-level categories. The category order cannot be changed.
+- Turn it off to build your own menu: add categories and **custom links**, reorder them with the arrow buttons and rename each item (an optional English name can be entered too). Up to 12 items.
+- With **Show sub-categories in a dropdown** on, hovering over a category opens a list of its sub-categories. On phones the sub-categories follow their parent in the row.
+- For a custom link enter a path on your site starting with `/` (e.g. `/page/sales`) or a full address starting with `https://`. Addresses such as `javascript:` are rejected. External addresses can open in a new tab.
+- A deleted or deactivated category is not shown in the menu; the settings show a “Hidden on the storefront” badge.
+
+After saving, the storefront may take about a minute to reflect the change.
+
+## Product order {#vitrin-siralamasi}
+
+Controls the order in which products appear on the storefront (home page and product lists).
+
+- **Default order:** used when the customer has not chosen one. Options: Recommended, Newest, Best sellers, Price (low/high), By name.
+- **Recommended:** the products you pin come first, in order, then the rest from newest to oldest. Customers can also pick “Recommended” from the sort menu.
+- **Best sellers:** products with the most units sold in the period you choose (7–365 days) come first. Only paid orders and later count; pending and cancelled ones do not.
+- **Show sold-out products last:** when on, products in stock come first in every order and sold-out ones go to the end.
+- **Pinned products:** search for a product and press **Pin**; use the arrows to reorder and the double arrow to move one to the top. Up to 60 products. Pinned products are only used in the “Recommended” order.
+
+> [!NOTE]
+> Sorting by name is not aware of Turkish letters (Ç, Ö, Ş, Ü…); names starting with them may end up at the end of the list.
+
 ## System {#sistem}
 
 ![System tab](help/en/settings-system.png)

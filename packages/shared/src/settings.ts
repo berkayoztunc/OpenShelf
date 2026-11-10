@@ -108,13 +108,48 @@ export const NotificationSettings = z.object({
   templates: z.object({ tr: z.record(z.string(), Template).default({}), en: z.record(z.string(), Template).default({}) }).default({}),
 });
 
+
+/** Storefront top menu. `auto` keeps the default (Products + first 4 top-level categories); otherwise `items` is the menu. */
+const menuUrl = z.string().max(300).refine((v) => v === "" || /^\/(?!\/)/.test(v) || /^https:\/\/[^\s]+$/i.test(v), "Use a path starting with / or an https:// address");
+export const MenuItem = z.object({
+  id: z.string().min(1).max(40),
+  type: z.enum(["category", "link"]),
+  categoryId: z.string().max(60).nullable().default(null),
+  /** Link text. Required for links; for categories it overrides the category name when set. */
+  label: z.string().max(40).default(""),
+  labelEn: z.string().max(40).default(""),
+  url: menuUrl.default(""),
+  newTab: z.boolean().default(false),
+  /** Categories only: show sub-categories in a dropdown. */
+  showChildren: z.boolean().default(true),
+}).refine((i) => (i.type === "category" ? !!i.categoryId : !!i.url && !!i.label.trim()), { message: "A category item needs a category; a link needs a label and an address", path: ["label"] });
+export const MenuSettings = z.object({
+  auto: z.boolean().default(true),
+  showProductsLink: z.boolean().default(true),
+  items: z.array(MenuItem).max(12).default([]),
+});
+
+/** How products are ordered on the storefront (list pages and the home page). */
+export const SORT_KEYS = ["featured", "newest", "bestselling", "price_asc", "price_desc", "name"] as const;
+export type SortKey = (typeof SORT_KEYS)[number];
+export const MerchandisingSettings = z.object({
+  /** Order used when the customer has not picked one. "featured" = pinned products first, then newest. */
+  defaultSort: z.enum(SORT_KEYS).default("newest"),
+  /** Product ids pinned to the top for the "featured" order, in this order. */
+  pinned: z.array(z.string().min(1).max(60)).max(60).default([]).transform((a) => [...new Set(a)]),
+  /** Sold-out products always go last, whatever the order. */
+  inStockFirst: z.boolean().default(false),
+  /** Look-back window for the "bestselling" order. */
+  bestsellerDays: z.number().int().min(7).max(365).default(30),
+});
+
 export const SETTING_GROUPS = {
   general: GeneralSettings, branding: BrandingSettings, seo: SeoSettings,
   legal: LegalSettings, checkout: CheckoutSettings, tracking: TrackingSettings,
-  system: SystemSettings, notifications: NotificationSettings,
+  system: SystemSettings, notifications: NotificationSettings, menu: MenuSettings, merchandising: MerchandisingSettings,
 } as const;
 export type SettingGroup = keyof typeof SETTING_GROUPS;
 export type SettingsOf<G extends SettingGroup> = z.infer<(typeof SETTING_GROUPS)[G]>;
 
 /** Subset safe to expose to storefront. */
-export const PUBLIC_GROUPS: SettingGroup[] = ["general", "branding", "seo", "checkout", "tracking"];
+export const PUBLIC_GROUPS: SettingGroup[] = ["general", "branding", "seo", "checkout", "tracking", "menu", "merchandising"];

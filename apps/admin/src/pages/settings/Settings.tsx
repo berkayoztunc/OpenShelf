@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import { NavLink, Navigate, useParams } from "react-router-dom";
-import { Activity, Bell, KeyRound, Palette, Scale, Search, Server, ShoppingCart, Store } from "lucide-react";
+import { Activity, ArrowUpDown, Bell, KeyRound, Menu as MenuIcon, Palette, Scale, Search, Server, ShoppingCart, Store } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Loading, PageHeader } from "../../components/ui";
 import { useT } from "../../i18n";
@@ -11,12 +11,15 @@ const Seo = lazy(() => import("./Seo"));
 const Legal = lazy(() => import("./Legal"));
 const Checkout = lazy(() => import("./Checkout"));
 const Tracking = lazy(() => import("./Tracking"));
+const Menu = lazy(() => import("./Menu"));
+const Merchandising = lazy(() => import("./Merchandising"));
 const Notifications = lazy(() => import("./Notifications"));
 const System = lazy(() => import("./System"));
 const ApiTokens = lazy(() => import("./ApiTokens"));
 
 const TABS = [
   { id: "general", C: General, guide: "genel" }, { id: "branding", C: Branding, guide: "marka" },
+  { id: "menu", C: Menu, guide: "menu" }, { id: "merchandising", C: Merchandising, guide: "vitrin-siralamasi" },
   { id: "seo", C: Seo, guide: "seo-ayarlari" }, { id: "legal", C: Legal, guide: "yasal-metinler" },
   { id: "checkout", C: Checkout, guide: "odeme-ve-siparis" }, { id: "tracking", C: Tracking, guide: "takip-ve-reklam" },
   { id: "notifications", C: Notifications, guide: "bildirimler" },
@@ -24,7 +27,7 @@ const TABS = [
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
-const ICONS: Record<TabId, LucideIcon> = { general: Store, branding: Palette, seo: Search, legal: Scale, checkout: ShoppingCart, tracking: Activity, notifications: Bell, system: Server, mcp: KeyRound };
+const ICONS: Record<TabId, LucideIcon> = { general: Store, branding: Palette, menu: MenuIcon, merchandising: ArrowUpDown, seo: Search, legal: Scale, checkout: ShoppingCart, tracking: Activity, notifications: Bell, system: Server, mcp: KeyRound };
 
 export default function Settings() {
   const { tab } = useParams();

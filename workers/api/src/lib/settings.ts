@@ -49,6 +49,8 @@ export async function publicConfig(db: Db) {
     checkout: { guestCheckout: s.checkout.guestCheckout, freeShippingThreshold: s.checkout.freeShippingThreshold, flatShippingFee: s.checkout.flatShippingFee },
     tracking: { ga4MeasurementId: tracking.ga4MeasurementId, gtmContainerId: tracking.gtmContainerId, metaPixelId: tracking.metaPixelId, consentRequired: tracking.consentRequired },
     legal,
+    menu: s.menu,
+    merchandising: { defaultSort: s.merchandising.defaultSort, pinnedCount: s.merchandising.pinned.length },
     locales: { default: s.general.defaultLocale, available: s.general.locales },
     mockMode: s.system.mockMode === true,
   };
