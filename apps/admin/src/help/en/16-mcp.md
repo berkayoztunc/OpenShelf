@@ -34,7 +34,7 @@ When an assistant connects it reads two things: the **store guide** (units, chan
 - **Products:** `list_products` (stock, channel and no-image filters; price, stock and sales sorting), `update_variant_price`, `bulk_update_products` (status, category, percentage price), `adjust_stock`, `add_product_images`.
 - **Storefront:** `update_menu` (top menu), `update_merchandising` (product order, pinned products), `update_homepage` (home page products).
 - **Settings and SEO:** store profile, branding, SEO, legal pages, checkout rules, tracking, notifications; `seo_audit` and per-product/category SEO tools.
-- **Files and images:** `upload_help`, `upload_media_from_url`, `set_store_image`, `view_image`, `list_media`, `update_media_alt` (see below).
+- **Files and images:** `upload_help`, `upload_media_from_url`, `create_upload_link`, `import_attached_files`, `set_store_image`, `view_image`, `list_media`, `update_media_alt` (see below).
 - **Messages and campaigns:** e-mail/SMS sending and campaign drafts (preview and test first, send after approval).
 - **Guide:** `help_topics`, `help_search`, `help_read` and the `openshelf://help/<chapter>` resources.
 - **Integrations:** the Trendyol and Geliver consoles, integration events and background jobs.
@@ -43,12 +43,19 @@ When an assistant connects it reads two things: the **store guide** (units, chan
 
 ## Uploading files and images {#dosya-ve-gorsel-yukleme}
 
-Chat apps cut long tool arguments, so a big base64 string arrives truncated and costs many tokens. The assistant picks a way based on what it has (the `upload_help` tool tells it):
+Chat apps cut long tool arguments, so a big base64 string arrives truncated and costs many tokens. The assistant picks the cheapest way based on **what it has** (the `upload_help` tool tells it):
 
 1. **A public link** (generated image URL, CDN, Google Drive/Dropbox share link): pass `url` to `add_product_images` or `set_store_image`; the image is imported **and** attached in one call. `upload_media_from_url` takes up to 10 links per call.
-2. **A shell** (Claude Code, Codex, Cursor): the file is sent to `POST /mcp/upload` with `curl`; the bytes never enter the conversation.
-3. **Only a chat:** you drop the files on **Katalog → Medya**; the assistant finds the newest with `list_media` and attaches them.
-4. **A tiny image (under ~20 KB, e.g. a favicon):** `upload_media` (base64). Anything larger is refused without being read.
+2. **Images you attached to the chat in ChatGPT:** `import_attached_files` downloads your attachments at original quality and, with `productId`, attaches them to the product in the same call. The bytes never enter the conversation.
+3. **Image files in the assistant's own code sandbox but no MCP token** (generated, or uploaded by you): `create_upload_link` returns single-use **tickets**; the assistant sends each file from its sandbox with `curl -X PUT` and the `X-Upload-Ticket` header. A ticket is valid for 10 minutes, uploads **one** image, fixes the image type and contains no token. Some apps limit the sandbox network to certain domains; if it cannot connect you must allow the store's domain once. An assistant that cannot connect does not loop, it moves on to way 5.
+4. **A shell where the assistant holds the token** (Claude Code, Codex, Cursor): the file is sent to `POST /mcp/upload` with `curl` and `Authorization: Bearer`.
+5. **None of those:** you drop the files on **Katalog → Medya**; the assistant finds the newest with `list_media` and attaches them.
+6. **A tiny image (under ~20 KB, e.g. a favicon):** `upload_media` (base64). Anything larger is refused without being read.
+
+```sh
+curl -sS -H "Authorization: Bearer $OPENSHELF_TOKEN" -F kind=product -F alt="Short description" -F file=@./photo.jpg https://YOUR-STORE/mcp/upload
+```
+`/mcp/upload` does the same validation as the admin upload (real file type, size limits, truncated images rejected) and is audited. It works with a token or a ticket; **without either nothing can be uploaded**. The owner can switch `upload_media` (token uploads) and `create_upload_link` (tickets) off separately under Settings → MCP → Tools. A ticket only uploads; it does not open the API or MCP.
 
 Adding a product image never needs the whole product: `add_product_images` appends, prepends or reorders the gallery. Use `set_store_image` for the logo, favicon, social share image and home banner. Every import returns **warnings** when the size does not fit (wrong aspect ratio, too small) so the assistant can regenerate the image.
 
@@ -74,4 +81,5 @@ The whole user guide is open to the assistant too:
 - **"This tool needs level write":** the token's level is too low. Create a new token with a higher level under Settings → MCP.
 - **"Tool disabled by the store owner":** turn that tool on under Settings → MCP → Tools (owner only).
 - **A big image is being sent as base64:** it is refused; point the assistant to `upload_help` or drop the file on Katalog → Medya.
+- **The assistant cannot upload from its code sandbox ("could not connect"):** the app may limit that environment's network. Allow the store's domain in the app's code-execution / network settings; if that is not possible drop the files on Katalog → Medya.
 - **A storefront change does not show at once:** storefront responses are cached for a short time; wait about a minute.

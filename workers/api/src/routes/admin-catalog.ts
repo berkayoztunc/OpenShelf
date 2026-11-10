@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { and, asc, desc, eq, inArray, like, notInArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { categories, channelPrices, media, slugRedirects, coupons, inventory, orderItems, productImages, productMappings, productVariants, products } from "@openshelf/db";
@@ -237,8 +238,9 @@ const ProductImagesBody = z.object({ images: z.array(ImageItem).min(1).max(10), 
  * and stored server-side as a product photo) or an image already on the product (imageId, to keep or reorder it in `replace` mode).
  * append/prepend skip images that are already on the product. Returns the final gallery plus fit warnings for new imports.
  */
-adminCatalog.post("/products/:id/images", requireRole("admin"), async (c) => {
-  const id = c.req.param("id"); const b = await body(c, ProductImagesBody); const db = c.get("db"); const adminId = c.get("admin")!.id;
+/** Shared by the product-images route and the attached-files import: add/replace images of one product without resending the product. */
+export async function applyProductImages(c: Context<AppEnv>, id: string, b: z.infer<typeof ProductImagesBody>, adminId: string) {
+  const db = c.get("db");
   const [prod] = await db.select({ id: products.id }).from(products).where(eq(products.id, id)).limit(1);
   if (!prod) throw notFound("Product");
   const current = await db.select().from(productImages).where(eq(productImages.productId, id)).orderBy(asc(productImages.position));
@@ -274,7 +276,11 @@ adminCatalog.post("/products/:id/images", requireRole("admin"), async (c) => {
   await db.update(products).set({ updatedAt: new Date() }).where(eq(products.id, id));
   await audit(c, "product.images", "product", id, { mode: b.mode, added: next.length, total: finalList.length });
   const rows = await db.select().from(productImages).where(eq(productImages.productId, id)).orderBy(asc(productImages.position));
-  return c.json({ productId: id, images: rows.map((r) => ({ id: r.id, mediaId: r.mediaId, url: r.mediaId ? `/media/${r.mediaId}` : r.url, alt: r.alt, position: r.position })), ...(warnings.length ? { warnings } : {}) });
+  return ({ productId: id, images: rows.map((r) => ({ id: r.id, mediaId: r.mediaId, url: r.mediaId ? `/media/${r.mediaId}` : r.url, alt: r.alt, position: r.position })), ...(warnings.length ? { warnings } : {}) });
+}
+adminCatalog.post("/products/:id/images", requireRole("admin"), async (c) => {
+  const b = await body(c, ProductImagesBody);
+  return c.json(await applyProductImages(c, c.req.param("id"), b, c.get("admin")!.id));
 });
 
 /** Inline price edit: website channel price (+ optional compare-at) of one variant. */

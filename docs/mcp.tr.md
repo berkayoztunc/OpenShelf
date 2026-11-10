@@ -28,25 +28,30 @@ Yapıştıracak anahtar yok: özel bir MCP sunucusu / bağlayıcı ekleyip `http
 
 ## Araç izinleri (owner)
 **Ayarlar → MCP / AI erişimi → Araçlar** her aracı gruplarıyla ve bir onay kutusuyla listeler. Bir aracın işaretini kaldırırsanız hiçbir AI istemcisi onu göremez veya çağıramaz; `full` anahtar olsa bile (araç yalnızca işaretliyse **ve** anahtarın seviyesi izin veriyorsa çalışır). Hazır ayarlar: yalnızca okuma araçları, `full` araçlar kapalı, hepsine izin ver. Ana şalter anahtarları silmeden tüm MCP erişimini kapatır. Yalnızca owner değiştirebilir; admin görüntüler; anahtar asla değiştiremez. Varsayılan: her şey açık.
+- **Yükleme biletleri** (`create_upload_link`): HMAC imzalı, 10 dakika geçerli, tek başarılı yükleme, görsel türü sabit, `X-Upload-Ticket` başlığında gönderilir (adrese asla yazılmaz), yalnızca `/mcp/upload` kabul eder; API ya da MCP kabul etmez; bileti üreten yönetici devre dışı bırakılınca geçersiz olur. Yüklenen dosyalar yönetim paneli yüklemesiyle aynı doğrulamadan geçer (gerçek tür, boyut sınırları, kesik görsel reddi). Sahip `create_upload_link` ve `upload_media` araçlarını ayrı ayrı kapatabilir. ChatGPT'de eklenen dosyalar (`import_attached_files`) ve bağlantılar (`upload_media_from_url`) sunucu tarafında SSRF korumasıyla indirilir (yalnızca herkese açık https adresleri, yönlendirmeler yeniden denetlenir, boyut sınırlı).
 
 ## Ayar ve SEO araçları
 - **Mağaza ayarları** (PATCH: yalnızca gönderdiğiniz alanlar değişir, iç içe nesneler birleşir, birleşmiş grup bütün olarak doğrulanır): `update_store_profile` (mağaza adı, slogan, iletişim, para birimi, vergi), `update_seo_settings`, `update_branding`, `update_legal_pages`, `update_checkout_settings`, `update_tracking_settings`, `update_notification_settings`; tek grup okumak için `get_settings_group`.
 - **SEO**: `seo_audit` (site geneli anahtarlar + her ürün/kategori eksiği: başlık/açıklama yok, noindex, alt metinsiz görsel, tekrar eden başlık), `update_product_seo` / `update_category_seo` (yalnızca arama ve sosyal alanlar), `seo_preview` (Google/sosyal ağların tam olarak ne göreceği).
 
 ### Görsel ve dosya yükleme
-Sohbet istemcileri uzun araç argümanlarını keser; büyük bir base64 metni eksik gelir (ve çok token harcar). Yapay zekâda ne varsa ona uygun yolu seçin; **`upload_help`** aracı hangisinin uygun olduğunu, gerçek adresle çalıştırılmaya hazır komutlarla birlikte söyler:
+Sohbet istemcileri uzun araç argümanlarını keser; büyük bir base64 metni eksik gelir (ve çok token harcar). Yapay zekâda **ne varsa** ona uygun yolu seçin; **`upload_help`** aracı hangisinin uygun olduğunu, gerçek adresle çalıştırılmaya hazır komutlarla söyler:
 
 | Yapay zekâda olan | Kullanılacak | Maliyet |
 |---|---|---|
 | herkese açık https bağlantısı (üretilmiş görsel URL'si, CDN, Google Drive / Dropbox paylaşım bağlantısı) | `url` ile `add_product_images` / `set_store_image` (içe aktarır **ve** bağlar, tek çağrıda); `upload_media_from_url` tek çağrıda 10 bağlantı alır | birkaç token, tam boyut |
-| kabuk (Claude Code, Codex, Cursor, betikler) | MCP anahtarıyla **`POST /mcp/upload`** adresine `curl` (multipart `file`, `kind`, `alt` ya da `?kind=` ile ham görsel gövdesi); sonra `mediaId` ile bağlama | konuşmada dosya baytı yok |
-| yalnızca sohbet penceresi | insan dosyaları yönetim panelinde **Katalog → Medya** sayfasına bırakır; yapay zekâ `list_media` ile bulup kimlikleri bağlar | tek insan adımı |
+| kişinin **ChatGPT sohbetine eklediği** dosyalar | **`import_attached_files`** (ChatGPT indirme bağlantılarını `_meta["openai/fileParams"]` ile verir; `productId` ile ürüne de bağlar) | konuşmada dosya baytı yok |
+| **kendi kod ortamında (sandbox)** görsel dosyaları var ama MCP anahtarı yok (kod çalıştıran sohbet uygulamaları) | **`create_upload_link`** → tek kullanımlık biletler → `curl -X PUT -H "X-Upload-Ticket: …" --data-binary @dosya …/mcp/upload`, sonra `mediaId` ile bağlama | konuşmada dosya baytı yok |
+| anahtarın elinde olduğu kabuk (Claude Code, Codex, Cursor, betikler) | `Authorization: Bearer` ile **`POST /mcp/upload`** adresine `curl` | konuşmada dosya baytı yok |
+| yalnızca sohbet penceresi | insan dosyaları **Katalog → Medya** sayfasına bırakır; yapay zekâ `list_media` ile bulup kimlikleri bağlar | tek insan adımı |
 | çok küçük görsel (< ~20 KB, örn. favicon) | `upload_media` (base64). Daha uzun veri okunmadan hemen reddedilir | son çare |
 
 ```sh
 curl -sS -H "Authorization: Bearer $OPENSHELF_TOKEN" -F kind=product -F alt="Kısa açıklama" -F file=@./foto.jpg https://MAGAZANIZ/mcp/upload
 ```
-`/mcp/upload`, `/mcp` ile aynı anahtarı, seviyeyi (write ve üstü) ve sahip anahtarlarını kullanır (kapatmak için Ayarlar → MCP'de `upload_media`'yı devre dışı bırakın); yönetim panelindeki yüklemeyle aynı doğrulamayı yapar (gerçek dosya türü, boyut sınırları, kesik görsel reddi) ve kayda geçer. **Herkese açık bir bağlantı değildir:** anahtarsız yükleme yapılamaz.
+**Biletler** (`create_upload_link`, `count` 1–10): her biri 10 dakika geçerlidir, **bir** görsel yükler (kesik dosyayla başarısız yükleme bileti harcamaz; 3 denemeden sonra durur), görsel türünü ve alt metni sabitler, `X-Upload-Ticket` başlığında gönderilir (adrese asla yazılmaz), anahtar içermez ve yalnızca `/mcp/upload` üzerinde çalışır: API'yi ya da MCP'yi açmaz. Bileti üreten yönetici devre dışı bırakılırsa bilet de geçersiz olur. Bazı sohbet uygulamaları kod ortamının ağını belirli alan adlarıyla sınırlar; `curl` bağlanamazsa kişinin mağaza alan adına bir kez izin vermesi gerekir. Yapay zekâya döngüye girmemesi, diğer yola geçmesi söylenir.
+
+`/mcp/upload`, yönetim paneli yüklemesiyle aynı doğrulamayı yapar (gerçek dosya türü, boyut sınırları, kesik görsel reddi) ve kayda geçer. Sahip, Ayarlar → MCP → Araçlar'dan `upload_media` (anahtarlı yükleme) ve `create_upload_link` (bilet) araçlarını ayrı ayrı kapatabilir.
 
 **Bağlamak** için tüm ürünü göndermek gerekmez: `add_product_images` (`append`, `prepend` ya da `replace` modu; öğeler `mediaId`, `url` veya üründe zaten olan görselin `imageId`'si) ve `set_store_image` (`logo`, `logo_dark`, `favicon`, `og` ya da `banner`). İçe aktarmalar `warnings` döndürür (yanlış oran, çok küçük), böylece yapay zekâ yeniden üretebilir. `update_media_alt` alt metni değiştirir.
 

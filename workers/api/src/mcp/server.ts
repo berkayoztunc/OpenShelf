@@ -10,6 +10,7 @@ import { GUIDE, GUIDE_URI, HELP_URI, PROMPTS } from "./guide";
 import { INTERNAL_HEADER, signInternal } from "./internal";
 import { LEVEL_RANK, TOOLS, TOOL_BY_NAME, inputSchema, type Level, type ToolDef } from "./tools";
 import { loadPolicy, type ToolPolicy } from "./policy";
+import { verifyTicket } from "../lib/tickets";
 import { helpRead, helpTopics, type HelpLang } from "../lib/help";
 import { getSettings } from "../lib/settings";
 import { R2_LIMIT } from "../lib/media";
@@ -55,6 +56,7 @@ const toolJson = (d: ToolDef) => {
   const { $schema: _s, ...schema } = zodToJsonSchema(inputSchema(d), { target: "jsonSchema7", $refStrategy: "none" }) as Record<string, unknown>;
   return {
     name: d.name, title: d.title, description: `[${d.level}] ${d.description}`, inputSchema: schema,
+    ...(d.fileParams ? { _meta: { "openai/fileParams": d.fileParams } } : {}),
     annotations: { title: d.title, readOnlyHint: d.method === "GET" || d.level === "read", destructiveHint: d.level === "full", idempotentHint: d.method === "GET" || d.method === "PUT" || d.method === "DELETE", openWorldHint: false },
   };
 };
@@ -169,40 +171,55 @@ export function mountMcp(app: Hono<AppEnv>) {
    * Same Bearer token as /mcp (level write+, respects the owner's tool switches), same validation and audit as the admin upload. The bytes never
    * pass through the conversation, so no tokens are spent on them and nothing gets truncated.
    */
-  app.post("/mcp/upload", async (c) => {
+  app.on(["POST", "PUT"], "/mcp/upload", async (c) => {
     const db = c.get("db");
-    const auth = c.req.header("Authorization") ?? "";
-    const raw = /^bearer\s+/i.test(auth) ? auth.replace(/^bearer\s+/i, "").trim() : "";
-    const who = raw ? await authenticateToken(db, raw) : null;
-    if (!who) return jsonRes({ error: { code: "unauthorized", message: "Send Authorization: Bearer osk_… (token from Settings → MCP)" } }, 401);
-    const r = await hit(c.env.DB, `mcp:${who.tokenId}`, 60);
-    if (r.count > MCP_RATE_PER_MIN) return jsonRes({ error: { code: "rate_limited", message: "Rate limit exceeded" } }, 429, { "Retry-After": String(r.resetIn) });
+    const jsonErr = (status: number, code: string, message: string, extra: Record<string, string> = {}) => jsonRes({ error: { code, message } }, status, extra);
+    const ticketRaw = c.req.header("X-Upload-Ticket");
+    let who: Omit<Principal, "ip"> | null = null; let fixed: { kind: string; alt: string | null; n: string } | null = null;
+    if (ticketRaw) {
+      // ticket mode: a code sandbox that cannot hold the MCP token uploads ONE image with the ticket minted by create_upload_link
+      const t = await verifyTicket(c.env, ticketRaw.trim());
+      if (!t) return jsonErr(401, "invalid_ticket", "Upload ticket is invalid or expired (they last 10 minutes): call create_upload_link again");
+      if ((await c.env.DB.prepare("SELECT count FROM rate_limits WHERE key = ?1").bind(`upl-done:${t.n}`).first<{ count: number }>())?.count) return jsonErr(409, "ticket_used", "This ticket was already used: one ticket uploads one image. Call create_upload_link for more");
+      if ((await hit(c.env.DB, `upl-try:${t.n}`, 900)).count > 3) return jsonErr(429, "too_many_attempts", "Too many attempts with this ticket: call create_upload_link again");
+      const [adm] = await db.select().from(admins).where(eq(admins.id, t.aid)).limit(1);
+      if (!adm || adm.disabled) return jsonErr(401, "invalid_ticket", "Upload ticket is no longer valid");
+      who = { tokenId: t.tid, adminId: adm.id, role: adm.role as Role, level: "write" }; fixed = { kind: t.kind, alt: t.alt, n: t.n };
+    } else {
+      const auth = c.req.header("Authorization") ?? "";
+      const raw = /^bearer\s+/i.test(auth) ? auth.replace(/^bearer\s+/i, "").trim() : "";
+      who = raw ? await authenticateToken(db, raw) : null;
+      if (!who) return jsonErr(401, "unauthorized", "Send Authorization: Bearer osk_… (token from Settings → MCP), or X-Upload-Ticket from create_upload_link");
+    }
+    const rl = await hit(c.env.DB, `mcp:${who.tokenId}:${c.get("ip")}`, 60);
+    if (rl.count > MCP_RATE_PER_MIN) return jsonErr(429, "rate_limited", "Rate limit exceeded", { "Retry-After": String(rl.resetIn) });
     const policy = await loadPolicy(db);
-    if (!policy.masterEnabled) return jsonRes({ error: { code: "mcp_disabled", message: "MCP access is switched off by the store owner (Settings → MCP)." } }, 403);
-    if (policy.disabled.has("upload_media")) return jsonRes({ error: { code: "tool_disabled", message: "Uploads are disabled by the store owner (Settings → MCP → Tools: upload_media)." } }, 403);
-    if (LEVEL_RANK[who.level] < LEVEL_RANK.write) return jsonRes({ error: { code: "forbidden", message: `This token has level "${who.level}"; uploading needs "write" or higher.` } }, 403);
+    if (!policy.masterEnabled) return jsonErr(403, "mcp_disabled", "MCP access is switched off by the store owner (Settings → MCP).");
+    if (policy.disabled.has(fixed ? "create_upload_link" : "upload_media")) return jsonErr(403, "tool_disabled", `Uploads are disabled by the store owner (Settings → MCP → Tools: ${fixed ? "create_upload_link" : "upload_media"}).`);
+    if (LEVEL_RANK[who.level] < LEVEL_RANK.write) return jsonErr(403, "forbidden", `This token has level "${who.level}"; uploading needs "write" or higher.`);
     const max = R2_LIMIT + 64 * 1024;
-    if (Number(c.req.header("Content-Length") ?? 0) > max) return jsonRes({ error: { code: "payload_too_large", message: "File too large" } }, 413);
+    if (Number(c.req.header("Content-Length") ?? 0) > max) return jsonErr(413, "payload_too_large", "File too large");
     const ct = c.req.header("Content-Type") ?? "";
     let bytes: Uint8Array; let kind = ""; let alt = ""; let filename = "upload";
     try {
       if (ct.toLowerCase().startsWith("multipart/form-data")) {
         const fd = await c.req.formData(); const f = fd.get("file");
-        if (!(f instanceof File)) return jsonRes({ error: { code: "validation_error", message: "multipart field `file` is required (curl -F file=@photo.jpg)" } }, 400);
+        if (!(f instanceof File)) return jsonErr(400, "validation_error", "multipart field `file` is required (curl -F file=@photo.jpg)");
         bytes = new Uint8Array(await f.arrayBuffer()); filename = f.name || filename; kind = String(fd.get("kind") ?? ""); alt = String(fd.get("alt") ?? "");
-      } else if (ct.toLowerCase().startsWith("image/")) {
+      } else if (ct.toLowerCase().startsWith("image/") || (fixed && ct.toLowerCase().startsWith("application/octet-stream"))) {
         bytes = new Uint8Array(await c.req.arrayBuffer()); kind = c.req.query("kind") ?? ""; alt = c.req.query("alt") ?? ""; filename = c.req.query("filename") ?? filename;
-      } else return jsonRes({ error: { code: "unsupported_media_type", message: "Send multipart/form-data (file, kind, alt) or a raw image body (Content-Type: image/jpeg|png|webp|gif|avif) with ?kind=" } }, 415);
-    } catch { return jsonRes({ error: { code: "validation_error", message: "Malformed request body" } }, 400); }
-    if (bytes.byteLength > max) return jsonRes({ error: { code: "payload_too_large", message: "File too large" } }, 413);
+      } else return jsonErr(415, "unsupported_media_type", "Send multipart/form-data (file, kind, alt) or a raw image body (Content-Type: image/jpeg|png|webp|gif|avif)" + (fixed ? "" : " with ?kind="));
+    } catch { return jsonErr(400, "validation_error", "Malformed request body"); }
+    if (fixed) { kind = fixed.kind; alt = fixed.alt ?? alt; }                       // the ticket decides what the image is for
+    if (bytes.byteLength > max) return jsonErr(413, "payload_too_large", "File too large");
     const f = new FormData(); f.set("file", new File([bytes as BlobPart], filename, { type: sniffMime(bytes) })); f.set("kind", kind); if (alt) f.set("alt", alt);
     const origin = new URL(c.req.url).origin;
     const headers = new Headers({ [INTERNAL_HEADER]: await signInternal(c.env, { aid: who.adminId, role: who.role, lvl: who.level, tid: who.tokenId }), "CF-Connecting-IP": c.get("ip"), "user-agent": "openshelf-mcp-upload" });
     const res = await app.fetch(new Request(`${origin}/api/admin/media`, { method: "POST", headers, body: f }), c.env, c.executionCtx as unknown as Ctx);
-    await audit(db, { ...who, ip: c.get("ip") }, "upload_media(file)", res.ok ? "ok" : "error");
+    if (fixed && res.ok) await hit(c.env.DB, `upl-done:${fixed.n}`, 900);               // the ticket is spent only by a successful upload
+    await audit(db, { ...who, ip: c.get("ip") }, fixed ? "upload_media(ticket)" : "upload_media(file)", res.ok ? "ok" : "error");
     return new Response(await res.text(), { status: res.status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
   });
-
   // Bearer token = an OAuth access token (osk_…, 1 h, from /oauth/token) or a personal access token (osk_…, created in Settings -> MCP).
   // A token in the URL is deliberately NOT supported: URLs end up in logs, history and screenshots.
   app.all("/mcp", async (c) => {

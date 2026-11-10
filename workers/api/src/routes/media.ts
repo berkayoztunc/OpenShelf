@@ -12,6 +12,8 @@ import { fetchImageBytes, normalizeImageUrl } from "../lib/imageFetch";
 import { sha256Hex, toBytes } from "../lib/crypto";
 import { ALLOWED_MIMES, D1_LIMITS, R2_LIMIT, sniffImage } from "../lib/media";
 import { proxyPath } from "../lib/imageProxy";
+import { signTicket, TICKET_TTL_MS } from "../lib/tickets";
+import { applyProductImages } from "./admin-catalog";
 
 /** Public: GET /media/:id */
 export const mediaPublic = new Hono<AppEnv>();
@@ -153,6 +155,48 @@ adminMedia.post("/assign", requireRole("admin"), async (c) => {
   return c.json({ slot: b.slot, ...r }, 200);
 });
 
+const TicketBody = z.object({ kind: z.enum(MEDIA_KINDS), alt: z.string().max(300).optional(), count: z.number().int().min(1).max(10).default(1) });
+/**
+ * Upload tickets for a code sandbox that can run HTTP requests but cannot hold the MCP token (e.g. a chat app's code-execution environment).
+ * Each ticket allows ONE image of the given kind within 10 minutes and carries no secret: it is sent in a header, never in a URL.
+ */
+adminMedia.post("/upload-ticket", requireRole("admin"), async (c) => {
+  const b = await body(c, TicketBody); const a = c.get("admin")!;
+  const tickets: string[] = [];
+  for (let i = 0; i < b.count; i++) tickets.push(await signTicket(c.env, { aid: a.id, role: a.role, lvl: "write", tid: "ticket", kind: b.kind, alt: b.alt ?? null }));
+  await audit(c, "media.upload_ticket", "media", b.kind, { kind: b.kind, count: b.count });
+  const origin = new URL(c.req.url).origin;
+  return c.json({
+    uploadUrl: `${origin}/mcp/upload`, method: "PUT", kind: b.kind, count: b.count, tickets,
+    expiresInSeconds: Math.floor(TICKET_TTL_MS / 1000), usage: "one ticket = one image; send raw bytes with the ticket in the X-Upload-Ticket header",
+    maxBytes: limitFor(c.env, b.kind),
+    example: `curl -sS -X PUT -H "X-Upload-Ticket: ${tickets[0]}" -H "Content-Type: image/png" --data-binary @./image.png ${origin}/mcp/upload`,
+    afterUpload: "the response has the media id: attach it with add_product_images (mediaId) or set_store_image",
+    ifItFails: "if curl cannot connect (this environment blocks the store's domain) do NOT retry: use import_attached_files (ChatGPT attachments), a public link, or ask the human to drop the files in the admin panel under Katalog → Medya",
+  }, 201);
+});
+
+const OpenAIFile = z.object({ download_url: z.string().min(8).max(4000), file_id: z.string().max(200), mime_type: z.string().max(100).optional(), file_name: z.string().max(300).optional() });
+const AttachedBody = z.object({
+  kind: z.enum(MEDIA_KINDS), files: z.array(OpenAIFile).min(1).max(10), alt: z.string().max(300).optional(),
+  productId: z.string().min(1).max(60).optional(), mode: z.enum(["append", "prepend"]).default("append"),
+});
+/**
+ * Files the person attached to the chat (ChatGPT passes them as temporary download links, see _meta["openai/fileParams"]). The server downloads
+ * each one at full size; with productId the images are also attached to that product in the same call. A bad file does not fail the others.
+ */
+adminMedia.post("/import-files", requireRole("admin"), async (c) => {
+  const b = await body(c, AttachedBody); const adminId = c.get("admin")!.id;
+  const items: Record<string, unknown>[] = []; const ok: Stored[] = [];
+  for (const f of b.files) {
+    try { const r = await importImage(c, b.kind, f.download_url, b.alt ?? null, adminId); ok.push(r); items.push({ file: f.file_name ?? f.file_id, ok: true, ...r }); await audit(c, "media.import", "media", r.id, { kind: b.kind, via: "attached-file", size: r.size }); }
+    catch (e) { items.push({ file: f.file_name ?? f.file_id, ok: false, error: e instanceof ApiError ? { code: e.code, message: e.message } : { code: "failed", message: "import failed" } }); }
+  }
+  let product: unknown;
+  if (b.productId && ok.length) product = await applyProductImages(c, b.productId, { images: ok.map((r) => ({ mediaId: r.id })), mode: b.mode }, adminId);
+  return c.json({ imported: ok.length, failed: items.length - ok.length, items, ...(product ? { product } : {}) }, 201);
+});
+
 const AltBody = z.object({ alt: z.string().max(300) });
 /** Change the alt text of an uploaded image (accessibility + SEO). */
 adminMedia.patch("/:id", requireRole("admin"), async (c) => {
@@ -216,10 +260,13 @@ adminMedia.get("/upload-help", requireRole("staff"), (c) => {
   return c.json({
     chooseByWhatYouHave: [
       { you_have: "a public https link to the image (generated image URL, CDN, Google Drive / Dropbox share link)", use: "upload_media_from_url (up to 10 links per call) or, to also attach it, add_product_images / set_store_image with `url`", cost: "cheapest: a few tokens, full size" },
-      { you_have: "a file on a machine where you can run shell commands (Claude Code, Codex, Cursor, scripts)", use: "curl to /mcp/upload with your token (below), then attach with add_product_images / set_store_image using the returned id", cost: "cheap: no base64 in the conversation" },
-      { you_have: "only a chat window and the human's own files", use: "ask the human to drop the files into the admin panel: Katalog → Medya (or product page / Settings → Branding). Then call list_media (newest first) and attach the ids", cost: "one human step, no tokens spent on bytes" },
+      { you_have: "image files the person ATTACHED to the conversation in ChatGPT", use: "import_attached_files (the app passes download links; pass productId to attach in the same call)", cost: "no tokens spent on bytes, original quality" },
+      { you_have: "a code sandbox / script with internet and the image files (chat apps with code execution, e.g. images you generated or the person uploaded) but NOT the MCP token", use: "create_upload_link (count = number of images) then `curl -X PUT -H \"X-Upload-Ticket: …\" --data-binary @file …` for each ticket; then attach the returned media ids", cost: "no tokens spent on bytes, original quality. If curl cannot connect the sandbox blocks this domain: fall back, do not loop" },
+      { you_have: "a shell on a machine where you hold the MCP token (Claude Code, Codex, Cursor, scripts)", use: "curl to /mcp/upload with the token (below), then attach with add_product_images / set_store_image using the returned id", cost: "cheap: no base64 in the conversation" },
+      { you_have: "none of the above (only a chat window and the human's own files)", use: "ask the human to drop the files into the admin panel: Katalog → Medya. Then call list_media (newest first) and attach the ids", cost: "one human step, no tokens spent on bytes" },
       { you_have: "a tiny image (a few KB, e.g. favicon) only", use: "upload_media (base64). Anything bigger is rejected immediately: do NOT try", cost: "expensive and fragile: last resort" },
     ],
+    sandboxNote: "Some chat apps limit the network of their code-execution sandbox to an allow-list of domains. If curl cannot connect, the person has to allow this store's domain once in that app's code-execution / network settings; until then use another way (do not loop).",
     shellUpload: {
       url: `${origin}/mcp/upload`, method: "POST", auth: "Authorization: Bearer <your MCP token osk_…>, level write or higher",
       example: `curl -sS -H "Authorization: Bearer $OPENSHELF_TOKEN" -F kind=product -F alt="Short description" -F file=@./photo.jpg ${origin}/mcp/upload`,

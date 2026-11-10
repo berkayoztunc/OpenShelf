@@ -13,7 +13,7 @@ const data = (r: { content: { text: string }[] }) => JSON.parse(r.content[0]!.te
 /** Everything added for AI clients lately: it must be reachable over MCP at the right level, and explained in the guide. */
 const NEW_TOOLS: Record<string, "read" | "write"> = {
   store_insights: "read", view_image: "read", upload_help: "read", help_topics: "read", help_search: "read", help_read: "read",
-  add_product_images: "write", set_store_image: "write", update_media_alt: "write", upload_media_from_url: "write", upload_media: "write",
+  add_product_images: "write", set_store_image: "write", create_upload_link: "write", import_attached_files: "write", update_media_alt: "write", upload_media_from_url: "write", upload_media: "write",
   update_menu: "write", update_merchandising: "write", update_homepage: "write", update_variant_price: "write", bulk_update_products: "write",
 };
 

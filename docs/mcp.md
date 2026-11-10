@@ -37,25 +37,30 @@ Users/passwords/MFA, creating tokens, integration **secrets** (write), mock-mode
 - Every tool call is audited (`mcp.tool`, token id, outcome, no arguments) and the underlying admin action is audited as usual.
 - Tools run the real admin API in-process with an HMAC-signed, 60-second internal claim, so permissions, validation and rate limits are the same as in the panel. A token cannot call `/api/admin/*` directly.
 - Marketing campaigns only reach customers with marketing consent. AI conversations may contain customer data: start with `read`.
+- **Upload tickets** (`create_upload_link`): HMAC-signed, valid 10 minutes, one successful upload, fixed image kind, sent in the `X-Upload-Ticket` header (never in a URL), accepted only by `/mcp/upload`, never by the API or MCP; revoked when the admin who minted it is disabled. Uploaded files get the same validation as the admin upload (real type, size limits, truncated images rejected). The owner can switch `create_upload_link` and `upload_media` off separately. Files attached in ChatGPT (`import_attached_files`) and links (`upload_media_from_url`) are fetched server-side with the SSRF guard (public https hosts only, redirects re-checked, size-capped).
 
 ## Settings and SEO tools
 - **Store settings** (PATCH, only the fields you send change; nested objects merge, the merged group is validated as a whole): `update_store_profile` (store name, tagline, contact, currency, tax), `update_seo_settings`, `update_branding`, `update_legal_pages`, `update_checkout_settings`, `update_tracking_settings`, `update_notification_settings`; read one group with `get_settings_group`.
 - **SEO**: `seo_audit` (site-wide switches + every product/category gap: missing title/description, noindex, images without alt, duplicate titles), `update_product_seo` / `update_category_seo` (search & social fields only), `seo_preview` (exactly what Google/social will see).
 
 ### Uploading images and files
-Chat clients cut long tool arguments, so a big base64 string arrives truncated (and costs a lot of tokens). Pick the way that matches what the AI has; the **`upload_help`** tool tells it which, with a ready-to-run command for the real host:
+Chat clients cut long tool arguments, so a big base64 string arrives truncated (and costs a lot of tokens). Pick the way that matches what the AI **has**; the **`upload_help`** tool tells it which, with ready-to-run commands for the real host:
 
 | The AI has | Use | Cost |
 |---|---|---|
 | a public https link (generated image URL, CDN, Google Drive / Dropbox share link) | `add_product_images` / `set_store_image` with `url` (imports **and** attaches in one call); `upload_media_from_url` takes up to 10 links | a few tokens, full size |
-| a shell (Claude Code, Codex, Cursor, scripts) | `curl` to **`POST /mcp/upload`** with the MCP token (multipart `file`, `kind`, `alt`, or a raw image body with `?kind=`), then attach by `mediaId` | no bytes in the conversation |
-| only a chat window | the human drops the files in the admin panel under **Katalog → Medya**; the AI calls `list_media` and attaches the ids | one human step |
+| files the person **attached to the chat in ChatGPT** | **`import_attached_files`** (ChatGPT passes download links via `_meta["openai/fileParams"]`; with `productId` it also attaches them) | no bytes in the conversation |
+| image files in its **own code sandbox** but not the MCP token (chat apps with code execution) | **`create_upload_link`** → single-use tickets → `curl -X PUT -H "X-Upload-Ticket: …" --data-binary @file …/mcp/upload`, then attach by `mediaId` | no bytes in the conversation |
+| a shell where it holds the token (Claude Code, Codex, Cursor, scripts) | `curl` to **`POST /mcp/upload`** with `Authorization: Bearer` | no bytes in the conversation |
+| only a chat window | the human drops the files on **Katalog → Medya**; the AI calls `list_media` and attaches the ids | one human step |
 | a tiny image (< ~20 KB, e.g. a favicon) | `upload_media` (base64). Longer data is refused immediately, without being read | last resort |
 
 ```sh
 curl -sS -H "Authorization: Bearer $OPENSHELF_TOKEN" -F kind=product -F alt="Short description" -F file=@./photo.jpg https://YOUR-STORE/mcp/upload
 ```
-`/mcp/upload` uses the same token, level (write or higher) and owner switches as `/mcp` (disable `upload_media` under Settings → MCP to turn it off), the same validation as the admin upload (real file type, size limits, truncated images rejected) and is audited. It is **not** a public link: nothing can be uploaded without a token.
+**Tickets** (`create_upload_link`, `count` 1–10): each lasts 10 minutes, uploads **one** image (a failed upload with a truncated file does not spend it; after 3 attempts it stops), fixes the image kind and alt text, is sent in the `X-Upload-Ticket` header (never in a URL), contains no token, and only works on `/mcp/upload`: it does not open the API or MCP. It stops working if the admin who minted it is disabled. Some chat apps limit the code sandbox's network to an allow-list of domains; if `curl` cannot connect the person must allow the store's domain once in that app. The AI is told to fall back instead of looping.
+
+`/mcp/upload` uses the same validation as the admin upload (real file type, size limits, truncated images rejected) and is audited. The owner can switch `upload_media` (token uploads) and `create_upload_link` (tickets) off separately under Settings → MCP → Tools.
 
 **Attaching** never needs the whole product: `add_product_images` (mode `append`, `prepend` or `replace`; items are `mediaId`, `url` or `imageId` of an image already on the product) and `set_store_image` (slot `logo`, `logo_dark`, `favicon`, `og` or `banner`). Imports report `warnings` (wrong aspect ratio, too small) so the AI can regenerate. `update_media_alt` edits alt text.
 

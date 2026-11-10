@@ -39,7 +39,7 @@ describe("share-link normalisation", () => {
 describe("upload_help", () => {
   it("lists the methods by what the client has, with a ready-to-run command for the real host", async () => {
     const r = data(await tool("upload_help"));
-    expect(r.chooseByWhatYouHave).toHaveLength(4);
+    expect(r.chooseByWhatYouHave).toHaveLength(6);
     expect(r.shellUpload.url).toMatch(/\/mcp\/upload$/); expect(r.shellUpload.example).toContain("-F file=@");
     expect(r.attach.product).toContain("add_product_images");
   });

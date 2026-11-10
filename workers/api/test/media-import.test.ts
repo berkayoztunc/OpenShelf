@@ -77,7 +77,8 @@ describe("upload_media_from_url (MCP)", () => {
     const list = (await j<any>(await rpc({ jsonrpc: "2.0", id: 2, method: "tools/list" }))).result.tools;
     expect(list.find((t: any) => t.name === "upload_media").description).toMatch(/LAST RESORT.*tiny images/);
     expect(list.find((t: any) => t.name === "upload_media_from_url").description).toMatch(/BEST WAY/);
-    expect(list.map((t: any) => t.name)).not.toContain("create_upload_link"); // no public upload links
+    // uploads without the MCP token exist only as short-lived single-use tickets (create_upload_link), never as a standing public link
+    expect(list.map((t: any) => t.name)).toContain("create_upload_link");
   });
 });
 
