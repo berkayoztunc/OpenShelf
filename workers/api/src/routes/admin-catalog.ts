@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { and, desc, eq, inArray, like, notInArray, or, sql } from "drizzle-orm";
-import { categories, channelPrices, slugRedirects, coupons, inventory, orderItems, productImages, productVariants, products } from "@openshelf/db";
+import { categories, channelPrices, slugRedirects, coupons, inventory, orderItems, productImages, productMappings, productVariants, products } from "@openshelf/db";
 import { adjustInventory, enqueueJob, InsufficientStockError } from "@openshelf/core";
-import { CategoryInput, CouponInput, InventoryAdjustBody, ProductInput } from "@openshelf/shared";
+import { CategoryInput, CouponInput, InventoryAdjustBody, ProductBulkBody, ProductInput, VariantPriceBody } from "@openshelf/shared";
 import type { AppEnv, Db } from "../env";
 import { ApiError, body, likeEscape, notFound, paged, paging } from "../lib/http";
 import { audit } from "../lib/audit";
@@ -68,17 +68,46 @@ adminCatalog.patch("/categories/:id/seo", requireRole("admin"), async (c) => {
 });
 
 // ---------- products ----------
+const LOW_STOCK = 5;
+// SQL fragments over products (correlated sub-selects keep list filters/sorts in one query)
+const MIN_PRICE = sql`(SELECT MIN(cp.price) FROM channel_prices cp JOIN product_variants v ON v.id = cp.variant_id WHERE v.product_id = ${products.id} AND v.active = 1 AND cp.channel = 'website')`;
+const AVAILABLE = sql`COALESCE((SELECT SUM(i.total - i.reserved) FROM inventory i JOIN product_variants v ON v.id = i.variant_id WHERE v.product_id = ${products.id} AND v.active = 1), 0)`;
+const SORTS = {
+  newest: desc(products.createdAt), oldest: sql`${products.createdAt} ASC`, updated: desc(products.updatedAt),
+  name: sql`${products.nameTr} COLLATE NOCASE ASC`, "name-desc": sql`${products.nameTr} COLLATE NOCASE DESC`,
+  price: sql`${MIN_PRICE} ASC`, "price-desc": sql`${MIN_PRICE} DESC`, stock: sql`${AVAILABLE} ASC`, "stock-desc": sql`${AVAILABLE} DESC`,
+} as const;
+
 adminCatalog.get("/products", requireRole("staff"), async (c) => {
   const p = paging(c); const db = c.get("db");
   const q = c.req.query("q"); const status = c.req.query("status"); const category = c.req.query("category");
+  const stock = c.req.query("stock"); const image = c.req.query("image"); const channel = c.req.query("channel"); const sort = c.req.query("sort") ?? "newest";
+  if (stock && !["out", "low", "in"].includes(stock)) throw new ApiError(400, "validation_error", "Unknown stock filter");
+  if (image && image !== "none") throw new ApiError(400, "validation_error", "Unknown image filter");
+  if (channel && !["trendyol", "website_only"].includes(channel)) throw new ApiError(400, "validation_error", "Unknown channel filter");
+  if (!(sort in SORTS)) throw new ApiError(400, "validation_error", "Unknown sort");
   const conds = [];
-  if (q) { const l = `%${likeEscape(q)}%`; conds.push(or(sql`${products.nameTr} LIKE ${l} ESCAPE '\\'`, sql`${products.slug} LIKE ${l} ESCAPE '\\'`, sql`${products.id} IN (SELECT product_id FROM product_variants WHERE sku LIKE ${l} ESCAPE '\\')`)); }
+  if (q) { const l = `%${likeEscape(q)}%`; conds.push(or(sql`${products.nameTr} LIKE ${l} ESCAPE '\\'`, sql`${products.slug} LIKE ${l} ESCAPE '\\'`, sql`${products.brand} LIKE ${l} ESCAPE '\\'`, sql`${products.id} IN (SELECT product_id FROM product_variants WHERE sku LIKE ${l} ESCAPE '\\' OR barcode LIKE ${l} ESCAPE '\\')`)); }
   if (status) conds.push(eq(products.status, status));
-  if (category) conds.push(eq(products.categoryId, category));
+  if (category === "none") conds.push(sql`${products.categoryId} IS NULL`); else if (category) conds.push(eq(products.categoryId, category));
+  if (stock === "out") conds.push(sql`${AVAILABLE} <= 0`);
+  if (stock === "low") conds.push(sql`${AVAILABLE} > 0 AND ${AVAILABLE} <= ${LOW_STOCK}`);
+  if (stock === "in") conds.push(sql`${AVAILABLE} > ${LOW_STOCK}`);
+  if (image === "none") conds.push(sql`NOT EXISTS (SELECT 1 FROM product_images im WHERE im.product_id = ${products.id})`);
+  const onTy = sql`EXISTS (SELECT 1 FROM product_mappings m JOIN product_variants v ON v.id = m.variant_id WHERE v.product_id = ${products.id} AND m.provider = 'trendyol')`;
+  if (channel === "trendyol") conds.push(onTy);
+  if (channel === "website_only") conds.push(sql`NOT ${onTy}`);
   const where = conds.length ? and(...conds) : undefined;
-  const rows = await db.select().from(products).where(where).orderBy(desc(products.createdAt)).limit(p.pageSize).offset(p.offset);
+  const rows = await db.select().from(products).where(where).orderBy(SORTS[sort as keyof typeof SORTS], desc(products.createdAt)).limit(p.pageSize).offset(p.offset);
   const [t] = await db.select({ n: sql<number>`count(*)` }).from(products).where(where);
-  return c.json(paged(await hydrateProducts(db, rows), t?.n ?? 0, p));
+  const ids = rows.map((r) => r.id);
+  const hydrated = await hydrateProducts(db, rows);
+  const catIds = [...new Set(rows.map((r) => r.categoryId).filter((x): x is string => !!x))];
+  const cats = catIds.length ? await db.select({ id: categories.id, name: categories.nameTr }).from(categories).where(inArray(categories.id, catIds)) : [];
+  const catName = new Map(cats.map((x) => [x.id, x.name]));
+  const mapped = ids.length ? await db.select({ productId: productVariants.productId }).from(productMappings).innerJoin(productVariants, eq(productVariants.id, productMappings.variantId)).where(and(eq(productMappings.provider, "trendyol"), inArray(productVariants.productId, ids))) : [];
+  const onTrendyol = new Set(mapped.map((m) => m.productId));
+  return c.json(paged(hydrated.map((h) => ({ ...h, categoryName: h.categoryId ? catName.get(h.categoryId) ?? null : null, onTrendyol: onTrendyol.has(h.id) })), t?.n ?? 0, p));
 });
 adminCatalog.get("/products/:id", requireRole("staff"), async (c) => {
   const db = c.get("db");
@@ -194,6 +223,56 @@ export async function writeProduct(db: Db, d1: D1Database, id: string | null, b:
   void d1; void notInArray; void like;
   return pid;
 }
+
+/** Inline price edit: website channel price (+ optional compare-at) of one variant. */
+adminCatalog.patch("/variants/:variantId/price", requireRole("admin"), async (c) => {
+  const variantId = c.req.param("variantId"); const b = await body(c, VariantPriceBody); const db = c.get("db");
+  const [v] = await db.select({ id: productVariants.id, productId: productVariants.productId }).from(productVariants).where(eq(productVariants.id, variantId)).limit(1);
+  if (!v) throw notFound("Variant");
+  // compareAtPrice omitted = keep the existing strike-through price, unless the new price is no longer below it
+  const [cur] = await db.select({ compare: channelPrices.compareAtPrice }).from(channelPrices).where(and(eq(channelPrices.variantId, variantId), eq(channelPrices.channel, "website"))).limit(1);
+  const compare = b.compareAtPrice !== undefined ? b.compareAtPrice : cur?.compare != null && cur.compare > b.price ? cur.compare : null;
+  await db.insert(channelPrices).values({ variantId, channel: "website", price: b.price, compareAtPrice: compare, currency: "TRY" })
+    .onConflictDoUpdate({ target: [channelPrices.variantId, channelPrices.channel], set: { price: b.price, compareAtPrice: compare } });
+  await db.update(products).set({ updatedAt: new Date() }).where(eq(products.id, v.productId));
+  await audit(c, "variant.price", "variant", variantId, b);
+  await enqueueJob(db, { kind: "trendyol.stock_push", payload: { variantIds: [variantId] }, dedupeKey: `trendyol.stock_push:${variantId}:${Math.floor(Date.now() / 60000)}` }).catch(() => {});
+  return c.json({ variantId, price: b.price, compareAtPrice: compare });
+});
+
+/** Bulk change from the list page. Returns per-product counts; unknown ids are reported, not fatal. */
+adminCatalog.post("/products/bulk", requireRole("admin"), async (c) => {
+  const b = await body(c, ProductBulkBody); const db = c.get("db");
+  const ids = [...new Set(b.ids)];
+  const found = await db.select({ id: products.id }).from(products).where(inArray(products.id, ids));
+  const okIds = found.map((r) => r.id); const missing = ids.filter((i) => !okIds.includes(i));
+  const now = new Date();
+  if (b.action === "category" && b.categoryId) {
+    const [cat] = await db.select({ id: categories.id }).from(categories).where(eq(categories.id, b.categoryId)).limit(1);
+    if (!cat) throw new ApiError(400, "validation_error", "Unknown category");
+  }
+  let variantIds: string[] = []; let priceChanged = 0;
+  if (okIds.length) {
+    if (b.action === "status") await db.update(products).set({ status: b.status, updatedAt: now }).where(inArray(products.id, okIds));
+    else if (b.action === "category") await db.update(products).set({ categoryId: b.categoryId, updatedAt: now }).where(inArray(products.id, okIds));
+    else {
+      variantIds = (await db.select({ id: productVariants.id }).from(productVariants).where(and(inArray(productVariants.productId, okIds), eq(productVariants.active, true)))).map((v) => v.id);
+      const factor = 1 + b.percent / 100;
+      for (let i = 0; i < variantIds.length; i += 50) {
+        const chunk = variantIds.slice(i, i + 50);
+        const res = await db.update(channelPrices).set({
+          price: sql`MAX(1, CAST(ROUND(${channelPrices.price} * ${factor}) AS INTEGER))`,
+          compareAtPrice: sql`CASE WHEN ${channelPrices.compareAtPrice} IS NULL THEN NULL WHEN CAST(ROUND(${channelPrices.compareAtPrice} * ${factor}) AS INTEGER) > MAX(1, CAST(ROUND(${channelPrices.price} * ${factor}) AS INTEGER)) THEN CAST(ROUND(${channelPrices.compareAtPrice} * ${factor}) AS INTEGER) ELSE NULL END`,
+        }).where(and(inArray(channelPrices.variantId, chunk), eq(channelPrices.channel, "website"))).returning({ v: channelPrices.variantId });
+        priceChanged += res.length;
+      }
+      await db.update(products).set({ updatedAt: now }).where(inArray(products.id, okIds));
+      if (variantIds.length) await enqueueJob(db, { kind: "trendyol.stock_push", payload: { variantIds }, dedupeKey: `trendyol.stock_push:bulk:${Math.floor(now.getTime() / 60000)}:${okIds.length}` }, now).catch(() => {});
+    }
+    await audit(c, `product.bulk_${b.action}`, "product", okIds[0]!, { ...b, ids: okIds });
+  }
+  return c.json({ updated: okIds.length, missing, ...(b.action === "price" ? { pricesChanged: priceChanged } : {}) });
+});
 
 // ---------- inventory ----------
 adminCatalog.post("/inventory/:variantId/adjust", requireRole("staff"), async (c) => {

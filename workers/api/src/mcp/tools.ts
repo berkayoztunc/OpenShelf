@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-  BrandingSettings, CategoryInput, CheckoutSettings, ComposeEmailBody, GeneralSettings, LegalSettings, NotificationSettings, SeoSettings, TrackingSettings, CouponInput, GeliverCallBody, InventoryAdjustBody, ManualInvoiceBody, OrderStatusBody, ProductInput, RefundBody, SETTING_GROUPS,
+  BrandingSettings, CategoryInput, CheckoutSettings, ComposeEmailBody, GeneralSettings, LegalSettings, NotificationSettings, SeoSettings, TrackingSettings, CouponInput, GeliverCallBody, InventoryAdjustBody, ManualInvoiceBody, OrderStatusBody, ProductBulkBody, ProductInput, RefundBody, SETTING_GROUPS, VariantPriceBody,
   ShipmentBody, TrendyolCallBody,
 } from "@openshelf/shared";
 import { CampaignBody } from "../lib/campaigns";
@@ -43,16 +43,25 @@ export const TOOLS: ToolDef[] = [
   /* ================= overview / read ================= */
   t({ name: "store_overview", title: "Store overview", level: "read", method: "GET", path: "/dashboard", shape: {},
     description: "Dashboard numbers: orders by status, revenue, low stock and recent activity. Start here for 'how is the store doing?'. Money values are minor units (kuruş: 1999 = 19.99 TRY)." }),
-  t({ name: "list_orders", title: "List orders", level: "read", method: "GET", path: "/orders", query: ["q", "status", "source", "page", "pageSize"],
-    shape: { q: q("search order number or e-mail"), status: q("pending|awaiting_payment|paid|fulfilling|shipped|delivered|cancelled|refunded"), source: q("channel: website or trendyol"), ...page },
-    description: `Search/list orders (newest first). source=trendyol are marketplace orders (Trendyol ships and invoices them). ${SENSITIVE}` }),
+  t({ name: "list_orders", title: "List orders", level: "read", method: "GET", path: "/orders", query: ["q", "status", "source", "payment", "shipping", "invoice", "from", "to", "minTotal", "maxTotal", "page", "pageSize"],
+    shape: {
+      q: q("search order number, customer name/e-mail/phone/city, product name or SKU, or shipment tracking number"),
+      status: q("one status or a comma-separated list: pending|awaiting_payment|paid|fulfilling|shipped|delivered|cancelled|refunded"), source: q("channel: website or trendyol"),
+      payment: q("payment state: succeeded|pending|failed|refunded, or none (no payment yet)"), shipping: q("shipment state: created|in_transit|delivered|returned|cancelled, or none (not shipped yet)"),
+      invoice: q("invoice state: draft|issuing|issued|failed|cancelled, or none (not invoiced yet)"),
+      from: q("created on/after this date (YYYY-MM-DD)"), to: q("created on/before this date (YYYY-MM-DD)"), minTotal: q("minimum total in minor units (kuruş)"), maxTotal: q("maximum total in minor units (kuruş)"), ...page },
+    description: `Search/list orders (newest first). Each row includes the process state: latest payment, shipment (carrier + tracking number) and invoice, item lines, customer name and city. Use payment=succeeded&shipping=none to find orders waiting to ship. source=trendyol are marketplace orders (Trendyol ships and invoices them). ${SENSITIVE}` }),
   t({ name: "get_order", title: "Get order", level: "read", method: "GET", path: "/orders/:id", shape: { id: id("order") },
     description: `Full order: items, payments, shipments (incl. Trendyol cargo), invoices, events. ${SENSITIVE}` }),
   t({ name: "order_notifications", title: "Order notifications", level: "read", method: "GET", path: "/orders/:id/notifications", shape: { id: id("order") }, description: "E-mail/SMS notifications sent for an order and their status." }),
   t({ name: "list_customers", title: "List customers", level: "read", method: "GET", path: "/customers", query: ["q", "page", "pageSize"], shape: { q: q("search name/e-mail"), ...page }, description: `List customers. ${SENSITIVE}` }),
   t({ name: "get_customer", title: "Get customer", level: "read", method: "GET", path: "/customers/:id", shape: { id: id("customer") }, description: `Customer with addresses and orders. ${SENSITIVE}` }),
-  t({ name: "list_products", title: "List products", level: "read", method: "GET", path: "/products", query: ["q", "status", "category", "page", "pageSize"],
-    shape: { q: q("search name/slug/sku"), status: q("draft|active|archived"), category: q("category id"), ...page }, description: "List products with variants and stock." }),
+  t({ name: "list_products", title: "List products", level: "read", method: "GET", path: "/products", query: ["q", "status", "category", "stock", "image", "channel", "sort", "page", "pageSize"],
+    shape: {
+      q: q("search name/slug/brand/sku/barcode"), status: q("draft|active|archived"), category: q("category id, or none for uncategorised"),
+      stock: q("out (sold out) | low (1-5 available) | in (more than 5)"), image: q("none = products without any image"), channel: q("trendyol = listed on Trendyol, website_only"),
+      sort: q("newest|oldest|updated|name|name-desc|price|price-desc|stock|stock-desc"), ...page,
+    }, description: "List products with variants, stock, category name and whether they are mapped to Trendyol." }),
   t({ name: "get_product", title: "Get product", level: "read", method: "GET", path: "/products/:id", shape: { id: id("product") }, description: "Full product: variants (sku, barcode, prices per channel in minor units, stock), images, SEO." }),
   t({ name: "list_categories", title: "List categories", level: "read", method: "GET", path: "/categories", shape: {}, description: "All categories (tree via parentId)." }),
   t({ name: "list_coupons", title: "List coupons", level: "read", method: "GET", path: "/coupons", shape: {}, description: "All coupons with usage." }),
@@ -110,6 +119,10 @@ export const TOOLS: ToolDef[] = [
   t({ name: "update_coupon", title: "Update coupon", level: "write", method: "PUT", path: "/coupons/:code", shape: { code: z.string().min(1).describe("coupon code"), body: CouponInput }, description: "Replace a coupon." }),
   t({ name: "adjust_stock", title: "Adjust stock", level: "write", method: "POST", path: "/inventory/:variantId/adjust", shape: { variantId: id("variant"), body: InventoryAdjustBody },
     description: "Change stock by a signed delta (+10 / -3) with a reason. Local stock is the source of truth and is pushed to Trendyol automatically." }),
+  t({ name: "update_variant_price", title: "Update variant price", level: "write", method: "PATCH", path: "/variants/:variantId/price", shape: { variantId: id("variant"), body: VariantPriceBody },
+    description: "Set the website price of one variant in minor units (kuruş: 1999 = 19.99 TRY); compareAtPrice (optional, must be higher) is the strike-through price. Pushed to Trendyol automatically." }),
+  t({ name: "bulk_update_products", title: "Bulk update products", level: "write", method: "POST", path: "/products/bulk", shape: { body: ProductBulkBody },
+    description: "Up to 100 products at once: action status (draft|active|archived), category (categoryId or null) or price (percent, e.g. 10 = +10%, -15 = -15%, applied to every active variant's website price and compare-at price)." }),
   t({ name: "update_order_status", title: "Update order status", level: "write", method: "POST", path: "/orders/:id/status", shape: { id: id("order"), body: OrderStatusBody },
     description: "Move an order along its allowed transitions (paid/refunded are set by payment flows and are rejected). Trendyol orders are managed by Trendyol." }),
   t({ name: "update_settings", title: "Update settings group", level: "write", method: "PUT", path: "/settings/:group",
@@ -188,7 +201,7 @@ export const TOOL_BY_NAME = new Map(TOOLS.map((x) => [x.name, x]));
 
 /** Routes deliberately NOT reachable through MCP (account takeover, secrets, mock state, factory reset). Format: "METHOD /path-pattern". */
 export const EXCLUDED_ROUTES = [
-  "GET /setup/status", "POST /setup", "POST /auth/login", "GET /auth/me", "POST /auth/logout", "POST /auth/logout-all", "POST /auth/password",
+  "GET /setup/status", "GET /orders/counts", "POST /setup", "POST /auth/login", "GET /auth/me", "POST /auth/logout", "POST /auth/logout-all", "POST /auth/password",
   "POST /auth/mfa/setup", "POST /auth/mfa/enable", "POST /auth/mfa/disable",
   "GET /users", "POST /users", "PATCH /users/:id", "DELETE /users/:id",
   "GET /tokens", "POST /tokens", "DELETE /tokens/:id", "GET /mcp/tools", "PUT /mcp/tools",

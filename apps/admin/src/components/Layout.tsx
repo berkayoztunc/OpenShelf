@@ -58,6 +58,9 @@ export const NAV_GROUPS: { id: string; titleKey?: MessageKey; items: NavItem[] }
 const TITLE_KEYS: Record<string, MessageKey> = Object.fromEntries(NAV_GROUPS.flatMap((g) => g.items.map((i) => [i.to.slice(1), i.labelKey])));
 
 /** Persistent (non-dismissible) banner for owner/admin accounts that have not enrolled TOTP yet. */
+/** List pages that benefit from the full screen width (many columns). */
+const WIDE_ROUTES = new Set(["/orders", "/products"]);
+
 export function MfaBanner() {
   const admin = useAdmin();
   const { t } = useT();
@@ -195,7 +198,7 @@ export function Layout() {
         </header>
         <MockBanner />
         <MfaBanner />
-        <main id="main" tabIndex={-1} className="page-in mx-auto max-w-6xl p-4 outline-none sm:p-6 lg:p-8" key={loc.pathname.split("/")[1] ?? ""}><Outlet /></main>
+        <main id="main" tabIndex={-1} className={`page-in mx-auto p-4 outline-none sm:p-6 lg:p-8 ${WIDE_ROUTES.has(loc.pathname) ? "max-w-[110rem]" : "max-w-6xl"}`} key={loc.pathname.split("/")[1] ?? ""}><Outlet /></main>
       </div>
     </div>
   );

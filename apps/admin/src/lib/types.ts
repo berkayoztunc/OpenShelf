@@ -10,17 +10,28 @@ export interface Category {
 export interface Variant {
   id?: string; sku: string; barcode?: string | null; title: string;
   options?: Record<string, string>;
-  prices: { website: number; trendyol?: number | null };
+  prices: { website: number; trendyol?: number | null }; compareAtPrice?: number | null;
   stock?: { total: number; reserved: number };
 }
 export interface ProductImage { id?: string; url?: string; mediaId?: string; alt?: string; position?: number }
 export interface Product {
   id: string; name: string; slug: string; description?: string;
   status: "draft" | "active" | "archived"; categoryId?: string | null;
+  /** list-only extras: brand, category name, mapped to Trendyol, last update (ISO) */
+  brand?: string; categoryName?: string; onTrendyol?: boolean; updatedAt?: string;
   variants: Variant[]; images: ProductImage[];
   seoTitle?: string; seoDescription?: string; seoOgMediaId?: string | null; seoOgImageUrl?: string; seoNoindex?: boolean; seoCanonical?: string;
 }
-export interface OrderRow { id: string; number: string; status: OrderStatus; source: OrderSource; total: number; currency: string; email?: string; customerName?: string; createdAt: string; isMock?: boolean }
+export interface OrderRow {
+  id: string; number: string; status: OrderStatus; source: OrderSource; total: number; currency: string; email?: string; customerName?: string; createdAt: string; isMock?: boolean;
+  city?: string; district?: string; phone?: string;
+  /** Total quantity and the first few lines, for the list "Items" column. */
+  itemCount?: number; lineCount?: number; lines?: { name: string; sku?: string; quantity: number }[];
+  /** Latest payment / shipment / invoice, `null` when none exists yet (process tracking). */
+  payment?: { status: string; provider: string } | null;
+  shipment?: { status: string; carrier?: string; trackingNumber?: string; trackingUrl?: string } | null;
+  invoice?: { status: string; number?: string } | null;
+}
 export interface OrderDetail extends OrderRow {
   items: { id: string; title: string; sku?: string; quantity: number; unitPrice: number; total: number }[];
   payments: { id: string; provider: string; status: string; amount: number; createdAt?: string; isMock?: boolean }[];

@@ -20,9 +20,10 @@ export const categoryToApi = (c: Partial<Category>) => ({
 
 export const productFromApi = (p: W): Product => ({
   id: p.id, name: p.nameTr, slug: p.slug, description: p.descriptionTr ?? undefined, status: p.status, categoryId: p.categoryId ?? null,
+  brand: p.brand ?? undefined, categoryName: p.categoryName ?? undefined, onTrendyol: p.onTrendyol === true, updatedAt: iso(p.updatedAt),
   variants: (p.variants ?? []).filter((v: W) => v.active !== false).map((v: W) => ({
     id: v.id, sku: v.sku, barcode: v.barcode ?? null, title: v.title ?? "", options: v.options ?? undefined,
-    prices: { website: v.prices?.website ?? 0, trendyol: v.prices?.trendyol ?? null }, stock: v.stock ? { total: v.stock.total, reserved: v.stock.reserved } : undefined,
+    prices: { website: v.prices?.website ?? 0, trendyol: v.prices?.trendyol ?? null }, compareAtPrice: v.compareAtPrice ?? null, stock: v.stock ? { total: v.stock.total, reserved: v.stock.reserved } : undefined,
   })),
   images: (p.images ?? []).map((i: W) => ({ id: i.id, url: i.url ?? undefined, mediaId: i.mediaId ?? undefined, alt: i.alt ?? undefined, position: i.position })),
   seoTitle: p.seoTitle ?? "", seoDescription: p.seoDescription ?? "", seoOgMediaId: p.seoOgMediaId ?? null, seoOgImageUrl: p.seoOgImageUrl ?? "",
@@ -39,7 +40,16 @@ export const productToApi = (f: { name: string; slug: string; description: strin
 
 export const couponFromApi = (c: W): Coupon => ({ id: c.code, code: c.code, type: c.type, value: c.value, minSubtotal: c.minSubtotal ?? null, maxUses: c.maxUses ?? null, usedCount: c.used ?? 0, expiresAt: iso(c.expiresAt) ?? null, active: c.active });
 
-export const orderRowFromApi = (o: W): OrderRow => ({ id: o.id, number: o.number, status: o.status, source: o.source, total: o.total, currency: o.currency, email: o.email, createdAt: iso(o.createdAt) ?? "", isMock: o.isMock === true });
+const httpsOnly = (u: unknown) => (typeof u === "string" && /^https:\/\//i.test(u) ? u : undefined);
+export const orderRowFromApi = (o: W): OrderRow => ({
+  id: o.id, number: o.number, status: o.status, source: o.source, total: o.total, currency: o.currency, email: o.email, createdAt: iso(o.createdAt) ?? "", isMock: o.isMock === true,
+  customerName: o.customerName ?? undefined, city: o.city ?? undefined, district: o.district ?? undefined, phone: o.phone ?? undefined,
+  itemCount: o.itemCount, lineCount: o.lineCount,
+  lines: Array.isArray(o.lines) ? o.lines.map((l: W) => ({ name: l.name, sku: l.sku, quantity: l.quantity })) : undefined,
+  payment: o.payment === undefined ? undefined : o.payment ? { status: o.payment.status, provider: o.payment.provider } : null,
+  shipment: o.shipment === undefined ? undefined : o.shipment ? { status: o.shipment.status, carrier: o.shipment.carrier ?? undefined, trackingNumber: o.shipment.trackingNumber ?? undefined, trackingUrl: httpsOnly(o.shipment.trackingUrl) } : null,
+  invoice: o.invoice === undefined ? undefined : o.invoice ? { status: o.invoice.status, number: o.invoice.number ?? undefined } : null,
+});
 export const orderDetailFromApi = (o: W): OrderDetail => ({
   ...orderRowFromApi(o),
   customerName: [o.shippingAddress?.name, o.shippingAddress?.surname].filter(Boolean).join(" ") || undefined,

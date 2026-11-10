@@ -124,6 +124,94 @@ describe("Products list", () => {
   });
 });
 
+describe("Products list: inline edit, filters, bulk", () => {
+  const multi = { id: "p2", slug: "mug", nameTr: "Mug", status: "active", brand: "Atölye", categoryName: "Seramik", onTrendyol: true, updatedAt: 1767000000,
+    variants: [{ id: "m1", sku: "MUG-S", title: "Small", prices: { website: 2000 }, stock: { total: 8, reserved: 2 }, active: true }, { id: "m2", sku: "MUG-L", title: "Large", prices: { website: 3000 }, compareAtPrice: 4000, stock: { total: 0, reserved: 0 }, active: true }], images: [] };
+  const single = { id: "p1", slug: "vase", nameTr: "Vase", status: "active", categoryName: "Seramik", variants: [{ id: "v1", sku: "VASE-1", title: "D", prices: { website: 10000 }, stock: { total: 9, reserved: 1 }, active: true }], images: [] };
+  const setup = () => {
+    const seen: string[] = [];
+    vi.spyOn(api, "get").mockImplementation(async (path: string) => { if (path.startsWith("/api/admin/categories")) return { items: [{ id: "c1", slug: "s", nameTr: "Seramik" }] } as never; seen.push(path); return { items: [single, multi], page: 1, pageSize: 25, total: 2 } as never; });
+    return seen;
+  };
+  it("inline price edit PATCHes the variant price in minor units", async () => {
+    setLocale("tr"); setup();
+    const patch = vi.spyOn(api, "patch").mockResolvedValue({} as never);
+    mount(<Products />); const u = userEvent.setup();
+    await u.click(await screen.findByRole("button", { name: "Vase fiyatını düzenle" }));
+    const input = screen.getByRole("textbox", { name: "Vase fiyatını düzenle" });
+    await u.clear(input); await u.type(input, "125,50{Enter}");
+    await waitFor(() => expect(patch).toHaveBeenCalledWith("/api/admin/variants/v1/price", { price: 12550 }));
+  });
+  it("inline stock edit sends the delta against total stock", async () => {
+    setLocale("tr"); setup();
+    const post = vi.spyOn(api, "post").mockResolvedValue({} as never);
+    mount(<Products />); const u = userEvent.setup();
+    await u.click(await screen.findByRole("button", { name: "Vase toplam stoğunu düzenle" }));
+    const input = screen.getByRole("textbox", { name: "Vase toplam stoğunu düzenle" });
+    await u.clear(input); await u.type(input, "4{Enter}");
+    await waitFor(() => expect(post).toHaveBeenCalledWith("/api/admin/inventory/v1/adjust", { delta: -5, reason: "Ürün listesinden düzenleme" }));
+  });
+  it("invalid inline input is rejected without calling the API; Escape cancels", async () => {
+    setLocale("tr"); setup();
+    const patch = vi.spyOn(api, "patch").mockResolvedValue({} as never);
+    mount(<Products />); const u = userEvent.setup();
+    await u.click(await screen.findByRole("button", { name: "Vase fiyatını düzenle" }));
+    await u.clear(screen.getByRole("textbox", { name: "Vase fiyatını düzenle" })); await u.type(screen.getByRole("textbox", { name: "Vase fiyatını düzenle" }), "abc{Enter}");
+    expect(await screen.findByText("Geçerli bir fiyat girin (0’dan büyük).")).toBeTruthy();
+    await u.click(screen.getByRole("button", { name: "Vase fiyatını düzenle" })); await u.keyboard("{Escape}");
+    expect(patch).not.toHaveBeenCalled();
+  });
+  it("multi-variant products expand to per-variant rows; strike-through price is shown", async () => {
+    setLocale("tr"); setup(); mount(<Products />); const u = userEvent.setup();
+    await u.click(await screen.findByRole("button", { name: "Mug varyantlarını göster" }));
+    expect(await screen.findByText("SKU: MUG-L")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Mug (MUG-S) fiyatını düzenle" })).toBeTruthy();
+    expect(within(screen.getByRole("table")).getByText(/40,00/)).toBeTruthy();
+  });
+  it("shows category, brand and the Trendyol channel badge", async () => {
+    setLocale("tr"); setup(); mount(<Products />);
+    const table = await screen.findByRole("table");
+    expect(within(table).getAllByText("Seramik").length).toBe(2);
+    expect(within(table).getByText(/Atölye/)).toBeTruthy();
+    expect(within(table).getByText("Trendyol")).toBeTruthy();
+  });
+  it("filters and sort are sent as query params", async () => {
+    setLocale("tr"); const seen = setup(); mount(<Products />); const u = userEvent.setup();
+    await screen.findByRole("table");
+    await u.selectOptions(screen.getByLabelText("Stok durumu"), "out");
+    await u.click(screen.getByRole("checkbox", { name: "Yalnızca görseli olmayanlar" }));
+    await u.selectOptions(screen.getByLabelText("Sırala"), "price");
+    await u.click(screen.getByRole("tab", { name: "Taslak" }));
+    await waitFor(() => { const last = seen[seen.length - 1] ?? ""; for (const part of ["stock=out", "image=none", "sort=price", "status=draft"]) expect(last).toContain(part); });
+  });
+  it("bulk status posts the selected ids once after confirmation", async () => {
+    setLocale("tr"); setup();
+    const post = vi.spyOn(api, "post").mockResolvedValue({ updated: 2, missing: [] } as never);
+    mount(<Products />); const u = userEvent.setup();
+    await u.click(await screen.findByRole("checkbox", { name: "Bu sayfadaki tüm ürünleri seç" }));
+    await u.selectOptions(screen.getByLabelText("Durumu değiştir…"), "archived");
+    const dlg = await screen.findByRole("dialog");
+    expect(dlg).toHaveTextContent("2 ürün “Arşivde” durumuna alınacak");
+    await u.click(within(dlg).getByRole("button", { name: "2 ürüne uygula" }));
+    await waitFor(() => expect(post).toHaveBeenCalledWith("/api/admin/products/bulk", { ids: ["p1", "p2"], action: "status", status: "archived" }));
+  });
+  it("bulk price change validates the percentage and sends it", async () => {
+    setLocale("tr"); setup();
+    const post = vi.spyOn(api, "post").mockResolvedValue({ updated: 1, missing: [] } as never);
+    mount(<Products />); const u = userEvent.setup();
+    await u.click(await screen.findByRole("checkbox", { name: "Vase ürününü seç" }));
+    await u.click(screen.getByRole("button", { name: "Fiyatı değiştir" }));
+    const dlg = await screen.findByRole("dialog");
+    const apply = within(dlg).getByRole("button", { name: "1 ürüne uygula" });
+    expect(apply).toBeDisabled();
+    await u.type(within(dlg).getByLabelText("Yüzde değişim"), "-15");
+    expect(apply).toBeEnabled();
+    expect(dlg).toHaveTextContent("%-15");
+    await u.click(apply);
+    await waitFor(() => expect(post).toHaveBeenCalledWith("/api/admin/products/bulk", { ids: ["p1"], action: "price", percent: -15 }));
+  });
+});
+
 describe("destructive confirmations explain the consequences", () => {
   it("category delete", async () => {
     setLocale("tr");

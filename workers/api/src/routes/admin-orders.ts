@@ -15,19 +15,103 @@ import { availableOf } from "../lib/catalog";
 
 export const adminOrders = new Hono<AppEnv>();
 
+const PAY_FILTER = ["succeeded", "pending", "failed", "refunded"] as const;
+const SHIP_FILTER = ["created", "in_transit", "delivered", "returned", "cancelled"] as const;
+const INV_FILTER = ["draft", "issuing", "issued", "failed", "cancelled"] as const;
+const oneOf = (v: string | undefined, allowed: readonly string[], what: string) => {
+  if (!v) return undefined;
+  if (v === "none" || allowed.includes(v)) return v;
+  throw new ApiError(400, "validation_error", `Unknown ${what}`);
+};
+const dateParam = (v: string | undefined, endOfDay: boolean) => {
+  if (!v) return undefined;
+  const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z` : v);
+  if (Number.isNaN(d.getTime())) throw new ApiError(400, "validation_error", "Invalid date");
+  return d;
+};
+const intParam = (v: string | undefined) => { if (v === undefined || v === "") return undefined; const n = Number(v); if (!Number.isInteger(n) || n < 0) throw new ApiError(400, "validation_error", "Invalid amount"); return n; };
+/** child-table filter: "none" = no row, otherwise a row with that status exists */
+const childFilter = (table: "payments" | "shipments" | "invoices", v: string) =>
+  v === "none"
+    ? sql`NOT EXISTS (SELECT 1 FROM ${sql.raw(table)} x WHERE x.order_id = ${orders.id})`
+    : sql`EXISTS (SELECT 1 FROM ${sql.raw(table)} x WHERE x.order_id = ${orders.id} AND x.status = ${v})`;
+
+function orderListFilters(c: { req: { query(k: string): string | undefined } }, opts: { withStatus: boolean }) {
+  const conds = [];
+  const source = c.req.query("source"); const q = c.req.query("q")?.trim();
+  if (opts.withStatus) {
+    const status = c.req.query("status");
+    if (status) {
+      const list = status.split(",").map((x) => x.trim()).filter(Boolean);
+      if (list.some((x) => !(ORDER_STATUSES as readonly string[]).includes(x))) throw new ApiError(400, "validation_error", "Unknown status");
+      conds.push(list.length === 1 ? eq(orders.status, list[0]!) : inArray(orders.status, list));
+    }
+  }
+  if (source) conds.push(eq(orders.source, source));
+  if (q) {
+    const l = `%${likeEscape(q)}%`;
+    conds.push(sql`(${orders.number} LIKE ${l} ESCAPE '\\' OR ${orders.email} LIKE ${l} ESCAPE '\\'
+      OR json_extract(${orders.shippingAddress}, '$.name') LIKE ${l} ESCAPE '\\' OR json_extract(${orders.shippingAddress}, '$.surname') LIKE ${l} ESCAPE '\\'
+      OR json_extract(${orders.shippingAddress}, '$.phone') LIKE ${l} ESCAPE '\\' OR json_extract(${orders.shippingAddress}, '$.city') LIKE ${l} ESCAPE '\\'
+      OR EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = ${orders.id} AND (i.sku LIKE ${l} ESCAPE '\\' OR i.name LIKE ${l} ESCAPE '\\'))
+      OR EXISTS (SELECT 1 FROM shipments sh WHERE sh.order_id = ${orders.id} AND sh.tracking_number LIKE ${l} ESCAPE '\\'))`);
+  }
+  const payment = oneOf(c.req.query("payment"), PAY_FILTER, "payment status"); if (payment) conds.push(childFilter("payments", payment));
+  const shipping = oneOf(c.req.query("shipping"), SHIP_FILTER, "shipment status"); if (shipping) conds.push(childFilter("shipments", shipping));
+  const invoice = oneOf(c.req.query("invoice"), INV_FILTER, "invoice status"); if (invoice) conds.push(childFilter("invoices", invoice));
+  const from = dateParam(c.req.query("from"), false); if (from) conds.push(sql`${orders.createdAt} >= ${Math.floor(from.getTime() / 1000)}`);
+  const to = dateParam(c.req.query("to"), true); if (to) conds.push(sql`${orders.createdAt} <= ${Math.floor(to.getTime() / 1000)}`);
+  const min = intParam(c.req.query("minTotal")); if (min !== undefined) conds.push(sql`${orders.total} >= ${min}`);
+  const max = intParam(c.req.query("maxTotal")); if (max !== undefined) conds.push(sql`${orders.total} <= ${max}`);
+  return conds.length ? and(...conds) : undefined;
+}
+
+type Addr = { name?: string; surname?: string; city?: string; district?: string; phone?: string } | null;
+const latestBy = <T extends { orderId: string; createdAt: Date }>(rows: T[]) => {
+  const m = new Map<string, T>();
+  for (const r of rows) { const cur = m.get(r.orderId); if (!cur || r.createdAt.getTime() >= cur.createdAt.getTime()) m.set(r.orderId, r); }
+  return m;
+};
+
 adminOrders.get("/orders", requireRole("staff"), async (c) => {
   const p = paging(c); const db = c.get("db");
-  const conds = [];
-  const status = c.req.query("status"); const source = c.req.query("source"); const q = c.req.query("q")?.trim();
-  if (status) { if (!(ORDER_STATUSES as readonly string[]).includes(status)) throw new ApiError(400, "validation_error", "Unknown status"); conds.push(eq(orders.status, status)); }
-  if (source) conds.push(eq(orders.source, source));
-  if (q) { const l = `%${likeEscape(q)}%`; conds.push(sql`(${orders.number} LIKE ${l} ESCAPE '\\' OR ${orders.email} LIKE ${l} ESCAPE '\\')`); }
-  const where = conds.length ? and(...conds) : undefined;
+  const where = orderListFilters(c, { withStatus: true });
   const rows = await db.select().from(orders).where(where).orderBy(desc(orders.createdAt)).limit(p.pageSize).offset(p.offset);
   const [t] = await db.select({ n: sql<number>`count(*)` }).from(orders).where(where);
   const ids = rows.map((r) => r.id);
-  const mockIds = new Set(ids.length ? (await db.select({ o: payments.orderId }).from(payments).where(and(inArray(payments.orderId, ids), eq(payments.isMock, true)))).map((r) => r.o) : []);
-  return c.json(paged(rows.map(({ trackingToken: _t, ...o }) => ({ ...o, isMock: mockIds.has(o.id) })), t?.n ?? 0, p));
+  const [pays, items, ships, invs] = ids.length ? await Promise.all([
+    db.select().from(payments).where(inArray(payments.orderId, ids)),
+    db.select().from(orderItems).where(inArray(orderItems.orderId, ids)),
+    db.select().from(shipments).where(inArray(shipments.orderId, ids)),
+    db.select().from(invoices).where(inArray(invoices.orderId, ids)),
+  ]) : [[], [], [], []];
+  const mockIds = new Set(pays.filter((x) => x.isMock).map((x) => x.orderId));
+  const lastPay = latestBy(pays); const lastShip = latestBy(ships); const lastInv = latestBy(invs);
+  const itemsBy = new Map<string, typeof items>();
+  for (const i of items) { const a = itemsBy.get(i.orderId); if (a) a.push(i); else itemsBy.set(i.orderId, [i]); }
+  return c.json(paged(rows.map(({ trackingToken: _t, ...o }) => {
+    const addr = o.shippingAddress as Addr; const its = itemsBy.get(o.id) ?? [];
+    const pay = lastPay.get(o.id); const sh = lastShip.get(o.id); const inv = lastInv.get(o.id);
+    return {
+      ...o, isMock: mockIds.has(o.id),
+      customerName: [addr?.name, addr?.surname].filter(Boolean).join(" ") || null, city: addr?.city ?? null, district: addr?.district ?? null, phone: addr?.phone ?? null,
+      itemCount: its.reduce((n, i) => n + i.quantity, 0), lineCount: its.length,
+      lines: its.slice(0, 3).map((i) => ({ name: i.name, sku: i.sku, quantity: i.quantity })),
+      payment: pay ? { status: pay.status, provider: pay.provider } : null,
+      shipment: sh ? { status: sh.status, carrier: sh.carrier ?? null, trackingNumber: sh.trackingNumber ?? null, trackingUrl: sh.trackingUrl ?? null } : null,
+      invoice: inv ? { status: inv.status, number: inv.number ?? null } : null,
+    };
+  }), t?.n ?? 0, p));
+});
+
+/** Per-status order counts for the list tabs (honours every filter except status itself). */
+adminOrders.get("/orders/counts", requireRole("staff"), async (c) => {
+  const db = c.get("db");
+  const where = orderListFilters(c, { withStatus: false });
+  const rows = await db.select({ status: orders.status, n: sql<number>`count(*)` }).from(orders).where(where).groupBy(orders.status);
+  const byStatus: Record<string, number> = {};
+  for (const r of rows) byStatus[r.status] = r.n;
+  return c.json({ byStatus, total: rows.reduce((n, r) => n + r.n, 0) });
 });
 
 adminOrders.get("/orders/:id", requireRole("staff"), async (c) => {

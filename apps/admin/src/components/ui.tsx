@@ -168,7 +168,7 @@ export const statusTone = (s: string): Tone =>
   ({ paid: "success", delivered: "success", succeeded: "success", sent: "success", done: "success", active: "success", ok: "success",
     cancelled: "danger", refunded: "danger", failed: "danger", dead: "danger", error: "danger",
     pending: "warning", awaiting_payment: "warning", draft: "warning", retrying: "warning", queued: "warning",
-    fulfilling: "info", shipped: "info", running: "info" } as Record<string, Tone>)[s] ?? "neutral";
+    fulfilling: "info", shipped: "info", running: "info", in_transit: "info", created: "info", issuing: "warning", issued: "success", returned: "danger" } as Record<string, Tone>)[s] ?? "neutral";
 
 export function Loading({ label }: { label?: string }) {
   const { t } = useT();
@@ -197,10 +197,10 @@ export function ErrorState({ error, retry }: { error: unknown; retry?: () => voi
 }
 
 /* ---------- Table ---------- */
-export function Table({ head, children, caption }: { head: ReactNode[]; children: ReactNode; caption?: string }) {
+export function Table({ head, children, caption, minWidth = "34rem" }: { head: ReactNode[]; children: ReactNode; caption?: string; minWidth?: string }) {
   return (
-    <div className="-mx-5 max-h-[70vh] overflow-auto border-y border-line">
-      <table className="w-full min-w-[34rem] text-left text-sm">
+    <div className="-mx-5 max-h-[75vh] overflow-auto border-y border-line">
+      <table className="w-full text-left text-sm" style={{ minWidth }}>
         {caption && <caption className="sr-only">{caption}</caption>}
         <thead className="sticky top-0 z-10 bg-canvas/85 text-[11px] backdrop-blur-md uppercase tracking-wider text-muted shadow-[0_1px_0_var(--color-line)]"><tr>{head.map((h, i) => <th key={i} scope="col" className="px-5 py-2.5 font-semibold first:pl-5">{h}</th>)}</tr></thead>
         <tbody className="divide-y divide-line [&>tr]:transition-colors [&>tr:hover]:bg-hover">{children}</tbody>

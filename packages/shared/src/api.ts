@@ -82,6 +82,15 @@ export const ProductInput = z.object({
   variants: z.array(VariantInput).min(1).max(200), images: z.array(ImageInput).max(30).default([]),
 });
 export type ProductInput = z.infer<typeof ProductInput>;
+/** Inline price edit from the product list: sets the website price (kuruş) and optionally the strike-through price. */
+export const VariantPriceBody = z.object({ price: z.number().int().min(1), compareAtPrice: z.number().int().min(1).nullable().optional() })
+  .refine((b) => b.compareAtPrice == null || b.compareAtPrice > b.price, { message: "compareAtPrice must be higher than price", path: ["compareAtPrice"] });
+/** Bulk product changes (list page): status, category, or a percentage price change on the website channel. */
+export const ProductBulkBody = z.object({ ids: z.array(z.string().min(1)).min(1).max(100) }).and(z.discriminatedUnion("action", [
+  z.object({ action: z.literal("status"), status: z.enum(["draft", "active", "archived"]) }),
+  z.object({ action: z.literal("category"), categoryId: z.string().min(1).nullable() }),
+  z.object({ action: z.literal("price"), percent: z.number().min(-90).max(500).refine((n) => n !== 0, "percent must be non-zero") }),
+]));
 export const InventoryAdjustBody = z.object({ delta: z.number().int().refine((n) => n !== 0, "delta must be non-zero"), reason: z.string().min(1).max(200) });
 export const CouponInput = z.object({
   code: z.string().min(2).max(40).regex(/^[A-Za-z0-9_-]+$/), type: z.enum(["percent", "fixed"]), value: z.number().int().min(1),
