@@ -17,6 +17,7 @@
   <div class="wrap bar">
     <a class="brand" href="#top"><img class="logo" src="logo.png" alt="OpenShelf" width="101" height="32"></a>
     <nav>
+      <a href="#integrations" data-i="nav.integ">Integrations</a>
       <a data-doc="deploy-cloudflare.md" data-i="nav.docs" href="#">Docs</a>
       <a id="gh" data-i="nav.github" href="#">GitHub</a>
       <span class="lang" role="group" aria-label="Language"><button data-lang="en" aria-pressed="true">EN</button><button data-lang="tr" aria-pressed="false">TR</button></span>
@@ -30,10 +31,12 @@
     <h1 data-i="hero.title">Your online store, live in 5 minutes.</h1>
     <p class="sub" data-i="hero.sub">OpenShelf is a complete shop that deploys to Cloudflare.</p>
     <div class="cta"><a class="btn primary" href="#steps" data-i="hero.cta">Start the 3-step setup</a><a class="btn ghost" data-doc="quickstart.md" data-i="hero.docs" href="#">Read the docs</a></div>
+    <ul class="chips"><li data-i="hero.c1">MIT licensed</li><li data-i="hero.c2">Cloudflare Workers + D1</li><li data-i="hero.c3">Türkçe &amp; English</li></ul>
     <noscript><p class="warn-box">This setup page needs JavaScript to generate your secrets. Or use the command line: <code>git clone</code> + <code>pnpm run setup</code>.</p></noscript>
   </section>
 
-  <section id="steps" class="wrap">
+  <section id="steps" class="wrap sec">
+    <p class="eyebrow" data-i="steps.eyebrow">Setup</p>
     <h2 data-i="steps.title">Deploy in 3 steps</h2>
     <ol class="steps">
       <li class="card">
@@ -64,8 +67,9 @@
     </ol>
   </section>
 
-  <section class="wrap two">
+  <section class="wrap two sec">
     <div>
+      <p class="eyebrow" data-i="next.eyebrow">First hour</p>
       <h2 data-i="next.title">After you log in</h2>
       <p class="muted" data-i="next.sub"></p>
       <ol class="todo"><li data-i="n1"></li><li data-i="n2"></li><li data-i="n3"></li><li data-i="n4"></li><li data-i="n5"></li><li data-i="n6"></li></ol>
@@ -78,7 +82,21 @@
     </div>
   </section>
 
-  <section class="wrap">
+  <section id="integrations" class="wrap sec">
+    <p class="eyebrow" data-i="integ.eyebrow">Before you sell</p>
+    <h2 data-i="integ.title">Connect your providers</h2>
+    <p class="lead" data-i="integ.sub"></p>
+    <ol class="how">
+      <li><span class="num">1</span><h3 data-i="how1.t"></h3><p data-i="how1.b"></p></li>
+      <li><span class="num">2</span><h3 data-i="how2.t"></h3><p data-i="how2.b"></p></li>
+      <li><span class="num">3</span><h3 data-i="how3.t"></h3><p data-i="how3.b"></p></li>
+    </ol>
+    <div id="integ" class="integ"></div>
+    <p class="callout" data-i="integ.note"></p>
+  </section>
+
+  <section class="wrap sec">
+    <p class="eyebrow" data-i="feat.eyebrow">Included</p>
     <h2 data-i="feat.title">What you get</h2>
     <div class="grid">
       <div class="card"><h3 data-i="f1.t"></h3><p data-i="f1.b"></p></div><div class="card"><h3 data-i="f2.t"></h3><p data-i="f2.b"></p></div>
@@ -87,13 +105,13 @@
     </div>
   </section>
 
-  <section class="wrap help card">
+  <section class="wrap sec"><div class="help card">
     <h2 data-i="help.title">Need a different way?</h2>
     <p data-i="help.cli"></p>
     <p class="links"><a data-doc="deploy-cloudflare.md" href="#" data-i="help.docs"></a> · <a data-doc="security.md" href="#" data-i="help.sec"></a> · <a href="https://github.com/berkayoztunc/OpenShelf/issues" data-i="help.issue"></a></p>
-  </section>
+  </div></section>
 </main>
-<footer class="wrap foot"><p data-i="foot">OpenShelf is open source (MIT). Not affiliated with Cloudflare.</p></footer>
+<footer class="wrap foot"><img src="favicon.png" alt="" width="28" height="28"><p data-i="foot">OpenShelf is open source (MIT). Not affiliated with Cloudflare.</p></footer>
 <script type="module" src="app.js"></script>
 </body>
 </html>
