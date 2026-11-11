@@ -78,20 +78,22 @@ export function Banner({ collage = [] }: { collage?: { url?: string | null; titl
       className="relative overflow-hidden bg-stone-900"
       onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocus={() => setPaused(true)} onBlur={() => setPaused(false)}
     >
-      <div className="relative aspect-[4/5] sm:aspect-[16/7] lg:max-h-[640px]">
+      {/* The banner is designed at 16:7 (2400×1050). Full width always (an aspect-ratio box with only a max-height shrinks its WIDTH in browsers,
+          leaving an empty dark strip on wide screens); the whole image is visible on phones; only screens wider than 1920px crop a little off top/bottom (840px is exactly 16:7 at 1920px). */}
+      <div className="relative aspect-[16/7] w-full lg:max-h-[840px]">
         {bannerUrls.map((src, idx) => (
           <div key={src} role="group" aria-roledescription="slide" aria-label={`${idx + 1} / ${n}`} aria-hidden={idx !== i}
             className={`absolute inset-0 transition-opacity duration-1000 ${idx === i ? "opacity-100" : "pointer-events-none opacity-0"}`}>
-            <img src={src} alt="" className={`size-full object-cover transition-transform duration-[7000ms] ease-out ${idx === i ? "scale-105" : "scale-100"}`} loading={idx === 0 ? "eager" : "lazy"} fetchPriority={idx === 0 ? "high" : "auto"} />
+            <img src={src} alt="" className={`size-full object-cover transition-transform duration-[7000ms] ease-out ${idx === i ? "scale-[1.02]" : "scale-100"}`} loading={idx === 0 ? "eager" : "lazy"} fetchPriority={idx === 0 ? "high" : "auto"} />
           </div>
         ))}
         {hasText && (
-          <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/70 via-black/15 to-transparent lg:items-center lg:bg-gradient-to-r lg:from-black/65 lg:via-black/20">
-            <div className="container-x pb-14 lg:pb-0">
+          <div className="absolute inset-0 hidden items-center bg-gradient-to-r from-black/65 via-black/20 to-transparent sm:flex">
+            <div className="container-x">
               <div className="max-w-xl text-white">
-                {bannerTitle && <h1 className="font-display text-4xl font-semibold leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">{bannerTitle}</h1>}
-                {bannerSubtitle && <p className="mt-4 text-base text-white/85 sm:text-lg">{bannerSubtitle}</p>}
-                <div className="mt-7 flex flex-wrap gap-3">
+                {bannerTitle && <h1 className="font-display text-4xl font-semibold leading-[1.05] tracking-tight sm:text-3xl md:text-5xl lg:text-6xl">{bannerTitle}</h1>}
+                {bannerSubtitle && <p className="mt-4 text-base text-white/85 sm:mt-2 sm:text-sm md:mt-4 md:text-lg">{bannerSubtitle}</p>}
+                <div className="mt-7 flex flex-wrap gap-3 sm:mt-4 md:mt-7">
                   {bannerCtaLabel && <Cta url={ctaUrl} label={bannerCtaLabel} className="btn-primary !min-h-12 !bg-white !px-6 !text-base !text-stone-900 hover:!bg-white/85" />}
                   <a href="#categories" className="inline-flex min-h-12 items-center rounded-xl border border-white/40 px-6 text-base font-medium text-white backdrop-blur transition hover:bg-white/15">{t("hero.browse")}</a>
                 </div>
@@ -113,6 +115,16 @@ export function Banner({ collage = [] }: { collage?: { url?: string | null; titl
           </>
         )}
       </div>
+      {hasText && (
+        <div className="container-x py-6 text-white sm:hidden">
+          {bannerTitle && <h1 className="font-display text-3xl font-semibold leading-[1.1] tracking-tight">{bannerTitle}</h1>}
+          {bannerSubtitle && <p className="mt-2 text-base text-white/85">{bannerSubtitle}</p>}
+          <div className="mt-5 flex flex-wrap gap-3">
+            {bannerCtaLabel && <Cta url={ctaUrl} label={bannerCtaLabel} className="btn-primary !min-h-12 !bg-white !px-6 !text-base !text-stone-900 hover:!bg-white/85" />}
+            <a href="#categories" className="inline-flex min-h-12 items-center rounded-xl border border-white/40 px-6 text-base font-medium text-white transition hover:bg-white/15">{t("hero.browse")}</a>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

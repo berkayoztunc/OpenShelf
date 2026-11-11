@@ -32,8 +32,8 @@ export const IMAGE_SPECS: Record<MediaKind, ImageSpec> = {
   },
   banner: {
     kind: "banner", title: "Home hero banner", width: 2400, height: 1050, aspect: "16:7 (wide)", minWidth: 1600, minHeight: 700, transparent: false, preferredFormats: ["webp", "jpeg"],
-    usage: "Home page hero carousel: 16:7 on tablet/desktop (max height 640 px), 4:5 on phones, cropped with object-cover from the centre. A dark gradient and the store's title/subtitle/button are overlaid (left side on desktop, bottom on mobile).",
-    guidance: "Keep the key subject inside the central ~35% width (phones show only that strip) and vertically centred. Leave the left third calm/low-detail for the overlaid text. No text or buttons in the image. Darker or mid-tone images read best under the overlay. Up to 6 banners rotate.",
+    usage: "Home page hero carousel at full width, always shown at 16:7: the WHOLE image is visible on phones and tablets; on screens wider than 1920 px (max height 840 px) a little is cropped from the top and bottom, from the centre. The store's title/subtitle/button are overlaid on the left on tablet/desktop (with a dark gradient) and sit under the image on phones.",
+    guidance: "Keep the key subject vertically centred with ~12% free space above and below (very wide monitors crop a little at the top and bottom). Leave the left third calm/low-detail for the overlaid text. No text or buttons in the image. Darker or mid-tone images read best under the overlay. Up to 6 banners rotate.",
     attach: "set_store_image (slot banner, mediaId or url): appended to the carousel, max 6. Title/subtitle/CTA are separate fields (bannerTitle, bannerSubtitle, bannerCtaLabel, bannerCtaUrl).",
   },
   og: {
