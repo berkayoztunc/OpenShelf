@@ -109,7 +109,7 @@ describe("curated home page products", () => {
     await setMerch({ inStockFirst: false, defaultSort: "newest" });
   });
   it("homepage settings: public defaults, validation and dedupe", async () => {
-    expect((await j<any>(await call("/api/store/config"))).homepage).toEqual({ mode: "auto", productIds: [], limit: 8, title: "", titleEn: "" });
+    expect((await j<any>(await call("/api/store/config"))).homepage).toEqual({ mode: "auto", productIds: [], limit: 8, title: "", titleEn: "", categoryCards: "plain" });
     const ok = await admin(owner, "/settings/homepage", "PATCH", { mode: "manual", productIds: ["ss-c", "ss-a", "ss-c"], title: "Seçtiklerimiz" });
     expect(ok.status).toBe(200);
     expect((await j<any>(await call("/api/store/config"))).homepage).toMatchObject({ mode: "manual", productIds: ["ss-c", "ss-a"], title: "Seçtiklerimiz" });

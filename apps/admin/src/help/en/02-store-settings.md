@@ -264,12 +264,13 @@ Test sending is limited to 5 per admin per hour and 10 per connecting address. I
 
 ## Home page products {#ana-sayfa-urunleri}
 
-You choose which products appear in the "featured" section of the home page under **Storefront → Home page products** in the left menu.
+You choose which products appear in the "featured" section of the home page under **Storefront → Home page** in the left menu.
 
 - **Automatic:** the first products according to the product order setting are shown (e.g. newest or best sellers). You choose how many (4–24).
 - **I'll pick them:** search for products and press **Add**; reorder with the arrows. Only your selection is shown, in your order (up to 24).
 - **Section heading:** leave empty to show "Featured", or enter your own heading (and an optional English one).
 - A draft or archived product is not shown on the storefront even if it stays selected; the list marks it "Not active". If none of the selected products can be shown, the automatic list is used so the home page is never empty.
+- **Category cards:** in the same tab you choose how category cards look on the home page and under category pages: **Plain** (default, name and description only) or **With photos** (the category image). For photos, upload a card image for each category on the **Categories** screen; a category without one stays plain. This only affects the cards.
 
 After saving, the storefront may take about a minute to reflect the change.
 

@@ -11,5 +11,5 @@ export function sniffImage(b: Uint8Array): ImageMime | null {
   if (b.length >= 12 && ascii(b, 4, 8) === "ftyp" && ["avif", "avis"].includes(ascii(b, 8, 12))) return "image/avif";
   return null;
 }
-export const D1_LIMITS: Record<string, number> = { logo: 512 * 1024, logo_dark: 512 * 1024, favicon: 512 * 1024, banner: 1536 * 1024, og: 1536 * 1024, product: 1536 * 1024 };
+export const D1_LIMITS: Record<string, number> = { logo: 512 * 1024, logo_dark: 512 * 1024, favicon: 512 * 1024, banner: 1536 * 1024, og: 1536 * 1024, product: 1536 * 1024, category: 1024 * 1024 };
 export const R2_LIMIT = 5 * 1024 * 1024;

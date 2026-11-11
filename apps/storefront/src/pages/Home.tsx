@@ -1,13 +1,13 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Banner } from "../components/Banner";
-import { ProductImage } from "../components/ProductImage";
 import { ProductGrid, ProductGridSkeleton } from "../components/ProductCard";
 import { TrustBar } from "../components/TrustBar";
 import { api } from "../api/client";
 import { useI18n } from "../i18n";
 import { useHead, absUrl } from "../lib/head";
-import { ArrowIcon, CATEGORY_ICONS } from "../lib/Icons";
+import { ArrowIcon } from "../lib/Icons";
+import { CategoryCard } from "../components/CategoryCard";
 import { homeDescription, jsonLdEnabled, pageTitle, siteHead } from "../lib/seo";
 import { useConfig } from "../store/ConfigContext";
 import { homePlan } from "../lib/homeProducts";
@@ -36,6 +36,7 @@ export default function Home() {
   const curatedEmpty = !!plan.ids && featured.isSuccess && items.length === 0;
   const gridItems = curatedEmpty ? (pool.data?.items ?? []).slice(0, 8) : items.slice(0, plan.count);
   const coverPool = plan.ids ? [...items, ...(pool.data?.items ?? [])] : items;
+  const cardMode = config.homepage?.categoryCards === "image" ? "image" : "plain";
   const top = (cats.data ?? []).filter((c) => !c.parentId).slice(0, 4);
   const coverFor = (id: string, slug: string, own?: string | null) => own || coverPool.find((p) => p.categoryId === id || p.category?.slug === slug)?.images[0]?.url || null;
   const collage = coverPool.filter((p) => p.images[0]).slice(0, 3).map((p) => ({ url: p.images[0]!.url, title: p.title }));
@@ -64,30 +65,9 @@ export default function Home() {
             <p className="mt-2 text-muted">{t("home.categoriesSub")}</p>
           </div>
           <ul className={`mt-8 grid grid-cols-2 gap-3 sm:gap-5 ${top.length === 3 ? "lg:grid-cols-3" : "lg:grid-cols-4"}`}>
-            {top.map((c, idx) => {
-              const cover = coverFor(c.id, c.slug, c.imageUrl);
-              const Icon = CATEGORY_ICONS[idx % CATEGORY_ICONS.length]!;
-              return (
-                <li key={c.id}>
-                  <Link to={`/category/${c.slug}`} className="group relative flex aspect-[4/5] items-end overflow-hidden rounded-2xl max-lg:aspect-[3/4] lg:aspect-[4/3] bg-brand-50 ring-1 ring-ink/[.07] transition duration-300 hover:shadow-lift">
-                    {cover ? (
-                      <>
-                        <ProductImage src={cover} title={c.name} alt="" className="absolute inset-0 size-full object-cover transition duration-700 group-hover:scale-105" />
-                        <span aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
-                      </>
-                    ) : (
-                      <span aria-hidden className="hero-mesh absolute inset-0 grid place-items-center">
-                        <Icon size={64} strokeWidth={1.1} className="text-brand-ink/70 transition duration-500 group-hover:scale-110" />
-                      </span>
-                    )}
-                    <span className={`relative flex w-full items-end justify-between gap-2 p-4 sm:p-5 ${cover ? "text-white" : ""}`}>
-                      <span className="font-display text-xl font-semibold leading-tight sm:text-2xl">{c.name}</span>
-                      <span aria-hidden className={`grid size-9 shrink-0 place-items-center rounded-full transition duration-300 group-hover:translate-x-0.5 ${cover ? "bg-white/90 text-stone-900" : "bg-brand-600 text-white"}`}><ArrowIcon size={18} /></span>
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
+            {top.map((c) => (
+              <li key={c.id}><CategoryCard cat={c} mode={cardMode} cover={coverFor(c.id, c.slug, c.imageUrl)} /></li>
+            ))}
           </ul>
         </section>
       )}

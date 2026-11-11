@@ -1,0 +1,1 @@
+ALTER TABLE `categories` ADD `image_media_id` text;

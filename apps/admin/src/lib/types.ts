@@ -5,6 +5,7 @@ export interface Admin { id: string; email: string; name: string; role: "owner" 
 
 export interface Category {
   id: string; name: string; slug: string; parentId?: string | null; position?: number;
+  description?: string; descriptionEn?: string; /** media id of the category card photo */ imageMediaId?: string | null;
   seoTitle?: string; seoDescription?: string; seoOgImageUrl?: string; seoNoindex?: boolean;
 }
 export interface Variant {

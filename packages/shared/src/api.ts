@@ -37,7 +37,7 @@ export const IntegrationPutBody = z.object({
 export type IntegrationPutBody = z.infer<typeof IntegrationPutBody>;
 
 // ---------- media ----------
-export const MEDIA_KINDS = ["logo", "logo_dark", "favicon", "banner", "og", "product"] as const;
+export const MEDIA_KINDS = ["logo", "logo_dark", "favicon", "banner", "og", "product", "category"] as const;
 export type MediaKind = (typeof MEDIA_KINDS)[number];
 export interface MediaUploadResponse { id: string; url: string; mime: string; size: number; width?: number; height?: number; warnings?: string[] }
 
@@ -56,6 +56,8 @@ export const CategoryInput = z.object({
   slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(100), parentId: z.string().nullable().optional(),
   nameTr: z.string().min(1).max(200), nameEn: z.string().max(200).nullable().optional(),
   descriptionTr: z.string().max(2000).nullable().optional(), descriptionEn: z.string().max(2000).nullable().optional(),
+  /** Photo for the category card (uploaded media of kind "category"); shown when the home page setting categoryCards is "image". */
+  imageMediaId: z.string().max(60).nullable().optional(),
   position: z.number().int().default(0), active: z.boolean().default(true),
   seoTitle: SeoTitle, seoDescription: SeoDescription, seoOgImageUrl: httpsUrl, seoNoindex: z.boolean().default(false),
 });

@@ -7,7 +7,7 @@ import { dateOnly } from "../lib/format";
 import { useT } from "../i18n";
 import { Badge, Button, Card, ConfirmDialog, EmptyState, ErrorState, Loading, PageHeader, SelectField, Spinner, TextField, cx, useToast } from "../components/ui";
 
-const KINDS: MediaKind[] = ["product", "banner", "og", "logo", "logo_dark", "favicon"];
+const KINDS: MediaKind[] = ["product", "banner", "og", "logo", "logo_dark", "favicon", "category"];
 interface Item { id: string; kind: MediaKind; mime: string; size: number; alt: string | null; createdAt: string; url: string; suspect?: string }
 interface Upload { key: number; name: string; state: "uploading" | "ok" | "failed"; result?: MediaResult; error?: string }
 let seq = 0;

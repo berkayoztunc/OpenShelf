@@ -214,7 +214,8 @@ Categories let you group your products on the storefront (Vases, Plates, Gifts�
 1. Click **Categories** in the left menu, then **New category**.
 2. Enter the **Name** (example: `Vases`); the category address (slug) is generated automatically.
 3. If you like, choose a **Parent** (if you leave it as "None", it becomes a top-level category).
-4. Press **Save**.
+4. Optionally add a **Description** (Turkish/English) and a **Card image**. The card image appears on the card when **Storefront → Home page → Category cards** is set to "With photos" (recommended 1200×900, 4:3).
+5. Press **Save**.
 
 The table shows each category's name, address and parent; the **Edit** and **Delete** buttons are at the end of the row.
 

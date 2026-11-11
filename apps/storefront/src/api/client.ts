@@ -75,7 +75,7 @@ const addressToWire = (a: Address) => {
 export const api = {
   config: () => request<Wire>("/api/store/config").then((c): StoreConfig => ({ ...c, locales: c.locales?.available ?? c.locales })),
   categories: () => request<{ items: Wire[] }>("/api/store/categories").then((r) =>
-    r.items.map((c): Category => ({ id: c.id, slug: c.slug, name: c.nameTr, ...(c.descriptionTr && { description: c.descriptionTr }), ...(c.descriptionEn && { descriptionEn: c.descriptionEn }), parentId: c.parentId ?? null, ...(c.seo && { seo: c.seo }) }))),
+    r.items.map((c): Category => ({ id: c.id, slug: c.slug, name: c.nameTr, ...(c.descriptionTr && { description: c.descriptionTr }), ...(c.descriptionEn && { descriptionEn: c.descriptionEn }), ...(c.imageMediaId && { imageUrl: `/media/${c.imageMediaId}` }), parentId: c.parentId ?? null, ...(c.seo && { seo: c.seo }) }))),
   products: (q: ProductQuery) => request<Paged<Wire>>(`/api/store/products${qs({ ...q })}`).then((r): Paged<ProductSummary> => ({ ...r, items: r.items.map(productOf) })),
   product: (slug: string) => request<Wire>(`/api/store/products/${encodeURIComponent(slug)}`).then((p) => productOf(p) as ProductDetail),
   legal: (key: string, lang: Locale) => request<{ key: string; content: string }>(`/api/store/legal/${encodeURIComponent(key)}${qs({ lang })}`).then((r): LegalPage => ({ key: r.key, title: "", content: r.content })),

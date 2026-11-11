@@ -32,7 +32,7 @@ Asistan ilk bağlandığında iki şeyi okur: **mağaza rehberi** (birimler, kan
 - **Raporlar:** `store_overview` (bugün ve duruma göre siparişler), `store_insights` (7/30/90 gün, önceki dönemle karşılaştırma, en çok satanlar, iller, yapılacaklar kuyruğu).
 - **Siparişler:** `list_orders` (durum, kaynak, ödeme, kargo, fatura, tarih ve tutar filtreleri; ürün, müşteri ve takip numarasıyla arama), `get_order`, durum değiştirme, kargo, fatura, iade.
 - **Ürünler:** `list_products` (stok, kanal, görselsiz filtreleri; fiyat, stok, satış sıralaması), `update_variant_price`, `bulk_update_products` (durum, kategori, yüzde fiyat), `adjust_stock`, `add_product_images`.
-- **Vitrin:** `update_menu` (üst menü), `update_merchandising` (ürün sıralaması, sabitlenenler), `update_homepage` (ana sayfa ürünleri).
+- **Vitrin:** `update_menu` (üst menü), `update_merchandising` (ürün sıralaması, sabitlenenler), `update_homepage` (ana sayfa ürünleri ve kategori kartı görünümü; kategori görseli `update_category` ile `imageMediaId` olarak eklenir).
 - **Ayarlar ve SEO:** mağaza bilgileri, marka, SEO, yasal metinler, ödeme/kargo kuralları, takip, bildirimler; `seo_audit` ve ürün/kategori SEO araçları.
 - **Dosya ve görsel:** `upload_help`, `upload_media_from_url`, `create_upload_link`, `import_attached_files`, `set_store_image`, `view_image`, `list_media`, `update_media_alt` (aşağıya bakın).
 - **İleti ve kampanya:** e-posta/SMS gönderme ve kampanya taslakları (önce önizleme ve deneme gönderimi, onayla gönderme).

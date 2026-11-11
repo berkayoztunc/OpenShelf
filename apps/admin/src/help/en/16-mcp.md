@@ -32,7 +32,7 @@ When an assistant connects it reads two things: the **store guide** (units, chan
 - **Reports:** `store_overview` (today and orders by status), `store_insights` (7/30/90 days against the previous period, best sellers, cities, the work queue).
 - **Orders:** `list_orders` (filters for status, source, payment, shipment, invoice, dates and amounts; search by product, customer and tracking number), `get_order`, status changes, shipping, invoices, refunds.
 - **Products:** `list_products` (stock, channel and no-image filters; price, stock and sales sorting), `update_variant_price`, `bulk_update_products` (status, category, percentage price), `adjust_stock`, `add_product_images`.
-- **Storefront:** `update_menu` (top menu), `update_merchandising` (product order, pinned products), `update_homepage` (home page products).
+- **Storefront:** `update_menu` (top menu), `update_merchandising` (product order, pinned products), `update_homepage` (home page products and category card style; a category photo is attached with `update_category` `imageMediaId`).
 - **Settings and SEO:** store profile, branding, SEO, legal pages, checkout rules, tracking, notifications; `seo_audit` and per-product/category SEO tools.
 - **Files and images:** `upload_help`, `upload_media_from_url`, `create_upload_link`, `import_attached_files`, `set_store_image`, `view_image`, `list_media`, `update_media_alt` (see below).
 - **Messages and campaigns:** e-mail/SMS sending and campaign drafts (preview and test first, send after approval).

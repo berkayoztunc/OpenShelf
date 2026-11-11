@@ -17,15 +17,21 @@ export const adminCatalog = new Hono<AppEnv>();
 
 // ---------- categories ----------
 adminCatalog.get("/categories", requireRole("staff"), async (c) => c.json({ items: await c.get("db").select().from(categories).orderBy(categories.position, categories.nameTr) }));
+/** The category card photo must be an uploaded image: a typo or a deleted id would silently show nothing. */
+async function assertCategoryImage(db: Db, mediaId: string | null | undefined) {
+  if (!mediaId) return;
+  const [m] = await db.select({ id: media.id }).from(media).where(eq(media.id, mediaId)).limit(1);
+  if (!m) throw new ApiError(400, "validation_error", "imageMediaId does not exist: upload the image first (kind category) and use its id");
+}
 adminCatalog.post("/categories", requireRole("admin"), async (c) => {
-  const b = await body(c, CategoryInput);
+  const b = await body(c, CategoryInput); await assertCategoryImage(c.get("db"), b.imageMediaId);
   const id = crypto.randomUUID();
   try { await c.get("db").insert(categories).values({ id, ...b, parentId: b.parentId ?? null }); } catch (e) { throw dupOr(e, "slug"); }
   await audit(c, "category.create", "category", id, { slug: b.slug });
   return c.json({ id, ...b }, 201);
 });
 adminCatalog.put("/categories/:id", requireRole("admin"), async (c) => {
-  const id = c.req.param("id"); const b = await body(c, CategoryInput); const db = c.get("db");
+  const id = c.req.param("id"); const b = await body(c, CategoryInput); const db = c.get("db"); await assertCategoryImage(db, b.imageMediaId);
   const [old] = await db.select({ slug: categories.slug }).from(categories).where(eq(categories.id, id)).limit(1);
   if (!old) throw notFound("Category");
   const upd = db.update(categories).set({ ...b, parentId: b.parentId ?? null }).where(eq(categories.id, id)).returning();

@@ -7,12 +7,12 @@ import type { Category, ProductSummary } from "../api/types";
 const cats: Category[] = [
   { id: "c1", slug: "vazo", name: "Vazolar", description: "El yapımı seramik vazolar.\nHer biri tek.", descriptionEn: "Hand-made ceramic vases." },
   { id: "c1a", slug: "kucuk-vazo", name: "Küçük vazolar", parentId: "c1" }, { id: "c1b", slug: "buyuk-vazo", name: "Büyük vazolar", parentId: "c1" },
-  { id: "c2", slug: "tabak", name: "Tabaklar" }, { id: "c3", slug: "ortu", name: "Örtüler" },
+  { id: "c2", slug: "tabak", name: "Tabaklar" }, { id: "c3", slug: "ortu", name: "Örtüler", imageUrl: "/media/m3" },
 ];
 const prod = (id: string, img = true): ProductSummary => ({ id, slug: id, title: `Ürün ${id}`, images: img ? [{ url: `https://x/${id}.jpg` }] : [], price: 1000, currency: "TRY", variants: [] } as never);
-const state = vi.hoisted(() => ({ items: [] as unknown[], total: 0, locale: "tr" as "tr" | "en" }));
+const state = vi.hoisted(() => ({ items: [] as unknown[], total: 0, locale: "tr" as "tr" | "en", cards: undefined as undefined | "plain" | "image" }));
 vi.mock("../api/client", () => ({ api: { categories: async () => cats, products: async () => ({ items: state.items, total: state.total, page: 1, pageSize: 12 }) } }));
-vi.mock("../store/ConfigContext", () => ({ useConfig: () => ({ config: { general: { currency: "TRY", storeName: "M", description: "" }, seo: {}, branding: {}, merchandising: { defaultSort: "newest" }, checkout: {} } }) }));
+vi.mock("../store/ConfigContext", () => ({ useConfig: () => ({ config: { general: { currency: "TRY", storeName: "M", description: "" }, seo: {}, branding: {}, merchandising: { defaultSort: "newest" }, checkout: {}, homepage: { categoryCards: state.cards } } }) }));
 vi.mock("../i18n", () => ({ useI18n: () => ({ t: (k: string, v?: Record<string, unknown>) => (v ? `${k}:${Object.values(v).join(",")}` : k), locale: state.locale }) }));
 vi.mock("../lib/head", () => ({ useHead: () => {}, absUrl: (u: string) => u }));
 vi.mock("../tracking", () => ({ track: () => {}, getConsent: () => ({}), onConsentChange: () => () => {} }));
@@ -57,7 +57,18 @@ describe("category page", () => {
     state.items = [prod("p1")]; state.total = 1;
     mount("/category/kucuk-vazo");
     const others = (await screen.findByRole("heading", { name: "cat.others" })).closest("section")!;
-    expect(within(others).getAllByRole("link").map((a) => a.textContent)).toEqual(["Tabaklar", "Örtüler"]);   // not Vazolar (the parent), not the sub-categories
+    expect(within(others).getAllByRole("link").map((a) => a.getAttribute("href"))).toEqual(["/category/tabak", "/category/ortu"]);   // not Vazolar (the parent), not the sub-categories
+  });
+  it("other-category cards are plain by default (no photo, no icon); 'image' mode shows the photo only where one exists", async () => {
+    state.items = [prod("p1")]; state.total = 1; state.cards = undefined;
+    const a = mount("/category/kucuk-vazo");
+    const sec = (await screen.findByRole("heading", { name: "cat.others" })).closest("section")!;
+    expect([...sec.querySelectorAll("a")].map((l) => l.getAttribute("data-card"))).toEqual(["plain", "plain"]);
+    expect(sec.querySelector("img")).toBeNull(); a.unmount();
+    state.cards = "image"; mount("/category/kucuk-vazo");
+    const sec2 = (await screen.findByRole("heading", { name: "cat.others" })).closest("section")!;
+    expect([...sec2.querySelectorAll("a")].map((l) => l.getAttribute("data-card"))).toEqual(["plain", "image"]);   // Tabaklar has no photo → plain
+    expect(sec2.querySelector("img")?.getAttribute("src")).toContain("/media/m3"); state.cards = undefined;
   });
   it("English description is used for the en locale; an empty category explains itself instead of showing a search miss", async () => {
     state.items = []; state.total = 0; state.locale = "en";

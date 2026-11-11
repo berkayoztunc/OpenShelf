@@ -11,10 +11,12 @@ const iso = (v: unknown): string | undefined => (v == null ? undefined : typeof 
 
 export const categoryFromApi = (c: W): Category => ({
   id: c.id, slug: c.slug, name: c.nameTr, parentId: c.parentId ?? null, position: c.position,
+  description: c.descriptionTr ?? "", descriptionEn: c.descriptionEn ?? "", imageMediaId: c.imageMediaId ?? null,
   seoTitle: c.seoTitle ?? "", seoDescription: c.seoDescription ?? "", seoOgImageUrl: c.seoOgImageUrl ?? "", seoNoindex: c.seoNoindex === true,
 });
 export const categoryToApi = (c: Partial<Category>) => ({
   slug: c.slug, nameTr: c.name, parentId: c.parentId ?? null, position: c.position ?? 0, active: true,
+  descriptionTr: c.description?.trim() || null, descriptionEn: c.descriptionEn?.trim() || null, imageMediaId: c.imageMediaId ?? null,
   seoTitle: c.seoTitle?.trim() || null, seoDescription: c.seoDescription?.trim() || null, seoOgImageUrl: c.seoOgImageUrl?.trim() || null, seoNoindex: !!c.seoNoindex,
 });
 

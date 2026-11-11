@@ -3,6 +3,8 @@ import type { Category, ProductSummary } from "../api/types";
 import { useI18n } from "../i18n";
 import { ArrowIcon, CATEGORY_ICONS, ChevronIcon } from "../lib/Icons";
 import { ProductImage } from "./ProductImage";
+import { CategoryCard } from "./CategoryCard";
+import { useConfig } from "../store/ConfigContext";
 
 /** Family of a category: its parent, its children and its siblings, resolved from the flat category list. */
 export function categoryFamily(all: Category[], cat: Category) {
@@ -70,6 +72,7 @@ export function CategoryNav({ cat, parent, children, siblings }: { cat: Category
 /** Bottom of a category page: the other top-level categories as tiles, so the way to the rest of the shop is there without crowding the top. */
 export function OtherCategories({ all, cat }: { all: Category[]; cat: Category }) {
   const { t } = useI18n();
+  const mode = useConfig().config.homepage?.categoryCards === "image" ? "image" : "plain";
   const topId = cat.parentId ?? cat.id;
   const others = all.filter((c) => !c.parentId && c.id !== topId).slice(0, 8);
   if (!others.length) return null;
@@ -80,18 +83,9 @@ export function OtherCategories({ all, cat }: { all: Category[]; cat: Category }
         <h2 id="h-others" className="section-title mt-2">{t("cat.others")}</h2>
         <p className="mt-2 text-muted">{t("cat.othersSub")}</p>
         <ul className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-          {others.map((c, i) => {
-            const Icon = CATEGORY_ICONS[i % CATEGORY_ICONS.length]!;
-            return (
-              <li key={c.id}>
-                <Link to={`/category/${c.slug}`} className="group hero-mesh relative flex min-h-32 flex-col justify-between overflow-hidden rounded-2xl p-5 ring-1 ring-ink/[.07] transition duration-300 hover:-translate-y-0.5 hover:shadow-lift">
-                  <Icon size={32} strokeWidth={1.2} className="text-brand-ink/70 transition duration-500 group-hover:scale-110" />
-                  <span className="mt-6 flex items-end justify-between gap-2"><span className="font-display text-lg font-semibold leading-tight sm:text-xl">{c.name}</span>
-                    <span aria-hidden className="grid size-8 shrink-0 place-items-center rounded-full bg-surface/90 text-ink shadow-sm transition group-hover:translate-x-0.5"><ArrowIcon size={16} /></span></span>
-                </Link>
-              </li>
-            );
-          })}
+          {others.map((c) => (
+            <li key={c.id}><CategoryCard cat={c} mode={mode} cover={c.imageUrl} compact /></li>
+          ))}
         </ul>
       </div>
     </section>

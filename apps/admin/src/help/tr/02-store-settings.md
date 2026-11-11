@@ -264,12 +264,14 @@ Test gönderimi saatte yönetici başına 5, bağlantı adresi başına 10 ile s
 
 ## Ana sayfa ürünleri
 
-Ana sayfadaki "öne çıkanlar" bölümünde hangi ürünlerin görüneceğini sol menüdeki **Vitrin → Ana sayfa ürünleri** sekmesinden belirlersiniz.
+Ana sayfadaki "öne çıkanlar" bölümünde hangi ürünlerin görüneceğini sol menüdeki **Vitrin → Ana sayfa** sekmesinden belirlersiniz.
 
 - **Otomatik:** Ürün sıralaması ayarına göre ilk ürünler gösterilir (örn. en yeniler ya da çok satanlar). Kaç ürün gösterileceğini (4–24) seçersiniz.
 - **Elle seçeceğim:** Ürünleri arayıp **Ekle**'ye basın; ok düğmeleriyle sıralayın. Yalnızca seçtikleriniz, seçtiğiniz sırayla görünür (en fazla 24).
 - **Bölüm başlığı:** Boş bırakırsanız "Öne çıkanlar" yazar; kendi başlığınızı (ve isteğe bağlı İngilizcesini) girebilirsiniz.
 - Taslak ya da arşivdeki bir ürün seçili kalsa bile vitrinde gösterilmez; listede "Aktif değil" etiketi görürsünüz. Seçilen ürünlerin hiçbiri gösterilemiyorsa otomatik liste kullanılır, ana sayfa boş kalmaz.
+
+- **Kategori kartları:** Aynı sekmedeki bu bölümden ana sayfadaki ve kategori sayfalarının altındaki kategori kartlarının görünümünü seçersiniz: **Resimsiz** (varsayılan, yalnızca ad ve açıklama) ya da **Resimli** (kategori görseli). Resimli seçeneği için her kategoriye **Kategoriler** ekranından bir kart görseli yükleyin; görseli olmayan kategori resimsiz görünür. Bu ayar yalnızca kartları etkiler.
 
 Değişiklik kaydedildikten sonra vitrine yansıması yaklaşık bir dakika sürebilir.
 

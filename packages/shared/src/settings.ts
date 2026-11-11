@@ -150,6 +150,8 @@ export const HomepageSettings = z.object({
   productIds: z.array(z.string().min(1).max(60)).max(24).default([]).transform((a) => [...new Set(a)]),
   /** Auto mode: how many products to show. */
   limit: z.number().int().min(4).max(24).default(8),
+  /** Category cards (home page and "other categories"): "plain" = clean text cards (default), "image" = photo cards (category photo, else a product photo). */
+  categoryCards: z.enum(["plain", "image"]).default("plain"),
   /** Optional heading overrides for the section (empty = the default text). */
   title: z.string().max(60).default(""),
   titleEn: z.string().max(60).default(""),

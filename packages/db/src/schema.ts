@@ -28,7 +28,7 @@ export const integrationConfigs = sqliteTable("integration_configs", {
 });
 
 export const media = sqliteTable("media", {
-  id: id(), kind: text("kind").notNull(),           // logo|logo_dark|favicon|banner|og|product
+  id: id(), kind: text("kind").notNull(),           // logo|logo_dark|favicon|banner|og|product|category
   mime: text("mime").notNull(), size: integer("size").notNull(), sha256: text("sha256").notNull(),
   r2Key: text("r2_key"), data: blob("data", { mode: "buffer" }), // one of r2Key/data set
   alt: text("alt"), createdBy: text("created_by"), createdAt: createdAt(),
@@ -89,6 +89,7 @@ export const customerConsents = sqliteTable("customer_consents", {
 export const categories = sqliteTable("categories", {
   id: id(), parentId: text("parent_id"), slug: text("slug").notNull().unique(), nameTr: text("name_tr").notNull(), nameEn: text("name_en"),
   descriptionTr: text("description_tr"), descriptionEn: text("description_en"), position: integer("position").notNull().default(0),
+  /** media id of the category card photo */ imageMediaId: text("image_media_id"),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
   seoTitle: text("seo_title"), seoDescription: text("seo_description"), seoOgImageUrl: text("seo_og_image_url"),
   seoNoindex: integer("seo_noindex", { mode: "boolean" }).notNull().default(false),

@@ -1,6 +1,6 @@
 import { api } from "./api";
 
-export type MediaKind = "logo" | "logo_dark" | "favicon" | "banner" | "og" | "product";
+export type MediaKind = "logo" | "logo_dark" | "favicon" | "banner" | "og" | "product" | "category";
 export interface MediaResult { id: string; url: string; mime: string; size: number; width?: number; height?: number; warnings?: string[] }
 export const MEDIA_ACCEPT = "image/png,image/jpeg,image/webp,image/gif,image/avif";
 export const mediaUrl = (id: string | null | undefined) => (id ? `/media/${id}` : "");

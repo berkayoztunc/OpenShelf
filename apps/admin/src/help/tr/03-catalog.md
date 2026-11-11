@@ -214,7 +214,8 @@ Kategoriler, ürünlerinizi vitrinde gruplamanızı sağlar (Vazolar, Tabaklar, 
 1. Sol menüden **Kategoriler**'e, ardından **Yeni kategori**'ye tıklayın.
 2. **Ad**'ı yazın (örnek: `Vazolar`); kategori adresi (slug) otomatik oluşur.
 3. İsterseniz **Üst kategori** seçin ("Yok" bırakırsanız ana kategori olur).
-4. **Kaydet**'e basın.
+4. İsterseniz **Açıklama** (Türkçe/İngilizce) ve **Kart görseli** ekleyin. Kart görseli, **Vitrin → Ana sayfa → Kategori kartları** "Resimli" seçildiğinde kartta görünür (önerilen 1200×900, 4:3).
+5. **Kaydet**'e basın.
 
 Tabloda her kategorinin adı, adresi ve üst kategorisi görünür; **Düzenle** ve **Sil** düğmeleri satırın sonundadır.
 

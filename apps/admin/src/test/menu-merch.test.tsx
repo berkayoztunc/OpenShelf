@@ -120,10 +120,35 @@ describe("Storefront page", () => {
   it("has three tabs, defaults to home page products, and old settings URLs redirect", async () => {
     app("/storefront");
     expect(await screen.findByRole("heading", { name: "Vitrin" })).toBeTruthy();
-    for (const n of ["Ana sayfa ürünleri", "Üst menü", "Ürün sıralaması"]) expect(screen.getByRole("link", { name: n })).toBeTruthy();
+    for (const n of ["Ana sayfa", "Üst menü", "Ürün sıralaması"]) expect(screen.getByRole("link", { name: n })).toBeTruthy();
     expect(screen.getByTestId("where").textContent).toBe("/storefront/home");
   });
   it.each([["/settings/menu", "/storefront/menu"], ["/settings/merchandising", "/storefront/order"], ["/storefront/bogus", "/storefront/home"]])("%s lands on %s", async (from, to) => {
     app(from); await waitFor(() => expect(screen.getByTestId("where").textContent).toBe(to));
+  });
+});
+
+describe("Storefront → category card style", () => {
+  const cats = (withPhoto: boolean[]) => ({ items: withPhoto.map((p, i) => ({ id: `c${i}`, slug: `k${i}`, nameTr: `Kat ${i}`, ...(p ? { imageMediaId: `m${i}` } : {}) })) });
+  const load = (h = HomepageSettings.parse({}), photos: boolean[] = [true, false, false]) => vi.spyOn(api, "get").mockImplementation(async (p: string) => (p.startsWith("/api/admin/categories") ? cats(photos) : { homepage: h }) as never);
+  it("defaults to plain cards; choosing 'with photos' saves categoryCards=image and warns about categories without a photo", async () => {
+    load(); const put = vi.spyOn(api, "put").mockImplementation(async (_p, b) => b as never); const u = userEvent.setup(); wrap(<MemoryRouter><HomeProducts /></MemoryRouter>);
+    const group = await screen.findByRole("radiogroup", { name: "Kategori kartı görünümü" });
+    const [plain, image] = [...group.querySelectorAll("[role=radio]")] as HTMLElement[];
+    expect(plain!.getAttribute("aria-checked")).toBe("true"); expect(image!.getAttribute("aria-checked")).toBe("false");
+    expect(screen.queryByRole("note")).toBeNull();                                           // no warning while plain
+    await u.click(image!);
+    expect(image!.getAttribute("aria-checked")).toBe("true");
+    expect((await screen.findByRole("note")).textContent).toContain("2 kategorinin kart görseli yok");
+    expect(screen.getByRole("link", { name: "Kategorilere git" }).getAttribute("href")).toBe("/categories");
+    await u.click(screen.getByRole("button", { name: "Değişiklikleri kaydet" }));
+    await waitFor(() => expect(put).toHaveBeenCalled());
+    expect(put.mock.calls[0]![1]).toMatchObject({ categoryCards: "image" });
+  });
+  it("no warning when every category has a photo; an existing 'image' choice is shown selected", async () => {
+    load(HomepageSettings.parse({ categoryCards: "image" }), [true, true]); wrap(<MemoryRouter><HomeProducts /></MemoryRouter>);
+    const group = await screen.findByRole("radiogroup", { name: "Kategori kartı görünümü" });
+    expect((group.querySelectorAll("[role=radio]")[1] as HTMLElement).getAttribute("aria-checked")).toBe("true");
+    await new Promise((r) => setTimeout(r, 30)); expect(screen.queryByRole("note")).toBeNull();
   });
 });

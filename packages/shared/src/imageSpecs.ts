@@ -42,6 +42,12 @@ export const IMAGE_SPECS: Record<MediaKind, ImageSpec> = {
     guidance: "Exactly 1.91:1. Keep everything important inside the central 1000×500 area (platforms crop edges). Large, legible, high-contrast; text is allowed here (brand or offer) but keep it big and short. Under ~300 KB loads fastest. JPEG/PNG are the most widely supported.",
     attach: "set_store_image (slot og) for the store-wide default; for one product use update_product_seo `seoOgMediaId`; a product/category can also use `seoOgImageUrl` (https URL).",
   },
+  category: {
+    kind: "category", title: "Category card photo", width: 1200, height: 900, aspect: "4:3 (landscape)", minWidth: 600, minHeight: 450, transparent: false, preferredFormats: ["webp", "jpeg"],
+    usage: "The card of a category on the home page and in the 'other categories' section (only when Vitrin → Home page → Category cards is set to photo cards). Shown 4:3 on desktop and 3:4 on phones, cropped from the centre; the category name sits on a dark gradient over the bottom third.",
+    guidance: "One clear, well-lit subject that represents the category, centred, with calm space in the lower third for the name. A photo of the products themselves works better than an abstract picture. No text or logos in the image. Mid-tone to dark images read best under the white name.",
+    attach: "update_category (id, the whole category incl. imageMediaId): upload the image with kind=category first, or pass the media id of an existing one.",
+  },
   logo: {
     kind: "logo", title: "Logo (light theme)", width: 600, height: 144, aspect: "free, wide wordmark up to 5:1", minWidth: 240, minHeight: 72, transparent: true, preferredFormats: ["png", "webp"],
     usage: "Header and footer, rendered 36 px high with automatic width (so generate it 4× that, 144 px high, for sharp retina screens). Shown on light backgrounds.",

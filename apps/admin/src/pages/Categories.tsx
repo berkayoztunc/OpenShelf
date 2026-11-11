@@ -6,7 +6,8 @@ import { categoryFromApi, categoryToApi, mapList } from "../lib/adapt";
 import { SeoFields } from "../components/SeoCard";
 import { SlugField } from "../components/Seo";
 import { useT } from "../i18n";
-import { Button, Card, ConfirmDialog, EmptyState, ErrorState, Loading, Modal, PageHeader, SelectField, Table, Td, TextField, useToast } from "../components/ui";
+import { Button, Card, ConfirmDialog, EmptyState, ErrorState, Loading, Modal, PageHeader, SelectField, Table, Td, TextArea, TextField, useToast } from "../components/ui";
+import { MediaSlot } from "../components/MediaPicker";
 
 const slugify = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/ı/g, "i").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 export const useCategories = () => useQuery({ queryKey: ["categories"], queryFn: async () => { const r = await api.get<{ items: unknown[] }>("/api/admin/categories"); return mapList(r, categoryFromApi); } });
@@ -52,6 +53,9 @@ export default function Categories() {
           <SelectField label={t("catalog.categories.parent.label")} help="catalog.categoryParent" hint={t("catalog.categories.parent.hint")} value={edit.parentId ?? ""} onChange={(e) => setEdit({ ...edit, parentId: e.target.value || null })}>
             <option value="">{t("common.none")}</option>{q.data?.filter((c) => c.id !== edit.id).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </SelectField>
+          <TextArea label={t("catalog.categories.description.label")} hint={t("catalog.categories.description.hint")} maxLength={2000} value={edit.description ?? ""} onChange={(e) => setEdit({ ...edit, description: e.target.value })} />
+          <TextArea label={t("catalog.categories.descriptionEn.label")} maxLength={2000} value={edit.descriptionEn ?? ""} onChange={(e) => setEdit({ ...edit, descriptionEn: e.target.value })} />
+          <MediaSlot wide label={t("catalog.categories.image.label")} kind="category" value={edit.imageMediaId ?? null} onChange={(id) => setEdit({ ...edit, imageMediaId: id })} hint={t("catalog.categories.image.hint")} />
           <fieldset className="border-t border-line pt-4"><legend className="mb-3 pr-2 text-sm font-semibold">{t("catalog.categories.seo")}</legend>
             <SeoFields compact type="category" id={edit.id} value={edit} onChange={(p) => setEdit({ ...edit, ...p })}
               fallbackTitle={edit.name ?? ""} fallbackDescription={edit.name ? t("catalog.categories.fallbackDescNamed", { name: edit.name }) : t("catalog.categories.fallbackDesc")} path={`/category/${edit.slug ?? ""}`} />
