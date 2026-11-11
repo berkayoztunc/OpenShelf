@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, errMsg } from "../lib/api";
 import type { Admin } from "../lib/types";
-import { CreditCard, Package, ShieldCheck, Store } from "lucide-react";
+import { CreditCard, Package, ShieldCheck } from "lucide-react";
 import { Button, PasswordField, TextField } from "../components/ui";
 import { LocaleSwitch } from "../components/LocaleSwitch";
 import { GuideLink } from "../components/help/GuideLink";
@@ -20,7 +20,7 @@ export function AuthShell({ title, subtitle, children, footer }: { title: string
         <div aria-hidden className="pointer-events-none absolute -right-24 -top-24 size-96 rounded-full border border-white/10" />
         <div aria-hidden className="pointer-events-none absolute -bottom-32 -left-20 size-[28rem] rounded-full border border-white/10" />
         <div className="relative flex items-center gap-3">
-          <span className="grid size-10 place-items-center rounded-xl bg-white/15 ring-1 ring-white/25 backdrop-blur"><Store size={20} /></span>
+          <span className="grid size-10 place-items-center rounded-xl bg-white ring-1 ring-white/25"><img src={`${import.meta.env.BASE_URL}openshelf-mark.png`} alt="" className="size-7 object-contain" /></span>
           <span className="font-display text-2xl font-semibold tracking-tight">OpenShelf</span>
         </div>
         <div className="relative max-w-md">
@@ -38,7 +38,7 @@ export function AuthShell({ title, subtitle, children, footer }: { title: string
         <div className="absolute right-4 top-4 flex items-center gap-3"><GuideLink guide="getting-started#ilk-giris">{t("auth.guide")}</GuideLink><LocaleSwitch /></div>
         <div className="page-in w-full max-w-sm">
           <div className="mb-8 flex items-center gap-2.5 lg:hidden">
-            <span className="grid size-9 place-items-center rounded-xl bg-brand-600 text-white"><Store size={18} /></span>
+            <img src={`${import.meta.env.BASE_URL}openshelf-mark.png`} alt="" className="size-9 object-contain" />
             <span className="font-display text-xl font-semibold">OpenShelf</span>
           </div>
           <h1 className="font-display text-3xl font-semibold tracking-tight">{title}</h1>

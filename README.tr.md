@@ -1,6 +1,6 @@
 <div align="center">
 
-# OpenShelf
+<h1><img src="docs/assets/openshelf-logo.png" alt="OpenShelf" width="360"></h1>
 
 **Mağazanız. Altyapınız. Özgürlüğünüz.**
 

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { applyBrandTheme } from "@openshelf/ui";
-import { Truck, ShoppingBag, BookOpen, BarChart3, ChevronRight, ClipboardList, Database, LayoutDashboard, LogOut, Menu, Package, Plug, Settings, ShieldCheck, Store, Tags, Ticket, Users, X, Zap, Inbox, FileText, Mail, Megaphone, MessageSquare, LayoutTemplate, Images } from "lucide-react";
+import { Truck, ShoppingBag, BookOpen, BarChart3, ChevronRight, ClipboardList, Database, LayoutDashboard, LogOut, Menu, Package, Plug, Settings, ShieldCheck, Tags, Ticket, Users, X, Zap, Inbox, FileText, Mail, Megaphone, MessageSquare, LayoutTemplate, Images } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { api } from "../lib/api";
 import { useAdmin } from "../lib/auth";
@@ -155,7 +155,7 @@ export function Layout() {
         aria-label={t("shell.nav.primary")}>
         <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-line px-4">
           <Link to="/" className="flex min-w-0 items-center gap-2.5">
-            {logoId ? <img src={mediaUrl(logoId)} alt="" className="size-8 shrink-0 rounded-lg bg-canvas object-contain" /> : <span aria-hidden className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-600 text-white"><Store size={17} /></span>}
+            {logoId ? <img src={mediaUrl(logoId)} alt="" className="size-8 shrink-0 rounded-lg bg-canvas object-contain" /> : <img src={`${import.meta.env.BASE_URL}openshelf-mark.png`} alt="" className="size-8 shrink-0 object-contain" />}
             <span className="min-w-0 leading-tight"><span className="block truncate font-display text-[15px] font-semibold">{name}</span><span className="block text-[11px] text-muted">{t("shell.caption")}</span></span>
           </Link>
           <button className="grid size-8 place-items-center rounded-lg text-muted hover:bg-hover lg:hidden" aria-label={t("shell.nav.close")} onClick={() => setOpen(false)}><X size={18} /></button>
