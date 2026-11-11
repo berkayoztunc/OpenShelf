@@ -5,9 +5,10 @@ import { ThemeMenu } from "./ThemeMenu";
 import { api } from "../api/client";
 import { useCart } from "../cart/CartContext";
 import { useI18n } from "../i18n";
-import { BagIcon, SearchIcon } from "../lib/Icons";
+import { BagIcon, MenuIcon, SearchIcon } from "../lib/Icons";
 import { useConfig } from "../store/ConfigContext";
 import { Logo } from "./Logo";
+import { MobileMenu } from "./MobileMenu";
 import { buildMenu, type MenuLink, type MenuNode } from "../lib/menu";
 
 const navCls = ({ isActive }: { isActive: boolean }) =>
@@ -26,6 +27,7 @@ export function Header() {
   const [q, setQ] = useState(sp.get("q") ?? "");
   const [searchOpen, setSearchOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const cats = useQuery({ queryKey: ["categories"], queryFn: api.categories, staleTime: 5 * 60_000 });
 
   useEffect(() => {
@@ -47,12 +49,11 @@ export function Header() {
     </form>
   );
   const menu = buildMenu(config.menu, cats.data ?? [], locale, t("nav.products"));
-  /** Mobile chips: a flat row, sub-categories follow their parent. */
-  const chips: MenuLink[] = menu.flatMap((n) => [n, ...n.children]);
 
   return (
     <header className={`sticky top-0 z-40 border-b bg-canvas/80 backdrop-blur-xl transition-shadow duration-300 ${scrolled ? "border-line shadow-[0_8px_24px_-16px_rgb(28_25_23/.25)]" : "border-transparent"}`}>
       <div className="container-x flex h-[68px] items-center gap-2 sm:gap-3">
+        <button type="button" className="icon-btn -ml-2 md:hidden" aria-label={t("nav.openMenu")} aria-expanded={menuOpen} aria-controls="mobile-menu" onClick={() => setMenuOpen(true)}><MenuIcon /></button>
         <Logo />
         <nav aria-label={t("nav.menu")} className="ml-6 hidden items-center gap-7 md:flex">
           {menu.map((n) => <DesktopItem key={n.key} node={n} />)}
@@ -71,11 +72,7 @@ export function Header() {
         </button>
       </div>
       {searchOpen && <div className="container-x pb-3 lg:hidden">{searchForm}</div>}
-      <nav aria-label={t("nav.menu")} className="container-x flex gap-2 overflow-x-auto pb-3 [scrollbar-width:none] md:hidden">
-        {chips.map((c) => c.to
-          ? <NavLink key={c.key} to={c.to} end={c.to === "/products"} className={chipCls} {...(c.newTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}>{c.label}</NavLink>
-          : <a key={c.key} href={c.href} className="chip border-line bg-surface text-muted" {...(c.newTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}>{c.label}</a>)}
-      </nav>
+      <MobileMenu open={menuOpen} nodes={menu} onClose={() => setMenuOpen(false)} />
     </header>
   );
 }

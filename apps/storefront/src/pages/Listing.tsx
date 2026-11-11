@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { Pagination } from "../components/Pagination";
+import { Select } from "../components/Select";
 import { ProductGrid, ProductGridSkeleton } from "../components/ProductCard";
 import { useI18n } from "../i18n";
 import { absUrl, useHead } from "../lib/head";
@@ -103,9 +104,9 @@ export default function Listing() {
           </nav>
           <div className="flex items-center gap-3">
             <label className="sr-only" htmlFor="sort">{t("list.sort")}</label>
-            <select id="sort" className="field !w-auto cursor-pointer !rounded-full !pr-8" value={sort} onChange={(e) => update({ sort: e.target.value === defSort ? undefined : e.target.value })}>
+            <Select id="sort" wrapperClassName="shrink-0" className="!w-auto !rounded-full !pl-4 !pr-10" value={sort} onChange={(e) => update({ sort: e.target.value === defSort ? undefined : e.target.value })}>
               {SORTS.map((s) => <option key={s} value={s}>{t(`sort.${s}`)}</option>)}
-            </select>
+            </Select>
           </div>
         </div>
         {(q || sorted || (category && activeCat)) && (

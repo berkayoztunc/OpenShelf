@@ -1,5 +1,5 @@
 const tr = {
-  "nav.home": "Ana sayfa", "nav.products": "Tüm ürünler", "nav.cart": "Sepet", "nav.skip": "İçeriğe geç", "nav.menu": "Ana gezinme",
+  "nav.openMenu": "Menüyü aç", "nav.closeMenu": "Menüyü kapat", "nav.expand": "{name} alt kategorilerini aç", "nav.collapse": "{name} alt kategorilerini kapat", "nav.allIn": "{name} içindeki tümü", "nav.home": "Ana sayfa", "nav.products": "Tüm ürünler", "nav.cart": "Sepet", "nav.skip": "İçeriğe geç", "nav.menu": "Ana gezinme",
   "search.placeholder": "Ürün ara…", "search.label": "Ürün ara", "search.submit": "Ara",
   "theme.toggle": "Tema", "theme.system": "Sistem", "theme.light": "Açık", "theme.dark": "Koyu", "lang.switch": "Dil",
   "hero.shop": "Alışverişe başla", "banner.prev": "Önceki", "banner.next": "Sonraki", "banner.goto": "Banner {n}",
@@ -48,7 +48,7 @@ const tr = {
 export type MessageKey = keyof typeof tr;
 
 const en: Record<MessageKey, string> = {
-  "nav.home": "Home", "nav.products": "All products", "nav.cart": "Cart", "nav.skip": "Skip to content", "nav.menu": "Main navigation",
+  "nav.openMenu": "Open menu", "nav.closeMenu": "Close menu", "nav.expand": "Show sub-categories of {name}", "nav.collapse": "Hide sub-categories of {name}", "nav.allIn": "All in {name}", "nav.home": "Home", "nav.products": "All products", "nav.cart": "Cart", "nav.skip": "Skip to content", "nav.menu": "Main navigation",
   "search.placeholder": "Search products…", "search.label": "Search products", "search.submit": "Search",
   "theme.toggle": "Theme", "theme.system": "System", "theme.light": "Light", "theme.dark": "Dark", "lang.switch": "Language",
   "hero.shop": "Start shopping", "banner.prev": "Previous", "banner.next": "Next", "banner.goto": "Banner {n}",

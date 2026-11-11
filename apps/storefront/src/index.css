@@ -38,11 +38,18 @@
 
 @keyframes os-shimmer { to { transform: translateX(100%); } }
 @keyframes os-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes os-slide-in-left { from { transform: translateX(-100%); } to { transform: none; } }
 @keyframes os-slide-in { from { transform: translateX(100%); } to { transform: none; } }
 @keyframes os-sheet-in { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
 .rise { animation: os-rise .6s cubic-bezier(.2,.7,.2,1) both; }
 .rise-2 { animation-delay: .08s; } .rise-3 { animation-delay: .16s; } .rise-4 { animation-delay: .24s; }
 dialog[open].drawer { animation: os-slide-in .28s cubic-bezier(.2,.7,.2,1); }
+dialog[open].drawer-left { animation: os-slide-in-left .26s cubic-bezier(.2,.7,.2,1); }
+dialog.drawer-left::backdrop, dialog.drawer::backdrop { background: rgb(12 10 9 / .45); backdrop-filter: blur(2px); }
+@media (prefers-reduced-motion: reduce) { dialog[open].drawer, dialog[open].drawer-left { animation: none; } }
+/* native <select>: hide the OS arrow (the Select component draws its own), keep the popup readable in both themes */
+select.field { appearance: none; -webkit-appearance: none; background-image: none; }
+select.field option { background: var(--color-surface); color: var(--color-ink); }
 .sheet-in { animation: os-sheet-in .35s cubic-bezier(.2,.7,.2,1); }
 
 /* Light/dark logo swap, honouring manual toggle + system preference. */

@@ -1,5 +1,5 @@
 import type { LucideProps } from "lucide-react";
-import { ArrowRight, Check, ChevronLeft, ChevronRight, Minus, Moon, Plus, Search, ShieldCheck, ShoppingBag, Sun, Truck, RotateCcw, X, Headphones, Lock, Sparkles, Package, Armchair, UtensilsCrossed, Gem, Flower2, Shirt, Home, Heart } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, ChevronLeft, ChevronRight, Menu, Minus, Moon, Plus, Search, ShieldCheck, ShoppingBag, Sun, Truck, RotateCcw, X, Headphones, Lock, Sparkles, Package, Armchair, UtensilsCrossed, Gem, Flower2, Shirt, Home, Heart } from "lucide-react";
 
 /** Thin wrappers over lucide-react keeping the original names/props used across the storefront. */
 const d = { size: 20, strokeWidth: 1.75, "aria-hidden": true } as const;
@@ -13,6 +13,8 @@ export const SunMoonIcon = (p: LucideProps) => (
 );
 export const CloseIcon = (p: LucideProps) => <X {...d} {...p} />;
 export const ChevronIcon = ({ dir = "right", ...p }: LucideProps & { dir?: "left" | "right" }) => (dir === "right" ? <ChevronRight {...d} {...p} /> : <ChevronLeft {...d} {...p} />);
+export const MenuIcon = (p: LucideProps) => <Menu {...d} {...p} />;
+export const ChevronDownIcon = (p: LucideProps) => <ChevronDown {...d} {...p} />;
 export const MinusIcon = (p: LucideProps) => <Minus {...d} {...p} />;
 export const PlusIcon = (p: LucideProps) => <Plus {...d} {...p} />;
 export const ArrowIcon = (p: LucideProps) => <ArrowRight {...d} {...p} />;
