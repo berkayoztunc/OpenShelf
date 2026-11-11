@@ -43,8 +43,21 @@ export default function Home() {
     <>
       <Banner collage={collage} />
       <TrustBar />
+      <section className="container-x mt-16 sm:mt-24" aria-labelledby="h-feat">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="max-w-xl">
+            <p className="eyebrow">{t("hero.new")}</p>
+            <h2 id="h-feat" className="section-title mt-2">{plan.title || t("home.featured")}</h2>
+            <p className="mt-2 text-muted">{t("home.featuredSub")}</p>
+          </div>
+          <Link to="/products" className="link-arrow">{t("home.viewAll")}<ArrowIcon size={16} /></Link>
+        </div>
+        <div className="mt-8">
+          {featured.isLoading || (curatedEmpty && pool.isLoading) ? <ProductGridSkeleton /> : featured.data ? <ProductGrid products={gridItems} /> : null}
+        </div>
+      </section>
       {top.length > 0 && (
-        <section id="categories" className="container-x mt-16 scroll-mt-24 sm:mt-20" aria-labelledby="h-cats">
+        <section id="categories" className="container-x mb-16 mt-16 scroll-mt-24 sm:mb-24 sm:mt-24" aria-labelledby="h-cats">
           <div className="max-w-xl">
             <p className="eyebrow">{t("home.shopCategory")}</p>
             <h2 id="h-cats" className="section-title mt-2">{t("home.categories")}</h2>
@@ -78,19 +91,6 @@ export default function Home() {
           </ul>
         </section>
       )}
-      <section className="container-x mt-16 sm:mt-24" aria-labelledby="h-feat">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="max-w-xl">
-            <p className="eyebrow">{t("hero.new")}</p>
-            <h2 id="h-feat" className="section-title mt-2">{plan.title || t("home.featured")}</h2>
-            <p className="mt-2 text-muted">{t("home.featuredSub")}</p>
-          </div>
-          <Link to="/products" className="link-arrow">{t("home.viewAll")}<ArrowIcon size={16} /></Link>
-        </div>
-        <div className="mt-8">
-          {featured.isLoading || (curatedEmpty && pool.isLoading) ? <ProductGridSkeleton /> : featured.data ? <ProductGrid products={gridItems} /> : null}
-        </div>
-      </section>
     </>
   );
 }

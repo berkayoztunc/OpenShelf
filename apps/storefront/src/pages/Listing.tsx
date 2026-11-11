@@ -4,6 +4,7 @@ import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { Pagination } from "../components/Pagination";
 import { Select } from "../components/Select";
+import { CategoryHero, CategoryNav, OtherCategories, categoryFamily } from "../components/CategoryHero";
 import { ProductGrid, ProductGridSkeleton } from "../components/ProductCard";
 import { useI18n } from "../i18n";
 import { absUrl, useHead } from "../lib/head";
@@ -34,6 +35,7 @@ export default function Listing() {
     placeholderData: keepPreviousData,
   });
   const activeCat = cats.data?.find((c) => c.slug === category);
+  const parentCat = activeCat?.parentId ? cats.data?.find((c) => c.id === activeCat.parentId) : undefined;
   const heading = q ? t("list.searchTitle", { q }) : activeCat?.name ?? t("list.title");
   const seo = activeCat?.seo ?? res.data?.seo;
   const sorted = sp.has("sort") && sort !== defSort;
@@ -51,7 +53,7 @@ export default function Listing() {
     noindex: filtered || !!seo?.noindex, prev: !filtered && page > 1 ? pageUrl(page - 1) : null, next: !filtered && page < pages ? pageUrl(page + 1) : null,
     ...siteHead(config),
     jsonLd: jsonLdEnabled(config) && !filtered && res.data?.items.length ? [
-      breadcrumbLd([{ name: t("product.home"), url: `${location.origin}/` }, ...(activeCat ? [{ name: activeCat.name, url: `${location.origin}/category/${activeCat.slug}` }] : [{ name: t("list.title"), url: `${location.origin}/products` }])]),
+      breadcrumbLd([{ name: t("product.home"), url: `${location.origin}/` }, ...(parentCat ? [{ name: parentCat.name, url: `${location.origin}/category/${parentCat.slug}` }] : []), ...(activeCat ? [{ name: activeCat.name, url: `${location.origin}/category/${activeCat.slug}` }] : [{ name: t("list.title"), url: `${location.origin}/products` }])]),
       { "@context": "https://schema.org", "@type": "ItemList", itemListElement: res.data.items.map((p, i) => ({ "@type": "ListItem", position: (page - 1) * PAGE_SIZE + i + 1, url: `${location.origin}/product/${p.slug}`, name: p.title })) },
     ] : null,
   });
@@ -78,40 +80,57 @@ export default function Listing() {
     setSp(n);
   };
 
+  const isCat = !!activeCat;
+  const fam = activeCat && cats.data ? categoryFamily(cats.data, activeCat) : null;
+  const searchForm = (
+    <form role="search" className={isCat ? "w-full min-w-0 sm:w-auto sm:flex-1 sm:max-w-sm" : "mb-5"} onSubmit={(e) => { e.preventDefault(); const v = String(new FormData(e.currentTarget).get("q") ?? "").trim(); update({ q: v || undefined }); }}>
+      <label htmlFor="list-search" className="sr-only">{t(isCat ? "cat.searchHere" : "list.searchHere")}</label>
+      <div className={`relative ${isCat ? "" : "max-w-xl"}`}>
+        <input id="list-search" name="q" type="search" key={q} defaultValue={q} placeholder={t(isCat ? "cat.searchHere" : "list.searchHere")} enterKeyHint="search" className="field rounded-full bg-surface pl-11" />
+        <SearchIcon size={18} aria-hidden className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted" />
+      </div>
+    </form>
+  );
+  const sortSelect = (
+    <div className="ml-auto flex items-center gap-3">
+      <label className="sr-only" htmlFor="sort">{t("list.sort")}</label>
+      <Select id="sort" wrapperClassName="shrink-0" className="!w-auto !rounded-full !pl-4 !pr-10" value={sort} onChange={(e) => update({ sort: e.target.value === defSort ? undefined : e.target.value })}>
+        {SORTS.map((s) => <option key={s} value={s}>{t(`sort.${s}`)}</option>)}
+      </Select>
+    </div>
+  );
+
   return (
     <>
-      <div className="border-b border-line bg-surface">
-        <div className="container-x py-8 sm:py-12">
-          <p className="eyebrow">{activeCat ? t("home.categories") : t("nav.products")}</p>
-          <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight sm:text-5xl">{heading}</h1>
-          {res.data && <p className="mt-2 text-sm text-muted" aria-live="polite">{t("list.count", { n: res.data.total })}</p>}
+      {isCat && activeCat ? (
+        <CategoryHero cat={activeCat} parent={fam?.parent} count={res.data?.total} previews={res.data?.items ?? []} />
+      ) : (
+        <div className="border-b border-line bg-surface">
+          <div className="container-x py-8 sm:py-12">
+            <p className="eyebrow">{t("nav.products")}</p>
+            <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight sm:text-5xl">{heading}</h1>
+            {res.data && <p className="mt-2 text-sm text-muted" aria-live="polite">{t("list.count", { n: res.data.total })}</p>}
+          </div>
         </div>
-      </div>
+      )}
       <div className="container-x py-8">
-        <form role="search" className="mb-5" onSubmit={(e) => { e.preventDefault(); const v = String(new FormData(e.currentTarget).get("q") ?? "").trim(); update({ q: v || undefined }); }}>
-          <label htmlFor="list-search" className="sr-only">{t("list.searchHere")}</label>
-          <div className="relative max-w-xl">
-            <input id="list-search" name="q" type="search" key={q} defaultValue={q} placeholder={t("list.searchHere")} enterKeyHint="search" className="field rounded-full bg-surface pl-11" />
-            <SearchIcon size={18} aria-hidden className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted" />
-          </div>
-        </form>
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <nav aria-label={t("list.filters")} className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:flex-wrap md:px-0">
-            <FilterChip active={!category} to={() => { const n = new URLSearchParams(sp); n.delete("category"); n.delete("page"); return n; }} label={t("list.allCategories")}/>
-            {(cats.data ?? []).map((c) => (
-              <FilterChip key={c.id} active={category === c.slug} label={c.name} to={() => { const n = new URLSearchParams(sp); n.set("category", c.slug); n.delete("page"); return n; }} />
-            ))}
-          </nav>
-          <div className="flex items-center gap-3">
-            <label className="sr-only" htmlFor="sort">{t("list.sort")}</label>
-            <Select id="sort" wrapperClassName="shrink-0" className="!w-auto !rounded-full !pl-4 !pr-10" value={sort} onChange={(e) => update({ sort: e.target.value === defSort ? undefined : e.target.value })}>
-              {SORTS.map((s) => <option key={s} value={s}>{t(`sort.${s}`)}</option>)}
-            </Select>
-          </div>
-        </div>
-        {(q || sorted || (category && activeCat)) && (
+        {isCat && activeCat && fam && <CategoryNav cat={activeCat} parent={fam.parent} children={fam.children} siblings={fam.siblings} />}
+        {isCat ? <div className="flex flex-wrap items-center justify-between gap-3">{searchForm}{sortSelect}</div> : (
+          <>
+            {searchForm}
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <nav aria-label={t("list.filters")} className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:flex-wrap md:px-0">
+                <FilterChip active={!category} to={() => { const n = new URLSearchParams(sp); n.delete("category"); n.delete("page"); return n; }} label={t("list.allCategories")}/>
+                {(cats.data ?? []).map((c) => (
+                  <FilterChip key={c.id} active={category === c.slug} label={c.name} to={() => { const n = new URLSearchParams(sp); n.set("category", c.slug); n.delete("page"); return n; }} />
+                ))}
+              </nav>
+              {sortSelect}
+            </div>
+          </>
+        )}
+        {(q || sorted) && (
           <div className="mt-4 flex flex-wrap items-center gap-2" role="group" aria-label={t("list.activeFilters")}>
-            {category && activeCat && <button type="button" className="chip gap-1.5 border-line bg-surface hover:border-ink/40" onClick={() => { const n = new URLSearchParams(sp); n.delete("category"); n.delete("page"); setSp(n); }}>{activeCat.name}<CloseIcon size={14} aria-hidden /></button>}
             {q && <button type="button" className="chip gap-1.5 border-line bg-surface hover:border-ink/40" onClick={() => update({ q: undefined })}>“{q}”<CloseIcon size={14} aria-hidden /></button>}
             {sorted && <button type="button" className="chip gap-1.5 border-line bg-surface hover:border-ink/40" onClick={() => update({ sort: undefined })}>{t(`sort.${sort}` as "sort.newest")}<CloseIcon size={14} aria-hidden /></button>}
             <button type="button" className="text-sm font-medium text-brand-ink hover:underline" onClick={() => setSp(new URLSearchParams())}>{t("list.clearAll")}</button>
@@ -122,13 +141,14 @@ export default function Listing() {
             : res.data && res.data.items.length ? <ProductGrid products={res.data.items} /> : (
               <div className="py-20 text-center">
                 <span className="mx-auto grid size-16 place-items-center rounded-full bg-brand-50 text-brand-ink"><SearchIcon size={26} /></span>
-                <p className="mt-5 font-medium">{q ? t("list.emptyFor", { q }) : t("list.empty")}</p><p className="mt-1 text-sm text-muted">{t("list.emptyHint")}</p>
-                <Link to="/products" className="btn-primary mt-6">{t("list.allCategories")}</Link>
+                <p className="mt-5 font-medium">{q ? t("list.emptyFor", { q }) : isCat ? t("cat.emptyHere") : t("list.empty")}</p><p className="mt-1 text-sm text-muted">{isCat && !q ? t("cat.emptyHereHint") : t("list.emptyHint")}</p>
+                <Link to="/products" className="btn-primary mt-6">{t(isCat ? "cat.viewAll" : "list.allCategories")}</Link>
               </div>
             )}
         </div>
         {res.data && <Pagination page={page} total={res.data.total} pageSize={res.data.pageSize || PAGE_SIZE} onPage={(p) => { update({ page: p > 1 ? String(p) : undefined }); window.scrollTo({ top: 0 }); }} />}
       </div>
+      {isCat && activeCat && cats.data && <OtherCategories all={cats.data} cat={activeCat} />}
     </>
   );
 }

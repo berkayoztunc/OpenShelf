@@ -35,7 +35,7 @@ export type LegalKey = (typeof LEGAL_KEYS)[number];
 /** Server-resolved SEO metadata (title already includes the site title template). */
 export interface ResolvedSeo { title?: string; description?: string; image?: string | null; canonical?: string; noindex?: boolean }
 
-export interface Category { id: string; slug: string; name: string; parentId?: string | null; imageUrl?: string | null; seo?: ResolvedSeo }
+export interface Category { id: string; slug: string; name: string; description?: string; descriptionEn?: string; parentId?: string | null; imageUrl?: string | null; seo?: ResolvedSeo }
 
 export interface ProductImage { id?: string; url: string; alt?: string | null }
 
