@@ -142,6 +142,13 @@ export const channelListings = sqliteTable("channel_listings", {
   variantId: text("variant_id").notNull(), channel: text("channel").notNull(), enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
   externalId: text("external_id"), lastSyncedStock: integer("last_synced_stock"), lastSyncedAt: integer("last_synced_at", { mode: "timestamp" }), lastError: text("last_error"),
 }, (t) => ({ pk: primaryKey({ columns: [t.variantId, t.channel] }) }));
+/** Per product marketplace sync preferences. A product is "synced" when its variants have enabled channel_listings; this row only
+ *  says where content (title, description, photos, brand) and price come from: local = edited here, remote = follows the marketplace. */
+export const channelProductSettings = sqliteTable("channel_product_settings", {
+  productId: text("product_id").notNull().references(() => products.id, { onDelete: "cascade" }), channel: text("channel").notNull(),
+  contentSource: text("content_source").notNull().default("local"), priceSource: text("price_source").notNull().default("local"), // local|remote
+  lastPulledAt: integer("last_pulled_at", { mode: "timestamp" }), lastPullError: text("last_pull_error"), updatedAt: updatedAt(),
+}, (t) => ({ pk: primaryKey({ columns: [t.productId, t.channel] }) }));
 export const productMappings = sqliteTable("product_mappings", {
   id: id(), variantId: text("variant_id").notNull(), provider: text("provider").notNull(), externalSku: text("external_sku"), externalBarcode: text("external_barcode"), externalId: text("external_id"),
 }, (t) => ({ u: uniqueIndex("mapping_u").on(t.provider, t.variantId) }));

@@ -15,6 +15,7 @@ import { SeoChecklist, SlugField } from "../components/Seo";
 import { productChecks } from "../lib/seo";
 import { Button, Card, ConfirmDialog, ErrorState, Loading, Modal, PageHeader, SelectField, TextArea, TextField, useToast } from "../components/ui";
 import { useCategories } from "./Categories";
+import { TrendyolSyncCard } from "../components/trendyol/SyncCard";
 
 interface VForm { id?: string; sku: string; barcode: string; title: string; options: string; website: string; trendyol: string; stock?: { total: number; reserved: number }; initialStock: string }
 interface PForm { name: string; slug: string; description: string; status: Product["status"]; categoryId: string; variants: VForm[]; images: ProductImage[]; seoTitle: string; seoDescription: string; seoOgMediaId: string | null; seoOgImageUrl: string; seoNoindex: boolean; seoCanonical: string }
@@ -187,6 +188,7 @@ export default function ProductEdit() {
               <SelectField label={t("catalog.product.category.label")} help="catalog.categoryPick" hint={t("catalog.product.category.hint")} value={f.categoryId} onChange={(e) => setF({ ...f, categoryId: e.target.value })}><option value="">{t("common.none")}</option>{cats.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</SelectField>
             </div>
           </Card>
+          {id && <TrendyolSyncCard productId={id} />}
         </div>
       </div>
     </form>

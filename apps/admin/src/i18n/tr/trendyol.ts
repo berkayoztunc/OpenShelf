@@ -2,6 +2,7 @@ export const trendyol = {
   "trendyol.title": "Trendyol konsolu",
   "trendyol.description": "Trendyol'un tüm API işlemlerini tek yerden deneyin: parametreleri doldurun, isteği önizleyin, gönderin ve yanıtı inceleyin.",
   "trendyol.tabs.label": "Trendyol bölümleri",
+  "trendyol.tab.sync": "Senkron kontrolü",
   "trendyol.tab.explorer": "Gezgin",
   "trendyol.tab.products": "Ürünler",
   "trendyol.tab.orders": "Son satışlar",

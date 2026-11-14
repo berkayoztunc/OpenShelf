@@ -94,13 +94,13 @@ UI code links to `section#anchor`; the guide MUST contain a `##`/`###` heading w
 | `security` | `iki-adimli-dogrulama`, `kullanicilar-ve-roller`, `oturumlar`, `denetim-kaydi`, `kilitlenme`, `gizli-anahtarlar` |
 | `data` | `disa-aktarma`, `ice-aktarma`, `yedekleme` |
 | `going-live` | `yayin-kontrol-listesi`, `alan-adi`, `gizli-anahtarlar-ve-ortam`, `mock-u-kapatma`, `maliyetler` |
-| `trendyol` | `baglanti-ve-mock`, `stage-ve-canli`, `urunler`, `urun-olusturma-sihirbazi`, `son-satislar`, `iadeler`, `sorular`, `finans`, `api-gezgini`, `riskli-islemler`, `cagri-gecmisi`, `sik-hatalar` |
+| `trendyol` | `baglanti-ve-mock`, `stage-ve-canli`, `senkron-kontrolu`, `urunler`, `urun-olusturma-sihirbazi`, `son-satislar`, `iadeler`, `sorular`, `finans`, `api-gezgini`, `riskli-islemler`, `cagri-gecmisi`, `sik-hatalar` |
 | `troubleshooting` | `giris-sorunlari`, `odeme-sorunlari`, `fatura-sorunlari`, `e-posta-ve-sms-sorunlari`, `entegrasyon-hatalari`, `sss` |
 | `glossary` (virtual) | `<glossary id>` e.g. `glossary#sku` |
 
 ### Page -> guide target (use these in `<PageHeader guide=...>`)
 
-Dashboard `getting-started#ilk-10-adim` · Orders `orders#siparis-durumlari` · Order detail `orders#siparis-detayi` · Invoices list + editor `invoices#manuel-fatura` · Emails + compose `email#e-posta-yazma` · Products + edit `catalog#urun-ekleme` · Categories `catalog#kategoriler` · Coupons `catalog#kuponlar` · Customers `customers-kvkk#musteriler` · Settings tabs `store-settings#genel|marka|seo-ayarlari|yasal-metinler|odeme-ve-siparis|takip-ve-reklam|bildirimler|sistem` · Integrations `integrations#entegrasyonlari-test-etme` · Integration events `troubleshooting#entegrasyon-hatalari` · Mock inbox `getting-started#deneme-modu` · Security `security#iki-adimli-dogrulama` · Audit `security#denetim-kaydi` · Data `data#disa-aktarma` · Login/Setup `getting-started#ilk-giris` · Trendyol console `trendyol#api-gezgini` (tabs: `trendyol#urunler|son-satislar|iadeler|sorular|finans`).
+Dashboard `getting-started#ilk-10-adim` · Orders `orders#siparis-durumlari` · Order detail `orders#siparis-detayi` · Invoices list + editor `invoices#manuel-fatura` · Emails + compose `email#e-posta-yazma` · Products + edit `catalog#urun-ekleme` · Categories `catalog#kategoriler` · Coupons `catalog#kuponlar` · Customers `customers-kvkk#musteriler` · Settings tabs `store-settings#genel|marka|seo-ayarlari|yasal-metinler|odeme-ve-siparis|takip-ve-reklam|bildirimler|sistem` · Integrations `integrations#entegrasyonlari-test-etme` · Integration events `troubleshooting#entegrasyon-hatalari` · Mock inbox `getting-started#deneme-modu` · Security `security#iki-adimli-dogrulama` · Audit `security#denetim-kaydi` · Data `data#disa-aktarma` · Login/Setup `getting-started#ilk-giris` · Trendyol console `trendyol#api-gezgini` (tabs: `trendyol#senkron-kontrolu|urunler|son-satislar|iadeler|sorular|finans`).
 
 ### Screenshot names (guide writers reference these; the screenshot agent produces them for both languages)
 

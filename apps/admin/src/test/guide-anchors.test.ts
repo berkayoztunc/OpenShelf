@@ -18,7 +18,7 @@ export const REQUIRED_ANCHORS: Record<string, string[]> = {
   security: ["iki-adimli-dogrulama", "kullanicilar-ve-roller", "oturumlar", "denetim-kaydi", "kilitlenme", "gizli-anahtarlar"],
   data: ["disa-aktarma", "ice-aktarma", "yedekleme"],
   "going-live": ["yayin-kontrol-listesi", "alan-adi", "gizli-anahtarlar-ve-ortam", "mock-u-kapatma", "maliyetler"],
-  trendyol: ["baglanti-ve-mock", "stage-ve-canli", "urunler", "urun-olusturma-sihirbazi", "son-satislar", "iadeler", "sorular", "finans", "api-gezgini", "riskli-islemler", "cagri-gecmisi", "sik-hatalar"],
+  trendyol: ["baglanti-ve-mock", "stage-ve-canli", "senkron-kontrolu", "urunler", "urun-olusturma-sihirbazi", "son-satislar", "iadeler", "sorular", "finans", "api-gezgini", "riskli-islemler", "cagri-gecmisi", "sik-hatalar"],
   mcp: ["yapay-zeka-baglantisi-nedir", "baglanma-ve-anahtarlar", "seviyeler-ve-guvenlik", "araclar-neler-yapar", "dosya-ve-gorsel-yukleme", "trendyol-fotograflari", "rehberi-yapay-zekaya-acma", "sik-yapilan-hatalar"],
   troubleshooting: ["giris-sorunlari", "odeme-sorunlari", "fatura-sorunlari", "e-posta-ve-sms-sorunlari", "entegrasyon-hatalari", "sss"],
 };

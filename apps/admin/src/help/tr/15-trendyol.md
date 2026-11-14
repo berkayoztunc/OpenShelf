@@ -44,6 +44,34 @@ Entegrasyon ekranındaki **Ortam** alanı iki değer alır: **Production** (vars
 
 **Hız sınırı:** Trendyol uç nokta başına **10 saniyede 50 istek** kabul eder; aşarsanız Trendyol "çok fazla istek" (429) döner. Konsol bunu kendiliğinden tekrar denemez; birkaç saniye bekleyip yeniden deneyin. Bazı ürün işlemlerinin ayrıca dakika başına sınırı vardır; işlem sayfasındaki **İstek sınırı** satırı bunu gösterir.
 
+## Senkron kontrolü {#senkron-kontrolu}
+
+**Senkron kontrolü** sekmesi, her ürünün Trendyol ile ilişkisini tek ekranda yönetir. Aynı ayarlar ürün sayfasındaki **Trendyol** kartında da bulunur.
+
+**Yalnızca web sitesi mi, senkron mu?** Her ürünün bir anahtarı vardır:
+
+* **Senkron:** Ürünün stoğu tek havuzdur ve Trendyol'a gönderilir. Web sitesinde ya da Trendyol'da satış olduğunda, bir Trendyol siparişi iptal edildiğinde veya stoğu elle değiştirdiğinizde yeni adet birkaç dakika içinde Trendyol'a gider. Ayrıca her 10 dakikada bir, gönderilen adet ile buradaki adet karşılaştırılır ve fark varsa düzeltilir.
+* **Yalnızca web sitesi:** Trendyol'a stok ya da fiyat gönderilmez. Aynı barkod Trendyol'da satılsa bile o satış buradaki stoğu düşürmez.
+
+Anahtarı ilk kez açtığınızda varyantlar [barkodlarıyla](term:barcode) Trendyol'a bağlanır. Barkodu olmayan varyant bağlanamaz; önce ürün sayfasında barkodu girin. Listede birden çok ürünü işaretleyip toplu olarak açıp kapatabilirsiniz.
+
+**İçerik ve fiyat kaynağı.** Senkron ürünlerde iki ayrı tercih vardır:
+
+| Tercih | Bu mağaza | Trendyol |
+| --- | --- | --- |
+| **İçerik kaynağı** (ad, açıklama, marka, fotoğraflar) | Burada düzenlersiniz; Trendyol'daki içerik buraya yazılmaz. | 30 dakikada bir Trendyol'dan alınır; burada yaptığınız içerik değişikliklerinin üzerine yazılır. |
+| **Fiyat kaynağı** | Girdiğiniz Trendyol fiyatı stokla birlikte Trendyol'a gönderilir. | Web sitesi ve Trendyol fiyatı Trendyol'daki satış fiyatından alınır; buradan fiyat gönderilmez. |
+
+> [!NOTE]
+> Stok için kaynak seçilmez: stok her zaman bu mağazadaki tek havuzdan yönetilir. İki kanal aynı anda sattığı için tek doğru sayı burada tutulur ve Trendyol'a gönderilir.
+
+**Elle işlemler.** **Stoku şimdi gönder** bekletmeden gönderim başlatır. **Trendyol'dan şimdi çek** içerik ya da fiyatı Trendyol'u izleyen ürünleri hemen günceller.
+
+> [!WARNING]
+> **Stoku Trendyol'dan al** buradaki satılabilir stoğu Trendyol'daki adetle **değiştirir**. Yalnızca sayılar birbirinden koptuğunda, tek seferlik düzeltme olarak kullanın. Değişiklik [stok defterine](term:ledger) yazılır.
+
+**Durum rozetleri:** *Güncel* son gönderilen adet buradaki adetle aynı demektir. *Gönderilecek* bir değişikliğin sırada beklediğini gösterir. *Hata* Trendyol'un son gönderimi reddettiğini gösterir; nedeni ürün kartında varyantın altında yazar (çoğu zaman barkod Trendyol'da bulunamamıştır).
+
 ## Ürünler {#urunler}
 
 **Ürünler** sekmesi Trendyol'daki katalogunuzu dört alt sekmede gösterir: **Onaylı**, **Onay bekleyen**, **Arşivlenmiş** ve **Eşleştirmeler**.

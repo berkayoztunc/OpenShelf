@@ -44,6 +44,34 @@ In the **live** (production) environment write operations change real data. That
 
 **Rate limit:** Trendyol accepts **50 requests per 10 seconds** per endpoint; if you exceed it Trendyol answers "too many requests" (429). The console does not retry on its own; wait a few seconds and try again. Some product operations also have per-minute limits; the **Rate limit** line on the operation shows it.
 
+## Sync control {#senkron-kontrolu}
+
+The **Sync control** tab manages every product's relationship with Trendyol on one screen. The same settings are on the **Trendyol** card of the product page.
+
+**Website only or synced?** Every product has a switch:
+
+* **Synced:** The product's stock is one shared pool and is sent to Trendyol. When a sale happens on the website or on Trendyol, when a Trendyol order is cancelled or when you change stock by hand, the new quantity reaches Trendyol within a few minutes. In addition, every 10 minutes the quantity last sent is compared with the quantity here and any difference is corrected.
+* **Website only:** No stock or price is sent to Trendyol. Even if the same barcode sells on Trendyol, that sale does not take stock here.
+
+The first time you turn the switch on, variants are linked to Trendyol by their [barcode](term:barcode). A variant without a barcode cannot be linked; enter the barcode on the product page first. You can tick several products in the list and switch them in bulk.
+
+**Content and price source.** Synced products have two separate preferences:
+
+| Preference | This store | Trendyol |
+| --- | --- | --- |
+| **Content source** (name, description, brand, photos) | You edit it here; Trendyol's content is never written over it. | Taken from Trendyol every 30 minutes; content edits made here are overwritten. |
+| **Price source** | The Trendyol price you enter is sent to Trendyol together with stock. | Website and Trendyol prices are taken from Trendyol's sale price; no price is sent from here. |
+
+> [!NOTE]
+> There is no source choice for stock: stock is always managed from the single pool in this store. Because two channels sell at the same time, the one true number is kept here and sent to Trendyol.
+
+**Manual actions.** **Push stock now** starts a push without waiting. **Pull from Trendyol now** immediately refreshes products whose content or price follows Trendyol.
+
+> [!WARNING]
+> **Take stock from Trendyol** **replaces** the sellable stock here with Trendyol's quantity. Use it only as a one-off correction when the numbers have drifted apart. The change is written to the [stock ledger](term:ledger).
+
+**Status badges:** *In sync* means the quantity last sent equals the quantity here. *Pending* means a change is waiting in the queue. *Error* means Trendyol rejected the last push; the reason is shown under the variant on the product card (most often the barcode was not found on Trendyol).
+
 ## Products {#urunler}
 
 The **Products** tab shows your Trendyol catalogue in four sub-tabs: **Approved**, **Pending approval**, **Archived** and **Mappings**.

@@ -28,6 +28,8 @@ import { adminNotifications } from "./routes/notifications";
 import { adminManualInvoices } from "./routes/manual-invoices";
 import { adminEmails } from "./routes/admin-emails";
 import { adminTrendyol } from "./routes/admin-trendyol";
+import { adminTrendyolSync } from "./routes/admin-trendyol-sync";
+import { hasFollowedProducts } from "@openshelf/integration-trendyol";
 import { adminGeliver } from "./routes/admin-geliver";
 import { adminCampaigns } from "./routes/admin-campaigns";
 import { unsubscribeRoutes } from "./routes/unsubscribe";
@@ -69,6 +71,7 @@ admin.route("/", adminNotifications);
 admin.route("/", adminManualInvoices);
 admin.route("/", adminEmails);
 admin.route("/", adminTrendyol);
+admin.route("/", adminTrendyolSync);
 admin.route("/", adminGeliver);
 admin.route("/", adminCampaigns);
 admin.route("/", adminTokens);
@@ -122,7 +125,13 @@ export async function runScheduled(env: Env, now = new Date()) {
   const minute = Math.floor(now.getTime() / 60000);
   try {
     const ty = await getAdapter(env, db, "trendyol");
-    if (ty) await enqueueJob(db, { kind: "trendyol.reconcile_orders", payload: {}, dedupeKey: `trendyol.reconcile_orders:${Math.floor(minute / 5)}` }, now);
+    if (ty) {
+      await enqueueJob(db, { kind: "trendyol.reconcile_orders", payload: {}, dedupeKey: `trendyol.reconcile_orders:${Math.floor(minute / 5)}` }, now);
+      // Safety net: whatever changed stock (sale, refund, cancel, reservation, manual edit), drifted listings are pushed within 10 minutes.
+      if (minute % 10 === 0) await enqueueJob(db, { kind: "trendyol.stock_push", payload: { stockOnly: true }, dedupeKey: `trendyol.stock_push:sweep:${Math.floor(minute / 10)}` }, now);
+      // Products whose content or price follows Trendyol are refreshed every 30 minutes.
+      if (minute % 30 === 0 && await hasFollowedProducts(db)) await enqueueJob(db, { kind: "trendyol.pull_products", payload: {}, dedupeKey: `trendyol.pull_products:cron:${Math.floor(minute / 30)}:first` }, now);
+    }
   } catch (e) { log("warn", "trendyol reconcile enqueue failed", { error: String(e) }); }
   try { out.outbox = await runOutbox(env, { now, limit: 20 }); } catch (e) { log("error", "outbox failed", { error: String(e) }); }
   if (minute % 60 === 0) {

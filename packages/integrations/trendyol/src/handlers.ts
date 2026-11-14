@@ -1,9 +1,11 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
-  categories, channelListings, channelPrices, inventory, inventoryMovements, orderItems, orders, outboxJobs, productImages, productMappings,
+  categories, channelListings, channelPrices, channelProductSettings, inventory, inventoryMovements, orderItems, orders, outboxJobs, productImages, productMappings,
   productVariants, products, shipments, syncCursors,
 } from "@openshelf/db";
 import type { MarketplaceCategory, MarketplaceOrder, MarketplaceProduct, MarketplaceProductVariant, MarketplaceProvider, MarketplaceStockUpdate } from "@openshelf/integration-sdk";
+import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
+import type { SQL } from "drizzle-orm";
 import { MAX_INVENTORY_BATCH } from "./endpoints";
 import { computeStockDrift } from "./drift";
 
@@ -16,6 +18,9 @@ export type JobHandler = (
 ) => Promise<void>;
 
 const CHANNEL = "trendyol";
+const CHUNK = 90; // D1 allows 100 bound parameters per statement
+const chunks = <T,>(a: T[], n: number) => { const o: T[][] = []; for (let i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; };
+const uniq = <T,>(a: T[]) => [...new Set(a)];
 export const ORDERS_CURSOR_KEY = "trendyol:orders:since";
 const OVERLAP_MS = 5 * 60_000;
 const DEFAULT_LOOKBACK_MS = 3 * 24 * 3600_000;
@@ -39,13 +44,21 @@ async function loadStockRows(db: any, variantIds?: string[]) {
   ])) as [any[], any[], any[], any[]];
   const by = <T extends Record<string, any>>(rows: T[], k: string) => new Map(rows.map((r) => [r[k], r]));
   const iM = by(inv, "variantId"), pM = by(prices, "variantId"), vM = by(variants, "id"), mM = by(maps, "variantId");
+  // price follows Trendyol for these products: never push our copy back
+  const remotePriced = new Set<string>();
+  const pids = uniq(variants.map((v) => v.productId as string));
+  for (const c of chunks(pids, CHUNK)) {
+    for (const r of await db.select().from(channelProductSettings).where(and(eq(channelProductSettings.channel, CHANNEL), inArray(channelProductSettings.productId, c)))) {
+      if (r.priceSource === "remote") remotePriced.add(r.productId);
+    }
+  }
   return listings.map((l) => {
     const i: any = iM.get(l.variantId), v: any = vM.get(l.variantId), m: any = mM.get(l.variantId), pr: any = pM.get(l.variantId);
     const available = Math.max(0, (i?.total ?? 0) - (i?.reserved ?? 0) - (i?.safetyStock ?? 0));
     return {
       variantId: l.variantId as string, sku: (m?.externalSku ?? v?.sku) as string | undefined,
       barcode: (m?.externalBarcode ?? v?.barcode ?? undefined) as string | undefined,
-      available, price: pr ? (pr.price as number) / 100 : undefined, lastSyncedStock: (l.lastSyncedStock ?? null) as number | null,
+      available, price: pr && !remotePriced.has(v?.productId) ? (pr.price as number) / 100 : undefined, lastSyncedStock: (l.lastSyncedStock ?? null) as number | null,
     };
   });
 }
@@ -112,10 +125,44 @@ export async function upsertTrendyolShipment(db: any, orderId: string, o: Market
   });
 }
 
-export async function importTrendyolOrder(db: any, o: MarketplaceOrder, newId: () => string = () => crypto.randomUUID()): Promise<"imported" | "duplicate" | { unmapped: number }> {
+/** Raw SQL as a batch item. drizzle's D1 batch needs a prepared `stmt`, which `db.run(sql)` does not carry (same trick as core `raw`). */
+function rawStmt(db: any, q: SQL) {
+  const client = db.$client;
+  if (!client?.prepare) return db.run(q); // non-D1 drivers (tests) batch SQLiteRaw fine
+  const built = new SQLiteSyncDialect().sqlToQuery(q);
+  const stmt = client.prepare(built.sql);
+  return { _prepare: () => ({ stmt, getQuery: () => ({ sql: built.sql, params: built.params }), mapResult: (r: unknown) => r }) };
+}
+
+/**
+ * A Trendyol order that we imported (and took stock for) was cancelled: put the stock back, once. Guarded by the movement log
+ * (`trendyol_cancel` per order + variant) inside the batch, so a retry or a concurrent run cannot restock twice.
+ */
+async function restockCancelledOrder(db: any, orderId: string): Promise<number> {
+  const moves: any[] = await db.select().from(inventoryMovements).where(and(eq(inventoryMovements.refType, "order"), eq(inventoryMovements.refId, orderId)));
+  const done = new Set(moves.filter((m) => m.reason === "trendyol_cancel").map((m) => m.variantId as string));
+  const back = new Map<string, number>();
+  for (const m of moves) if (m.reason === "trendyol_sale" && !done.has(m.variantId)) back.set(m.variantId, (back.get(m.variantId) ?? 0) - (m.delta as number));
+  const stmts: unknown[] = [];
+  for (const [variantId, qty] of back) {
+    if (qty <= 0) continue;
+    const notYet = sql`NOT EXISTS (SELECT 1 FROM inventory_movements WHERE ref_type = 'order' AND ref_id = ${orderId} AND variant_id = ${variantId} AND reason = 'trendyol_cancel')`;
+    stmts.push(db.update(inventory).set({ total: sql`${inventory.total} + ${qty}`, updatedAt: new Date() }).where(and(eq(inventory.variantId, variantId), notYet)));
+    stmts.push(rawStmt(db, sql`INSERT INTO inventory_movements (variant_id, delta, reason, ref_type, ref_id) SELECT ${variantId}, ${qty}, 'trendyol_cancel', 'order', ${orderId} WHERE ${notYet}`));
+  }
+  if (stmts.length) await db.batch(stmts as [any, ...any[]]);
+  return stmts.length / 2;
+}
+
+/**
+ * `fx.stockChanged` is set when local stock moved (sale taken or cancelled order restocked), so the caller can push the new numbers.
+ * Stock is only taken for variants whose Trendyol listing is not switched off: a "website only" product keeps its own stock.
+ */
+export async function importTrendyolOrder(db: any, o: MarketplaceOrder, newId: () => string = () => crypto.randomUUID(), fx?: { stockChanged?: boolean }): Promise<"imported" | "duplicate" | { unmapped: number }> {
   const existing = (await db.select().from(orders).where(and(eq(orders.source, CHANNEL), eq(orders.externalOrderId, o.externalId))).limit(1))[0];
   if (existing) {
     if (existing.status !== o.status) await db.update(orders).set({ status: o.status, updatedAt: new Date() }).where(eq(orders.id, existing.id));
+    if (o.status === "cancelled" && (await restockCancelledOrder(db, existing.id)) > 0 && fx) fx.stockChanged = true;
     await upsertTrendyolShipment(db, existing.id, o);
     return "duplicate";
   }
@@ -132,6 +179,9 @@ export async function importTrendyolOrder(db: any, o: MarketplaceOrder, newId: (
     if (!variant) unmapped++;
     lines.push({ idx, l, variantId: variant?.id ?? null });
   }
+  const lineVariants = uniq(lines.map((x) => x.variantId).filter((v): v is string => !!v));
+  const off = new Set<string>(lineVariants.length ? (await db.select().from(channelListings)
+    .where(and(eq(channelListings.channel, CHANNEL), eq(channelListings.enabled, false), inArray(channelListings.variantId, lineVariants)))).map((r: any) => r.variantId as string) : []);
   const now = new Date();
   const stmts: unknown[] = [
     db.insert(orders).values({
@@ -143,14 +193,15 @@ export async function importTrendyolOrder(db: any, o: MarketplaceOrder, newId: (
   ];
   for (const { idx, l, variantId } of lines) {
     stmts.push(db.insert(orderItems).values({ id: `${id}:${idx}`, orderId: id, variantId, sku: l.sku, name: l.name ?? l.sku, quantity: l.quantity, unitPrice: l.unitPrice }));
-    if (!variantId) continue;
+    if (!variantId || off.has(variantId)) continue; // unmapped, or website-only (separate stock)
+    if (fx) fx.stockChanged = true;
     stmts.push(db.update(inventory).set({ total: sql`${inventory.total} - ${l.quantity}`, updatedAt: now }).where(eq(inventory.variantId, variantId)));
     stmts.push(db.insert(inventoryMovements).values({ variantId, delta: -l.quantity, reason: "trendyol_sale", refType: "order", refId: id }));
   }
   try { await db.batch(stmts as [any, ...any[]]); }
   catch (e) {
     const dup = (await db.select({ id: orders.id }).from(orders).where(and(eq(orders.source, CHANNEL), eq(orders.externalOrderId, o.externalId))).limit(1))[0];
-    if (dup) return "duplicate"; // lost a race: other worker imported it (batch rolled back, nothing decremented)
+    if (dup) { if (fx) fx.stockChanged = false; return "duplicate"; } // lost a race: other worker imported it (batch rolled back, nothing decremented)
     throw e;
   }
   await upsertTrendyolShipment(db, id, o);
@@ -164,20 +215,22 @@ export const reconcileOrders: JobHandler = async (job, ctx) => {
   const startedAt = Date.now();
   const cur = (await ctx.db.select().from(syncCursors).where(eq(syncCursors.key, ORDERS_CURSOR_KEY)).limit(1))[0];
   const since = new Date(typeof job.payload?.sinceMs === "number" ? job.payload.sinceMs : cur ? Number(cur.value) : startedAt - DEFAULT_LOOKBACK_MS);
-  const touched = new Set<string>();
+  const fx = { stockChanged: false };
   const res: ImportResult = { imported: 0, duplicate: 0, unmappedLines: 0 };
   let page: string | undefined;
   do {
     const r = await provider.fetchOrders(since, page);
     for (const o of r.orders) {
-      const out = await importTrendyolOrder(ctx.db, o);
+      const one = { stockChanged: false };
+      const out = await importTrendyolOrder(ctx.db, o, undefined, one);
+      if (one.stockChanged) fx.stockChanged = true;
       if (out === "duplicate") res.duplicate++;
-      else { res.imported++; if (typeof out === "object") res.unmappedLines += out.unmapped; o.lines.forEach((l) => touched.add(l.sku)); }
+      else { res.imported++; if (typeof out === "object") res.unmappedLines += out.unmapped; }
     }
     page = r.nextCursor;
   } while (page);
-  // Local stock is the truth: a Trendyol sale decremented it above, so push the new quantities back (only drifted rows).
-  if (touched.size) {
+  // Local stock is the truth: a Trendyol sale (or a cancelled one) changed it above, so push the new quantities back (only drifted rows).
+  if (fx.stockChanged) {
     await ctx.db.insert(outboxJobs).values({
       id: crypto.randomUUID(), kind: "trendyol.stock_push", dedupeKey: `trendyol.stock_push:after-import:${Math.floor(startedAt / 60000)}`, payload: { stockOnly: true },
     }).onConflictDoNothing();
@@ -194,7 +247,6 @@ export const reconcileOrders: JobHandler = async (job, ctx) => {
 // ---------------------------------------------------------------------------------------------------------------------
 
 export const PRODUCTS_STATUS_KEY = "trendyol:products:last";
-const CHUNK = 90; // D1 allows 100 bound parameters per statement
 const BATCH_SIZE = 100;
 
 export interface ImportTotals {
@@ -210,8 +262,6 @@ const TR: Record<string, string> = { ç: "c", ğ: "g", ı: "i", ö: "o", ş: "s"
 export const slugify = (s: string) =>
   s.replace(/[çğıöşüÇĞİÖŞÜ]/g, (c) => TR[c] ?? c).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "product";
 
-const chunks = <T,>(a: T[], n: number) => { const o: T[][] = []; for (let i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; };
-const uniq = <T,>(a: T[]) => [...new Set(a)];
 
 async function saveStatus(db: any, st: ImportStatus) {
   const value = JSON.stringify(st);
@@ -416,4 +466,118 @@ export const importProducts: JobHandler = async (job, ctx) => {
     await saveStatus(ctx.db, { ...base, state: job.attempts >= 8 ? "error" : "running", error: (e instanceof Error ? e.message : String(e)).slice(0, 300) }).catch(() => {});
     throw e;
   }
+};
+
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Follow Trendyol (per product): content and/or price are pulled from Trendyol for products that ask for it
+// ---------------------------------------------------------------------------------------------------------------------
+
+export interface PullTotals { pages: number; products: number; content: number; prices: number; stock: number }
+export const emptyPullTotals = (): PullTotals => ({ pages: 0, products: 0, content: 0, prices: 0, stock: 0 });
+
+/**
+ * Applies ONE page of Trendyol products to the linked local products that follow Trendyol.
+ *  - content (title, description, brand, photos) is overwritten where the product's content source is "remote"
+ *  - prices (Trendyol + website) are overwritten where the price source is "remote"
+ *  - `opts.stock` (manual, one-off): local stock is set so that the sellable quantity equals Trendyol's
+ * Only products with at least one ENABLED listing are touched; `opts.productIds` narrows it further. Idempotent.
+ */
+export async function applyFollowedProducts(
+  db: any, remote: MarketplaceProduct[], opts: { productIds?: string[]; stock?: boolean; now?: Date } = {},
+): Promise<Omit<PullTotals, "pages">> {
+  const t = { products: 0, content: 0, prices: 0, stock: 0 };
+  const now = opts.now ?? new Date();
+  const all = remote.flatMap((p) => p.variants.map((v) => ({ p, v })));
+  if (!all.length) return t;
+  const barcodes = uniq(all.map((x) => x.v.barcode));
+  const maps: any[] = (await Promise.all(chunks(barcodes, CHUNK).map((c) => db.select().from(productMappings).where(and(eq(productMappings.provider, CHANNEL), inArray(productMappings.externalBarcode, c)))))).flat();
+  if (!maps.length) return t;
+  const vids = uniq(maps.map((m) => m.variantId as string));
+  const load = async (table: any, col: any, extra?: any) => (await Promise.all(chunks(vids, CHUNK).map((c) => db.select().from(table).where(extra ? and(extra, inArray(col, c)) : inArray(col, c))))).flat() as any[];
+  const [variants, listings, inv] = await Promise.all([
+    load(productVariants, productVariants.id), load(channelListings, channelListings.variantId, eq(channelListings.channel, CHANNEL)), load(inventory, inventory.variantId),
+  ]);
+  const vBy = new Map(variants.map((v) => [v.id as string, v])); const invBy = new Map(inv.map((i) => [i.variantId as string, i]));
+  const on = new Set(listings.filter((l) => l.enabled).map((l) => l.variantId as string));
+  const only = opts.productIds ? new Set(opts.productIds) : null;
+  const pids = uniq(variants.map((v) => v.productId as string)).filter((id) => !only || only.has(id));
+  const settings = new Map<string, any>();
+  for (const c of chunks(pids, CHUNK)) for (const r of await db.select().from(channelProductSettings).where(and(eq(channelProductSettings.channel, CHANNEL), inArray(channelProductSettings.productId, c)))) settings.set(r.productId, r);
+  const mapBy = new Map(maps.map((m) => [m.externalBarcode as string, m]));
+
+  const stmts: unknown[] = []; const touched = new Set<string>(); const contentDone = new Set<string>();
+  for (const { p, v } of all) {
+    const m = mapBy.get(v.barcode); const local = m ? vBy.get(m.variantId) : undefined;
+    if (!local || !on.has(local.id) || (only && !only.has(local.productId))) continue;
+    const st = settings.get(local.productId);
+    const content = st?.contentSource === "remote", price = st?.priceSource === "remote";
+    if (!content && !price && !opts.stock) continue;
+    touched.add(local.productId);
+    if (content && !contentDone.has(local.productId)) {
+      contentDone.add(local.productId); t.content++;
+      stmts.push(db.update(products).set({ nameTr: p.title || "Untitled", descriptionTr: p.description ?? null, brand: p.brand ?? null, updatedAt: now }).where(eq(products.id, local.productId)));
+      if (p.images.length) { // never wipe photos when Trendyol returns none
+        stmts.push(db.delete(productImages).where(eq(productImages.productId, local.productId)));
+        p.images.forEach((url, i) => stmts.push(db.insert(productImages).values({ id: `${local.productId}:${i}`, productId: local.productId, url, alt: p.title.slice(0, 200), position: i })
+          .onConflictDoUpdate({ target: productImages.id, set: { url, alt: p.title.slice(0, 200), position: i, mediaId: null } })));
+      }
+    }
+    if (price && v.salePrice > 0) {
+      t.prices++;
+      const v2 = { price: v.salePrice, compareAtPrice: v.listPrice > v.salePrice ? v.listPrice : null, currency: "TRY" };
+      for (const channel of ["trendyol", "website"] as const) {
+        stmts.push(db.insert(channelPrices).values({ variantId: local.id, channel, ...v2 }).onConflictDoUpdate({ target: [channelPrices.variantId, channelPrices.channel], set: v2 }));
+      }
+    }
+    if (opts.stock) {
+      const cur = invBy.get(local.id);
+      const total = v.quantity + (cur?.reserved ?? 0) + (cur?.safetyStock ?? 0);
+      const delta = total - (cur?.total ?? 0);
+      if (!cur) stmts.push(db.insert(inventory).values({ variantId: local.id, total, reserved: 0, safetyStock: 0 }).onConflictDoNothing());
+      else if (delta !== 0) stmts.push(db.update(inventory).set({ total: sql`${inventory.total} + ${delta}`, updatedAt: now }).where(eq(inventory.variantId, local.id)));
+      if (delta !== 0) { t.stock++; stmts.push(db.insert(inventoryMovements).values({ variantId: local.id, delta, reason: "trendyol_sync", refType: "product_pull", refId: null })); }
+      stmts.push(db.update(channelListings).set({ lastSyncedStock: v.quantity, lastSyncedAt: now, lastError: null }).where(and(eq(channelListings.variantId, local.id), eq(channelListings.channel, CHANNEL))));
+    }
+  }
+  for (const id of touched) {
+    stmts.push(db.insert(channelProductSettings).values({ productId: id, channel: CHANNEL, lastPulledAt: now, lastPullError: null })
+      .onConflictDoUpdate({ target: [channelProductSettings.productId, channelProductSettings.channel], set: { lastPulledAt: now, lastPullError: null } }));
+  }
+  t.products = touched.size;
+  for (const c of chunks(stmts, BATCH_SIZE)) await db.batch(c as [any, ...any[]]);
+  return t;
+}
+
+/** True when at least one product follows Trendyol for content or price (the scheduler only pulls then). */
+export async function hasFollowedProducts(db: any): Promise<boolean> {
+  const r = await db.select({ p: channelProductSettings.productId }).from(channelProductSettings)
+    .where(and(eq(channelProductSettings.channel, CHANNEL), sql`(${channelProductSettings.contentSource} = 'remote' OR ${channelProductSettings.priceSource} = 'remote')`)).limit(1);
+  return r.length > 0;
+}
+
+/**
+ * payload: { runId?, cursor?, productIds?, stock?, totals? }. Like the import, ONE page per job, re-enqueued with the next cursor.
+ * Scheduled runs pass no productIds (every followed product); "pull now" in the admin passes the picked products.
+ */
+export const pullProducts: JobHandler = async (job, ctx) => {
+  const provider = await getProvider(ctx);
+  if (!provider) { await ctx.log("info", "trendyol.pull_products: trendyol not enabled"); return; }
+  if (!provider.fetchProducts) throw new Error("trendyol adapter has no fetchProducts");
+  const runId: string = job.payload?.runId ?? job.id;
+  const productIds: string[] | undefined = Array.isArray(job.payload?.productIds) ? job.payload.productIds.slice(0, 500) : undefined;
+  const stock = !!job.payload?.stock && !!productIds?.length; // stock overwrite is never a scheduled/blanket operation
+  const totals: PullTotals = { ...emptyPullTotals(), ...(job.payload?.totals ?? {}) };
+  const page = await provider.fetchProducts(job.payload?.cursor);
+  const r = await applyFollowedProducts(ctx.db, page.products, { productIds, stock });
+  totals.pages++;
+  for (const k of Object.keys(r) as (keyof typeof r)[]) totals[k] += r[k];
+  if (page.nextCursor) {
+    await ctx.db.insert(outboxJobs).values({
+      id: crypto.randomUUID(), kind: "trendyol.pull_products", dedupeKey: `trendyol.pull_products:${runId}:${page.nextCursor}`,
+      payload: { runId, cursor: page.nextCursor, ...(productIds ? { productIds } : {}), stock, totals },
+    }).onConflictDoNothing();
+    return;
+  }
+  await ctx.log("info", "trendyol.pull_products done", { ...totals, stock });
 };

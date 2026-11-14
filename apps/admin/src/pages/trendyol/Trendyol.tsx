@@ -12,14 +12,15 @@ import { useT } from "../../i18n";
 
 const Overview = lazy(() => import("./views/Overview"));
 const Explorer = lazy(() => import("./explorer/Explorer"));
+const Sync = lazy(() => import("./views/Sync"));
 const Products = lazy(() => import("./views/Products"));
 const Orders = lazy(() => import("./views/Orders"));
 const Returns = lazy(() => import("./views/Returns"));
 const Questions = lazy(() => import("./views/Questions"));
 const Finance = lazy(() => import("./views/Finance"));
 
-const GUIDE: Record<string, string> = { overview: "trendyol", explorer: "trendyol#api-gezgini", products: "trendyol#urunler", orders: "trendyol#son-satislar", returns: "trendyol#iadeler", questions: "trendyol#sorular", finance: "trendyol#finans" };
-const TABS = ["overview", "products", "orders", "returns", "questions", "finance", "explorer"] as const;
+const GUIDE: Record<string, string> = { overview: "trendyol", sync: "trendyol#senkron-kontrolu", explorer: "trendyol#api-gezgini", products: "trendyol#urunler", orders: "trendyol#son-satislar", returns: "trendyol#iadeler", questions: "trendyol#sorular", finance: "trendyol#finans" };
+const TABS = ["overview", "sync", "products", "orders", "returns", "questions", "finance", "explorer"] as const;
 type TabId = (typeof TABS)[number];
 
 function StatusBar() {
@@ -77,6 +78,7 @@ export default function Trendyol() {
       <Suspense fallback={<Loading />}>
         <Routes>
           <Route index element={<Overview />} />
+          <Route path="sync" element={<Sync />} />
           <Route path="explorer" element={<Explorer />} />
           <Route path="products/*" element={<Products />} />
           <Route path="orders/*" element={<Orders />} />

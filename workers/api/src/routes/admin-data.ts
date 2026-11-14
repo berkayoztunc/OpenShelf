@@ -104,7 +104,7 @@ adminData.post("/import/products", requireRole("admin"), async (c) => {
  */
 export const RESET_TABLES = [
   "store_settings", "integration_configs", "media", "customers", "addresses", "customer_consents", "categories", "products", "product_variants", "product_images",
-  "inventory", "inventory_movements", "inventory_reservations", "channel_prices", "channel_listings", "product_mappings", "carts", "cart_items", "coupons",
+  "inventory", "inventory_movements", "inventory_reservations", "channel_prices", "channel_listings", "channel_product_settings", "product_mappings", "carts", "cart_items", "coupons",
   "orders", "order_items", "payments", "payment_events", "refunds", "shipments", "shipment_events", "invoices", "invoice_events", "integration_events", "outbox_jobs",
   "sync_cursors", "webhook_receipts", "marketing_events", "utm_attributions", "mock_messages", "notification_log", "slug_redirects", "manual_invoices",
   "outbound_emails", "outbound_sms", "campaigns", "campaign_recipients", "api_tokens", "mcp_tool_settings", "oauth_clients", "oauth_codes", "oauth_grants", "trendyol_calls", "mock_state",
