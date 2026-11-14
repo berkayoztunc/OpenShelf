@@ -6,6 +6,7 @@ import type { MessageKey } from "../i18n/messages";
 import { LEGAL_KEYS } from "../api/types";
 import { legalTitle, useConfig } from "../store/ConfigContext";
 import { openConsentBanner } from "../tracking";
+import { IyzicoLogo } from "./IyzicoLogo";
 import { Logo } from "./Logo";
 
 const SOCIAL: [keyof NonNullable<ReturnType<typeof useConfig>["config"]["branding"]["social"]>, string][] = [
@@ -58,6 +59,7 @@ export function Footer() {
         </nav>
       </div>
       <div className="border-t border-line">
+        <div className="container-x flex justify-center pt-6 sm:justify-start"><IyzicoLogo variant="band" className="h-6" /></div>
         <div className="container-x flex flex-col items-center justify-between gap-2 py-5 text-xs text-muted sm:flex-row">
           <p>© {new Date().getFullYear()} {g.storeName}. {t("footer.rights")}{g.taxId ? ` · ${g.taxId}` : ""}</p>
           <a href="https://github.com/berkayoztunc/openshelf" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 transition-colors hover:text-ink"><img src="/openshelf-mark.png" alt="" width={16} height={16} className="size-4 object-contain" />{t("footer.madeWith")}</a>

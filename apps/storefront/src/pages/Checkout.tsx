@@ -4,6 +4,7 @@ import { api, ApiError } from "../api/client";
 import type { Address, CheckoutResponse } from "../api/types";
 import { useCart } from "../cart/CartContext";
 import { CheckoutSteps } from "../components/CheckoutSteps";
+import { IyzicoLogo } from "../components/IyzicoLogo";
 import { useMoney } from "../components/Money";
 import { ProductImage } from "../components/ProductImage";
 import { ChevronIcon, LockIcon } from "../lib/Icons";
@@ -86,7 +87,7 @@ export default function Checkout() {
     return (
       <div className="container-x max-w-3xl py-10">
         <CheckoutSteps current={3} />
-        <h1 className="mt-6 font-display text-3xl font-semibold">{t("checkout.payment")}</h1>
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-4"><h1 className="font-display text-3xl font-semibold">{t("checkout.payment")}</h1><IyzicoLogo variant="pay" className="h-6" /></div>
         <p className="mt-2 text-sm text-muted">{t("checkout.secure")}</p>
         {/* Hosted iyzico form: sandboxed, no same-origin access to our storage/cookies. */}
         {payment.htmlContent && <iframe title={t("checkout.payment")} srcDoc={payment.htmlContent} sandbox="allow-scripts allow-forms allow-popups allow-top-navigation-by-user-activation" className="mt-6 h-[720px] w-full rounded-xl border border-line bg-white" />}
@@ -184,6 +185,7 @@ export default function Checkout() {
           {error && <p role="alert" className="rounded-xl bg-danger-soft p-3 text-sm text-danger">{error}</p>}
           <button className="btn-primary w-full !min-h-12 !text-base" disabled={submitting}><LockIcon size={16} />{submitting ? t("checkout.paying") : t("checkout.pay")}</button>
           <p className="flex items-start gap-2 text-xs text-muted"><LockIcon size={14} className="mt-px shrink-0" />{t("checkout.secure")}</p>
+          <div className="flex justify-center border-t border-line pt-5"><IyzicoLogo variant="pay" className="h-6" /></div>
         </aside>
       </form>
     </div>
