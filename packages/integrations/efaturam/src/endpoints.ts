@@ -1,23 +1,48 @@
-// Trendyol e-Faturam web-service documentation is delivered privately with the activation e-mails
-// (no public API reference was found). EVERYTHING in this file is therefore UNVERIFIED and isolated here.
-// Adjust paths / field names / auth to the documentation supplied with your e-Faturam credentials.
-export const DEFAULT_BASE_URL = "https://efaturam.trendyol.com/api"; // UNVERIFIED: base URL
-export const ALLOWED_HOST_SUFFIXES: readonly string[] = ["trendyol.com"]; // SSRF allowlist: trendyol.com and subdomains
+/**
+ * Trendyol e-Faturam gateway, taken from the public docs (developers.trendyolefaturam.com, checked 2026-11):
+ *  - production gateway apigateway.trendyolecozum.com, test gateway stage-apigateway.trendyolefaturam.com
+ *    (the test gateway needs IP whitelisting, production does not)
+ *  - POST /api/auth/signin { email, password } answers with the JWT in the `x-access-token` response header;
+ *    every other request sends it back in the `x-access-token` request header
+ *  - all amounts are integers in kuruş
+ * Not exercised against a live account yet: anything marked UNVERIFIED below is an assumption.
+ */
+export const PROD_BASE_URL = "https://apigateway.trendyolecozum.com";
+export const STAGE_BASE_URL = "https://stage-apigateway.trendyolefaturam.com";
+export const DEFAULT_BASE_URL = PROD_BASE_URL;
+/** SSRF allowlist: exact gateway hosts only. */
+export const ALLOWED_HOSTS: readonly string[] = ["apigateway.trendyolecozum.com", "stage-apigateway.trendyolefaturam.com"];
+
+export const TOKEN_HEADER = "x-access-token";
 
 export const paths = {
-  issue: "/invoices", // UNVERIFIED: POST, idempotency via `Idempotency-Key` header
-  cancel: (id: string) => `/invoices/${encodeURIComponent(id)}/cancel`, // UNVERIFIED: POST
-  ping: "/ping", // UNVERIFIED: GET, used for healthCheck
-  taxpayer: (taxId: string) => `/taxpayers/${encodeURIComponent(taxId)}`, // UNVERIFIED: GET -> { eInvoiceUser: boolean }
+  signIn: "/api/auth/signin",
+  eArchive: "/api/invoice/documents/earchive",
+  eInvoice: "/api/invoice/documents/outgoing-einvoice",
+  eArchiveCancel: "/api/invoice/documents/earchive/cancel",
+  eArchiveStatus: (uuid: string) => `/api/invoice/documents/earchive/status/${encodeURIComponent(uuid)}`,
+  eInvoiceStatus: (uuid: string) => `/api/invoice/documents/outgoing-einvoice/status/${encodeURIComponent(uuid)}`,
+  taxpayer: (taxId: string) => `/api/invoice/taxpayers/${encodeURIComponent(taxId)}`,
+  permanentUrl: "/api/invoice/documents/download/permanent-url",
 };
 
-// UNVERIFIED: auth scheme (HTTP Basic username:password assumed).
-export const authHeader = (u: string, p: string) => "Basic " + btoa(`${u}:${p}`);
+/** Document statuses that mean the invoice did not go through (29 = document error, 405 = failed). */
+export const FAILED_STATUSES: readonly string[] = ["29", "405"];
 
-// UNVERIFIED request/response mapping.
-export interface IssueRequest {
-  type: "e_fatura" | "e_arsiv"; orderNumber: string; issueDate: string; currency: string; seriesPrefix?: string;
-  customer: { name: string; email?: string; taxId?: string; taxOffice?: string; address: string; city: string };
-  lines: { name: string; quantity: number; unitPrice: string; vatRate: number }[];
+export const KDV = { taxType: "KDV", taxCode: "0015", name: "KDV" } as const;
+export const UNIT_PIECE = "C62";
+/** GİB placeholder TCKN for a consumer who gave no identity number. */
+export const ANONYMOUS_TCKN = "11111111111";
+
+export interface TaxSubtotal { taxableAmount: number; taxAmount: number; taxType: string; percent: number; taxCode: string; name: string }
+export interface CreateInvoiceRequest {
+  autoInvoiceId: true; companyId: number; userId: number; source: "WEB"; localReferenceId: string; prefix?: string; targetAlias?: string; issuedAt: string;
+  recipientInfo: { taxId: string; name: string; surname?: string; city: string; address?: string; taxOffice?: string; email?: string; countryCode: "TR" };
+  invoiceInfo: { invoiceType: "EARSIVFATURA" | "TEMELFATURA"; invoiceTypeCode: "SATIS"; invoiceUuid: string };
+  invoiceLines: { unitCode: string; quantity: number; itemName: string; unitPriceAmount: number; totalAmount: number; taxableAmount: number; taxAmount: number; taxPercent: number; taxName: string; taxCode: string; totalDiscountAmount: number }[];
+  totalTax: { totalTaxAmount: number; subTotalTaxes: TaxSubtotal[] };
+  invoiceTotal: { lineExtensionAmount: number; taxExclusiveAmount: number; taxInclusiveAmount: number; payableAmount: number; allowanceTotalAmount: number };
+  orderInfo: { orderId: string; orderDate: string };
 }
-export interface IssueResponse { id?: string; invoiceId?: string; number?: string; invoiceNumber?: string; pdfUrl?: string; pdf?: string; status?: string }
+export interface CreateInvoiceResponse { invoiceUuid?: string; invoiceId?: string; status?: string }
+export interface TaxPayer { alias?: string; aliasType?: string; deletedAt?: string | null }

@@ -23,11 +23,13 @@ export const mockManifests: Record<ProviderId, IntegrationManifest> = {
     { key: "storeUrl", label: "Mağaza URL", type: "url" },
   ], [pw("apiToken", "API Token")], "https://docs.geliver.io"),
   efaturam: m("efaturam", "Trendyol e-Faturam", "e-Fatura / e-Arşiv fatura kesme. Web siparişi kapsamı için e-Faturam sözleşmenizi doğrulayın.", [
-    { key: "baseUrl", label: "Servis URL", type: "url", required: true },
+    { key: "baseUrl", label: "Ortam", type: "select", required: true, options: [{ value: "https://apigateway.trendyolecozum.com", label: "Canlı" }, { value: "https://stage-apigateway.trendyolefaturam.com", label: "Test" }], help: "Test ortamı e-Faturam tarafında IP izni ister; canlı ortam istemez." },
     { key: "verifyTaxpayer", label: "Vergi no e-Fatura mükellefi sorgula", type: "boolean" },
     { key: "seriesPrefixEFatura", label: "e-Fatura seri (3 harf)", type: "text" },
     { key: "seriesPrefixEArsiv", label: "e-Arşiv seri (3 harf)", type: "text" },
-  ], [pw("username", "Kullanıcı adı"), pw("password", "Şifre")]),
+    { key: "companyId", label: "Firma ID (companyId)", type: "text" },
+    { key: "userId", label: "Kullanıcı ID (userId)", type: "text" },
+  ], [pw("username", "E-posta"), pw("password", "Şifre")]),
   trendyol: m("trendyol", "Trendyol Marketplace", "Stock/price push, order import and shipment updates for your Trendyol seller account.", [
     { key: "supplierId", label: "Supplier (Seller) ID", required: true, type: "text" },
     { key: "environment", label: "Environment", type: "select", options: [{ value: "production", label: "Production" }, { value: "stage", label: "Stage" }], help: "Stage needs Trendyol IP whitelisting and DIFFERENT credentials than production." },
