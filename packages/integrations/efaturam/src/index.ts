@@ -7,8 +7,14 @@ import {
   type CreateInvoiceRequest, type CreateInvoiceResponse, type TaxPayer, type TaxSubtotal,
 } from "./endpoints";
 
+import type { EfaturamCallResult, EfaturamOperation } from "@openshelf/shared";
+import { buildEfaturamRequest, runEfaturamCall, signInFailure, type ConsoleCall } from "./console";
+
 export { jobHandlers, invoiceIssueHandler, drizzleInvoiceRepo } from "./jobs";
 export type { JobHandler, InvoiceRepo } from "./jobs";
+export { EFATURAM_OPERATIONS } from "./catalog";
+export { EfaturamConsoleError, buildEfaturamRequest, runEfaturamCall } from "./console";
+export { PROD_BASE_URL, STAGE_BASE_URL } from "./endpoints";
 
 const hostOk = (u: string) => { try { const x = new URL(u); return x.protocol === "https:" && ALLOWED_HOSTS.includes(x.hostname); } catch { return false; } };
 const numericId = z.string().regex(/^\d+$/).optional().or(z.literal("").transform(() => undefined));
@@ -144,6 +150,20 @@ export class EfaturamAdapter implements InvoicingProvider {
     let json: any;
     try { json = text ? JSON.parse(text) : undefined; } catch { /* plain text answer */ }
     return { json, text, session };
+  }
+
+  /** API console: runs one catalog operation as the signed-in account (one re-sign-in when the token has expired). */
+  async consoleCall(op: EfaturamOperation, call: ConsoleCall): Promise<EfaturamCallResult> {
+    const base = this.p.config.baseUrl;
+    buildEfaturamRequest(op, call, base); // reject bad input before spending a sign-in
+    for (let attempt = 0; ; attempt++) {
+      let s: Awaited<ReturnType<EfaturamAdapter["signIn"]>>;
+      try { s = await this.signIn(); }
+      catch (e) { const x = e as EfaturamError; return signInFailure(op, buildEfaturamRequest(op, call, base), x.status, x.blocked ? "Blocked before reaching the gateway (IP not allowed)" : x.message); }
+      const r = await runEfaturamCall({ fetch: this.deps.fetch }, s.token, op, buildEfaturamRequest(op, call, base, s));
+      if (r.status !== 401 || attempt > 0) return r;
+      this.session = undefined;
+    }
   }
 
   async healthCheck(): Promise<HealthResult> {

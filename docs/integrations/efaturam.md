@@ -18,6 +18,16 @@ Pick the environment in the form. Live is `https://apigateway.trendyolecozum.com
 
 **Coverage must be verified by contract.** Do not assume e-Faturam covers invoicing for orders that came from non-Trendyol channels (your website, other marketplaces) or every taxpayer type. Confirm with e-Faturam, in writing, which order sources, document types and customer types your contract allows, before enabling automatic invoicing. Trendyol orders may already be invoiced through Trendyol's own flows; avoid duplicate invoicing. Invoicing obligations depend on your tax status: consult your accountant. The adapter follows the public API reference (developers.trendyolefaturam.com) but is tested with mocks, not live accounts.
 
+## Console
+
+Admin → e-Faturam console (owner and admins only) is for trying the connection by hand:
+
+- **Try it**: checks whether a VKN / TCKN is an e-Fatura user; looks up an invoice by ETTN, gets its PDF link, cancels an e-Arşiv invoice.
+- **Incoming e-Fatura**: lists the e-Fatura invoices issued to you for a date range (read only).
+- **API explorer**: runs every catalog operation with its example body. `companyId` and `userId` are added from the signed-in account when left out.
+
+On the live gateway every call that changes data asks for confirmation; calls that create an invoice issue a real one, reported to GİB. In Mock mode nothing reaches e-Faturam: answers are fake but validation is the same (a 10-digit VKN starting with "1" counts as an e-Fatura user). Partner endpoints, despatch advices and the file-upload endpoints are not in the console.
+
 ## Known gaps
 
 - Since 1 July 2024 internet-sale e-Arşiv invoices must carry payment and shipment details (`paymentInfo`, `deliveryInfo`). The adapter does not send them yet, because the invoice input has no carrier or payment data.

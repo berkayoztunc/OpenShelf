@@ -17,7 +17,7 @@ describe("sidebar structure", () => {
       ["sales", ["/orders", "/customers", "/invoices", "/coupons"]],
       ["catalog", ["/products", "/categories", "/media", "/storefront"]],
       ["communication", ["/campaigns", "/emails", "/sms"]],
-      ["channels", ["/trendyol", "/geliver"]],
+      ["channels", ["/trendyol", "/geliver", "/efaturam"]],
       ["integrations", ["/integrations", "/integration-events", "/mock-inbox"]],
       ["administration", ["/settings", "/security", "/data", "/audit", "/help"]],
     ]);

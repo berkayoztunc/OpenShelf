@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { applyBrandTheme } from "@openshelf/ui";
-import { Truck, ShoppingBag, BookOpen, BarChart3, ChevronRight, ClipboardList, Database, LayoutDashboard, LogOut, Menu, Package, Plug, Settings, ShieldCheck, Tags, Ticket, Users, X, Zap, Inbox, FileText, Mail, Megaphone, MessageSquare, LayoutTemplate, Images } from "lucide-react";
+import { Truck, ShoppingBag, BookOpen, BarChart3, ChevronRight, ClipboardList, Database, LayoutDashboard, LogOut, Menu, Package, Plug, Settings, ShieldCheck, Tags, Ticket, Users, X, Zap, Inbox, FileText, Mail, Megaphone, MessageSquare, LayoutTemplate, Images, Receipt } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { api } from "../lib/api";
 import { useAdmin } from "../lib/auth";
@@ -43,6 +43,7 @@ export const NAV_GROUPS: { id: string; titleKey?: MessageKey; items: NavItem[] }
   { id: "channels", titleKey: "nav.group.channels", items: [
     { to: "/trendyol", labelKey: "nav.trendyol", icon: ShoppingBag },
     { to: "/geliver", labelKey: "nav.geliver", icon: Truck },
+    { to: "/efaturam", labelKey: "nav.efaturam", icon: Receipt },
   ] },
   { id: "integrations", titleKey: "nav.group.integrations", items: [
     { to: "/integrations", labelKey: "nav.integrations", icon: Plug, badge: "integrations" },

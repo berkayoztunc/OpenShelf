@@ -32,6 +32,7 @@ const DataPage = lazy(() => import("./pages/Data"));
 const Help = lazy(() => import("./pages/Help"));
 const Trendyol = lazy(() => import("./pages/trendyol/Trendyol"));
 const Geliver = lazy(() => import("./pages/Geliver"));
+const Efaturam = lazy(() => import("./pages/Efaturam"));
 const Sms = lazy(() => import("./pages/Sms"));
 const CampaignList = lazy(() => import("./pages/Campaigns").then((m) => ({ default: m.CampaignList })));
 const CampaignEditor = lazy(() => import("./pages/Campaigns").then((m) => ({ default: m.CampaignEditor })));
@@ -75,6 +76,7 @@ export function App() {
           <Route path="data" element={<DataPage />} />
           <Route path="trendyol/*" element={<Trendyol />} />
           <Route path="geliver" element={<Geliver />} />
+          <Route path="efaturam" element={<Efaturam />} />
           <Route path="campaigns" element={<CampaignList />} />
           <Route path="campaigns/new" element={<CampaignEditor />} />
           <Route path="campaigns/:id" element={<CampaignEditor />} />

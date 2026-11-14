@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-  BrandingSettings, CategoryInput, CheckoutSettings, ComposeEmailBody, GeneralSettings, LegalSettings, HomepageSettings, MenuSettings, MerchandisingSettings, NotificationSettings, SeoSettings, TrackingSettings, CouponInput, GeliverCallBody, InventoryAdjustBody, ManualInvoiceBody, OrderStatusBody, ProductBulkBody, ProductInput, RefundBody, SETTING_GROUPS, VariantPriceBody,
+  BrandingSettings, CategoryInput, CheckoutSettings, ComposeEmailBody, GeneralSettings, LegalSettings, HomepageSettings, MenuSettings, MerchandisingSettings, NotificationSettings, SeoSettings, TrackingSettings, CouponInput, EfaturamCallBody, GeliverCallBody, InventoryAdjustBody, ManualInvoiceBody, OrderStatusBody, ProductBulkBody, ProductInput, RefundBody, SETTING_GROUPS, VariantPriceBody,
   ShipmentBody, TrendyolCallBody,
 } from "@openshelf/shared";
 import { CampaignBody } from "../lib/campaigns";
@@ -20,7 +20,7 @@ export interface ToolDef {
   bodyArg?: string;
   /** "csv": send `csv` argument as a multipart file upload (product import) */
   upload?: "csv" | "base64";
-  /** full-level tools need `confirm: true` unless the API itself has a confirm rule (raw Trendyol/Geliver calls) */
+  /** full-level tools need `confirm: true` unless the API itself has a confirm rule (raw Trendyol/Geliver/e-Faturam calls) */
   noConfirm?: boolean;
   /** route pattern this tool covers when `path` is concrete (e.g. path "/settings/seo" covers "PATCH /settings/:group") */
   coverAs?: string;
@@ -116,6 +116,7 @@ export const TOOLS: ToolDef[] = [
   t({ name: "trendyol_import_status", title: "Trendyol import status", level: "read", method: "GET", path: "/trendyol/import", shape: {}, description: "Progress/result of the last Trendyol product import." }),
   t({ name: "trendyol_call_history", title: "Trendyol call history", level: "read", method: "GET", path: "/trendyol/history", query: ["page", "pageSize"], shape: { ...page }, description: "Recent Trendyol API console calls (status/duration; no customer data)." }),
   t({ name: "geliver_list_operations", title: "Geliver API operations", level: "read", method: "GET", path: "/geliver/catalog", shape: {}, description: "Catalog of Geliver (shipping) operations, mode and sender address. Use with geliver_call." }),
+  t({ name: "efaturam_list_operations", title: "e-Faturam API operations", level: "read", method: "GET", path: "/efaturam/catalog", shape: {}, description: "Catalog of e-Faturam (e-Fatura / e-Arşiv) operations, mode and environment (live or test). Use with efaturam_call." }),
 
   /* ================= write ================= */
   t({ name: "create_product", title: "Create product", level: "write", method: "POST", path: "/products", shape: { body: ProductInput },
@@ -240,6 +241,8 @@ export const TOOLS: ToolDef[] = [
     description: "Call any Trendyol operation from the catalog (trendyol_list_operations). Read operations just run; write/destructive operations on the LIVE environment need body.confirm equal to the operationId. Mock mode returns fake data." }),
   t({ name: "geliver_call", title: "Raw Geliver API call", level: "full", noConfirm: true, method: "POST", path: "/geliver/call", shape: { body: GeliverCallBody },
     description: "Call any Geliver (shipping) operation from the catalog (geliver_list_operations). Billed operations (acceptOffer) and destructive ones need body.confirm equal to the operationId on LIVE accounts." }),
+  t({ name: "efaturam_call", title: "Raw e-Faturam API call", level: "full", noConfirm: true, method: "POST", path: "/efaturam/call", shape: { body: EfaturamCallBody },
+    description: "Call any e-Faturam operation from the catalog (efaturam_list_operations). companyId/userId are filled in from the signed-in account. Operations that issue a real invoice (createEArchive, createOutgoingEInvoice) and other writes need body.confirm equal to the operationId on LIVE accounts." }),
 ];
 
 export const TOOL_BY_NAME = new Map(TOOLS.map((x) => [x.name, x]));
@@ -269,6 +272,6 @@ const GROUP_BY_SEGMENT: Record<string, ToolGroup> = {
   dashboard: "overview", help: "overview", variants: "catalog", orders: "orders", customers: "customers", "customer-lookup": "customers",
   products: "catalog", categories: "catalog", coupons: "catalog", inventory: "catalog", "catalog-lookup": "catalog", media: "catalog", export: "catalog", import: "catalog", seo: "catalog",
   emails: "messaging", sms: "messaging", campaigns: "messaging", notifications: "messaging",
-  "manual-invoices": "invoices", trendyol: "trendyol", geliver: "geliver",
+  "manual-invoices": "invoices", efaturam: "invoices", trendyol: "trendyol", geliver: "geliver",
 };
 export const groupOf = (d: ToolDef): ToolGroup => (/seo/.test(d.name) ? "seo" : /^update_(menu|merchandising|homepage)$/.test(d.name) ? "catalog" : GROUP_BY_SEGMENT[d.path.split("/")[1] ?? ""] ?? "system");

@@ -18,7 +18,8 @@ import { trendyol } from "./trendyol";
 import { trendyolviews } from "./trendyolviews";
 import { trendyolsync } from "./trendyolsync";
 import { geliver } from "./geliver";
+import { efaturam } from "./efaturam";
 import { campaigns } from "./campaigns";
 
 /** Merged dictionary. Each namespace file is owned by one area (see docs/admin-i18n.md). */
-export const en = { ...common, ...nav, ...enums, ...glossary, ...helpui, ...shell, ...dashboard, ...orders, ...invoices, ...emails, ...print, ...catalog, ...settings, ...security, ...integrations, ...errors, ...trendyol, ...trendyolviews, ...trendyolsync, ...geliver, ...campaigns, };
+export const en = { ...common, ...nav, ...enums, ...glossary, ...helpui, ...shell, ...dashboard, ...orders, ...invoices, ...emails, ...print, ...catalog, ...settings, ...security, ...integrations, ...errors, ...trendyol, ...trendyolviews, ...trendyolsync, ...geliver, ...efaturam, ...campaigns, };

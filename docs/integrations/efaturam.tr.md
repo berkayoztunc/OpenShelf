@@ -18,6 +18,16 @@ Ortamı formdan seçin. Canlı `https://apigateway.trendyolecozum.com`, test `ht
 
 **Kapsam sözleşmeyle doğrulanmalıdır.** e-Faturam'ın Trendyol dışı kanallardan (web siteniz, diğer pazaryerleri) gelen siparişlerin faturalandırmasını veya her mükellef türünü kapsadığını varsaymayın. Otomatik faturalamayı açmadan önce sözleşmenizin hangi sipariş kaynaklarına, belge türlerine ve müşteri türlerine izin verdiğini e-Faturam'dan yazılı teyit edin. Trendyol siparişleri Trendyol'un kendi akışlarıyla zaten faturalanıyor olabilir; mükerrer faturadan kaçının. Fatura yükümlülükleri vergi durumunuza bağlıdır: mali müşavirinize danışın. Adaptör herkese açık API dokümanına (developers.trendyolefaturam.com) göre yazılmıştır ama mock ile sınanmıştır, canlı hesapla değil.
 
+## Konsol
+
+Admin → e-Faturam konsolu (yalnızca sahip ve yöneticiler) bağlantıyı elle denemek içindir:
+
+- **Dene**: bir VKN / TCKN'nin e-Fatura mükellefi olup olmadığını sorgular; ETTN ile bir faturanın durumuna bakar, PDF bağlantısını alır, e-Arşiv faturayı iptal eder.
+- **Gelen e-Faturalar**: size kesilen e-Faturaları tarih aralığına göre listeler (yalnızca okur).
+- **API gezgini**: katalogdaki her işlemi örnek gövdesiyle çalıştırır. `companyId` ve `userId` boş bırakılırsa oturumdaki hesaptan eklenir.
+
+Canlı ortamda veri değiştiren her çağrı onay ister; fatura oluşturan çağrılar GİB'e bildirilen gerçek fatura keser. Mock modunda hiçbir şey e-Faturam'a gitmez: yanıtlar sahte ama doğrulama aynıdır ("1" ile başlayan 10 haneli VKN mükellef sayılır). Partner uçları, irsaliye ve dosya yükleme uçları konsolda yoktur.
+
 ## Bilinen eksikler
 
 - 1 Temmuz 2024'ten beri internet satışı e-Arşiv faturalarında ödeme ve gönderi bilgileri (`paymentInfo`, `deliveryInfo`) zorunludur. Fatura girdisinde taşıyıcı ve ödeme verisi olmadığı için adaptör bunları henüz göndermez.
