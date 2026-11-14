@@ -113,6 +113,38 @@ describe("marketing.purchase.meta handler", () => {
   });
 });
 
+describe("health check", () => {
+  const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
+  const debug = (data: unknown) => json({ data });
+
+  it("passes for an Events Manager token scoped to the dataset, without reading the pixel node", async () => {
+    const f = vi.fn(async () => debug({ is_valid: true, granular_scopes: [{ scope: "read_ads_dataset_quality", target_ids: ["999", "1234567890"] }] }));
+    expect(await sink(f).healthCheck()).toEqual({ ok: true, detail: "token valid for dataset" });
+    expect(f).toHaveBeenCalledTimes(1);
+    expect((f.mock.calls[0] as any[])[0]).toContain("/debug_token?input_token=");
+  });
+  it("fails when the token is scoped to other datasets", async () => {
+    const f = vi.fn(async () => debug({ is_valid: true, granular_scopes: [{ target_ids: ["999"] }] }));
+    const r = await sink(f).healthCheck();
+    expect(r.ok).toBe(false);
+    expect(r.detail).toContain("1234567890");
+  });
+  it("fails for an invalid token", async () => {
+    const r = await sink(vi.fn(async () => debug({ is_valid: false }))).healthCheck();
+    expect(r).toEqual({ ok: false, detail: "access token is invalid or expired" });
+  });
+  it("falls back to the pixel node read when the token has no dataset scoping", async () => {
+    const f = vi.fn(async (url: string) =>
+      url.includes("/debug_token") ? debug({ is_valid: true, scopes: ["ads_management"] }) : json({ id: "1234567890" }));
+    expect(await sink(f).healthCheck()).toEqual({ ok: true, detail: "pixel reachable" });
+    expect(f).toHaveBeenCalledTimes(2);
+  });
+  it("surfaces the Graph error when introspection is rejected", async () => {
+    const f = vi.fn(async () => json({ error: { message: "Invalid OAuth access token", code: 190 } }, 400));
+    expect(await sink(f).healthCheck()).toEqual({ ok: false, detail: "HTTP 400: Invalid OAuth access token" });
+  });
+});
+
 describe("meta feed", () => {
   const products = [
     { id: "var_1", title: 'Kupa "Mavi" & <Büyük>', description: "Açıklama, virgüllü", availableStock: 3, price: 19990, link: "https://shop.example/p/kupa", imageLink: "https://shop.example/m/1", brand: "Acme", itemGroupId: "prod_1" },

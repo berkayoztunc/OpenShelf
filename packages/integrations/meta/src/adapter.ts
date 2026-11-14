@@ -5,7 +5,7 @@ import type {
   ServerEventContext, ServerEventSink,
 } from "@openshelf/integration-sdk";
 import { hashEmail, hashExternalId, hashPhone } from "./hash";
-import { DEFAULT_API_VERSION, assertAllowed, eventsUrl, pixelUrl } from "./endpoints";
+import { DEFAULT_API_VERSION, assertAllowed, debugTokenUrl, eventsUrl, pixelUrl } from "./endpoints";
 
 export const metaConfigSchema = z.object({
   config: z.object({
@@ -87,10 +87,27 @@ export class MetaCapiSink implements ServerEventSink {
   async validateConfig(): Promise<void> { /* parsed in constructor */ }
 
   async healthCheck(): Promise<HealthResult> {
-    const url = pixelUrl(this.cfg.apiVersion, this.cfg.pixelId);
+    const headers = { authorization: `Bearer ${this.token}` };
     try {
+      // Introspect the token rather than reading the dataset node: Events Manager CAPI tokens can
+      // send events but lack the permission to read /{pixel_id}.
+      const debugUrl = debugTokenUrl(this.cfg.apiVersion, this.token);
+      assertAllowed(debugUrl);
+      const dbg = await this.deps.fetch(debugUrl, { headers });
+      if (!dbg.ok) return { ok: false, detail: await errorDetail(dbg) };
+      const info = ((await dbg.json()) as {
+        data?: { is_valid?: boolean; granular_scopes?: { target_ids?: string[] }[] };
+      }).data;
+      if (!info?.is_valid) return { ok: false, detail: "access token is invalid or expired" };
+      const targets = (info.granular_scopes ?? []).flatMap((s) => s.target_ids ?? []);
+      if (targets.includes(this.cfg.pixelId)) return { ok: true, detail: "token valid for dataset" };
+      if (targets.length > 0) {
+        return { ok: false, detail: `access token is not granted for dataset ${this.cfg.pixelId}` };
+      }
+      // Token is not scoped to specific datasets (e.g. ads_management): confirm by reading the node.
+      const url = pixelUrl(this.cfg.apiVersion, this.cfg.pixelId);
       assertAllowed(url);
-      const res = await this.deps.fetch(url, { headers: { authorization: `Bearer ${this.token}` } });
+      const res = await this.deps.fetch(url, { headers });
       if (res.ok) return { ok: true, detail: "pixel reachable" };
       return { ok: false, detail: await errorDetail(res) };
     } catch (e) {
