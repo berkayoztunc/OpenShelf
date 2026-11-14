@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { EfaturamCallResult, EfaturamCatalogResponse } from "@openshelf/shared";
+import type { EfaturamCallResult, EfaturamCatalogResponse, EfaturamDiagnosis, EfaturamOutgoingRow } from "@openshelf/shared";
 import { EFATURAM_OPERATIONS } from "../../../../packages/integrations/efaturam/src/catalog";
 import { mockApi, renderRoutes } from "./helpers";
 import Efaturam from "../pages/Efaturam";
@@ -16,16 +16,21 @@ const res = (id: string, body: unknown, o: Partial<EfaturamCallResult> = {}): Ef
 });
 
 type Call = { operationId: string; path?: Record<string, unknown>; query?: Record<string, unknown>; body?: any; confirm?: string };
+const OK_DIAG: EfaturamDiagnosis = { ok: true, mock: false, environment: "live", steps: [{ id: "signIn", ok: true, status: 200 }, { id: "token", ok: true, detail: "3 parts" }, { id: "account", ok: true }, { id: "apiCall", ok: true, status: 404 }], claims: ["companyId", "exp", "userId"], companyId: 77, userId: 5, expiresAt: "2100-01-01T00:00:00.000Z" };
+const out = (o: Partial<EfaturamOutgoingRow>): EfaturamOutgoingRow => ({ source: "order", id: "i1", type: "e_arsiv", status: "issued", invoiceUuid: UUID, number: "ABC2026000000001", pdfUrl: null, orderId: "o1", orderNumber: "1001", customerName: "Ayşe Yılmaz", total: 24000, currency: "TRY", createdAt: "2026-01-02T10:00:00.000Z", ...o });
+let diagnosis: EfaturamDiagnosis = OK_DIAG; let outgoing: EfaturamOutgoingRow[] = []; let outgoingQueries: string[] = [];
 function setup(handlers: Record<string, (c: Call) => EfaturamCallResult>, mode: EfaturamCatalogResponse["mode"] = "mock", extra: Partial<EfaturamCatalogResponse> = {}) {
   const calls: Call[] = [];
   mockApi({
+    "POST /api/admin/efaturam/diagnose": () => diagnosis,
+    "GET /api/admin/efaturam/outgoing": (p) => { const q = new URLSearchParams(String(p).split("?")[1] ?? ""); outgoingQueries.push(q.toString()); const items = outgoing.filter((r) => !q.get("q") || JSON.stringify(r).toLowerCase().includes(q.get("q")!.toLowerCase())); return { items, total: items.length, page: Number(q.get("page") ?? 1), pageSize: 20 }; },
     "GET /api/admin/efaturam/catalog": () => cat(mode, extra),
     "POST /api/admin/efaturam/call": (_p, body) => { const c = body as Call; calls.push(c); const h = handlers[c.operationId]; return h ? h(c) : res(c.operationId, null); },
   });
   return calls;
 }
 const page = () => renderRoutes({ "/*": <Efaturam /> }, "/");
-beforeEach(() => { sessionStorage.clear(); localStorage.clear(); });
+beforeEach(() => { sessionStorage.clear(); localStorage.clear(); diagnosis = OK_DIAG; outgoing = []; outgoingQueries = []; });
 
 describe("e-Faturam console", () => {
   it("shows the mock banner, the live warning, and the disabled state without sending calls", async () => {
@@ -155,6 +160,100 @@ describe("e-Faturam console", () => {
     await userEvent.click(screen.getByRole("button", { name: /yes, send/i }));
     expect(await screen.findByTestId("ef-response")).toHaveTextContent("HTTP 200");
     expect(calls[1]).toMatchObject({ operationId: "createEArchive", confirm: "createEArchive", body: { localReferenceId: "T-1" } });
+  });
+});
+
+describe("e-Faturam console: connection diagnosis", () => {
+  it("shows every step and the account ids when the connection works", async () => {
+    setup({}, "live");
+    page();
+    await userEvent.click(await screen.findByRole("button", { name: /diagnose the connection/i }));
+    const box = await screen.findByTestId("ef-conn");
+    expect(box).toHaveAttribute("data-state", "ok");
+    expect([...box.querySelectorAll("li")].map((li) => li.getAttribute("data-state"))).toEqual(["ok", "ok", "ok", "ok"]);
+    expect(box).toHaveTextContent("companyId 77, userId 5"); expect(box).toHaveTextContent(/the connection works/i);
+    expect(box).toHaveTextContent("companyId, exp, userId");
+  });
+  it("signed in but the API call is refused: names the step, the provider text and the code", async () => {
+    diagnosis = { ok: false, mock: false, environment: "live", companyId: 77, userId: 5, steps: [{ id: "signIn", ok: true, status: 200 }, { id: "token", ok: true }, { id: "account", ok: true }, { id: "apiCall", ok: false, status: 401, code: "username-or-password-wrong", detail: "Username or Password is wrong." }] };
+    setup({}, "live");
+    page();
+    await userEvent.click(await screen.findByRole("button", { name: /diagnose the connection/i }));
+    const box = await screen.findByTestId("ef-conn");
+    expect(box).toHaveAttribute("data-state", "fail");
+    expect(box.querySelector('[data-step="apiCall"]')).toHaveTextContent("HTTP 401 Username or Password is wrong. [username-or-password-wrong]");
+    expect(box.querySelector('[data-step="signIn"]')).toHaveAttribute("data-state", "ok");
+    expect(box).toHaveTextContent(/refuses this account's api call/i);
+  });
+  it("a rejected sign-in stops there; an IP block is called an IP block", async () => {
+    diagnosis = { ok: false, mock: false, environment: "live", steps: [{ id: "signIn", ok: false, status: 401, code: "username-or-password-wrong", detail: "Username or Password is wrong." }] };
+    setup({}, "live");
+    const r = page();
+    await userEvent.click(await screen.findByRole("button", { name: /diagnose the connection/i }));
+    let box = await screen.findByTestId("ef-conn");
+    expect([...box.querySelectorAll("li")].map((li) => li.getAttribute("data-state"))).toEqual(["fail", "skipped", "skipped", "skipped"]);
+    expect(box).toHaveTextContent(/sign-in was rejected/i);
+    r.unmount();
+    diagnosis = { ok: false, mock: false, environment: "test", steps: [{ id: "signIn", ok: false, status: 403, code: "blocked", detail: "Blocked before reaching the gateway (IP not allowed)" }] };
+    setup({}, "live", { environment: "test" });
+    page();
+    await userEvent.click(await screen.findByRole("button", { name: /diagnose the connection/i }));
+    box = await screen.findByTestId("ef-conn");
+    expect(box).toHaveTextContent(/this is an ip block/i);
+  });
+});
+
+describe("e-Faturam console: outgoing invoices", () => {
+  it("lists the store's invoices with links, and checks each row at the gateway", async () => {
+    outgoing = [
+      out({}),
+      out({ source: "manual", id: "m1", type: "e_fatura", invoiceUuid: "11111111-2222-4333-8444-555555555555", number: "EFT2026000000007", orderId: null, orderNumber: null, customerName: "Acme A.Ş.", total: 60000, pdfUrl: "https://files.example/m1.pdf" }),
+      out({ id: "i3", status: "pending", invoiceUuid: null, number: null, orderNumber: "1003", orderId: "o3" }),
+    ];
+    const calls = setup({
+      getEArchiveStatus: () => res("getEArchiveStatus", { status: "205", invoiceUuid: UUID }),
+      getOutgoingEInvoiceStatus: () => res("getOutgoingEInvoiceStatus", null, { ok: false, status: 404, error: { message: "Outgoing e-invoice not found.", code: "outgoing-einvoice-not-found" } }),
+      getPermanentDocumentDownloadUrl: () => res("getPermanentDocumentDownloadUrl", "https://files.example/i1.pdf"),
+    });
+    page();
+    await userEvent.click(await screen.findByRole("tab", { name: /outgoing invoices/i }));
+    const table = await screen.findByTestId("ef-outgoing");
+    const row = (k: string) => table.querySelector(`[data-row="${k}"]`) as HTMLElement;
+    expect(row("order:i1")).toHaveTextContent("ABC2026000000001"); expect(row("order:i1")).toHaveTextContent("Ayşe Yılmaz"); expect(row("order:i1")).toHaveTextContent(/240,00/);
+    expect(within(row("order:i1")).getByRole("link", { name: "#1001" })).toHaveAttribute("href", expect.stringContaining("/orders/o1"));
+    expect(within(row("manual:m1")).getByRole("link", { name: /manual invoice/i })).toHaveAttribute("href", expect.stringContaining("/invoices/m1"));
+    expect(within(row("manual:m1")).getByRole("link", { name: /pdf/i })).toHaveAttribute("href", "https://files.example/m1.pdf"); // stored link, no call needed
+    expect(row("order:i3")).toHaveTextContent(/pending/i); expect(row("order:i3")).toHaveTextContent(/no ettn/i);
+    expect(within(row("order:i3")).queryByRole("button")).toBeNull();
+
+    await userEvent.click(within(row("order:i1")).getByRole("button", { name: /^check$/i }));
+    await waitFor(() => expect(row("order:i1")).toHaveTextContent(/205 · Approved/));
+    expect(calls[0]).toMatchObject({ operationId: "getEArchiveStatus", path: { invoiceUuid: UUID } });
+    await userEvent.click(within(row("order:i1")).getByRole("button", { name: /^pdf$/i }));
+    expect(await within(row("order:i1")).findByRole("link", { name: /pdf/i })).toHaveAttribute("href", "https://files.example/i1.pdf");
+    expect(calls[1]).toMatchObject({ operationId: "getPermanentDocumentDownloadUrl", body: { documentType: "EARCHIVE", invoiceUuid: UUID } });
+
+    await userEvent.click(screen.getByRole("button", { name: /check this page/i }));
+    await waitFor(() => expect(row("manual:m1")).toHaveTextContent("HTTP 404: Outgoing e-invoice not found. [outgoing-einvoice-not-found]"));
+    expect(calls.slice(2).map((c) => c.operationId)).toEqual(["getEArchiveStatus", "getOutgoingEInvoiceStatus"]); // rows without an ETTN are skipped
+  });
+  it("searches, and explains an empty list", async () => {
+    outgoing = [out({}), out({ id: "i2", number: "ABC2026000000002", customerName: "Mehmet Kaya", orderNumber: "1002" })];
+    setup({});
+    const r = page();
+    await userEvent.click(await screen.findByRole("tab", { name: /outgoing invoices/i }));
+    expect(await screen.findByTestId("ef-outgoing")).toHaveTextContent("Mehmet Kaya");
+    await userEvent.type(screen.getByLabelText(/^search$/i), "mehmet");
+    await waitFor(() => expect(screen.getByTestId("ef-outgoing")).not.toHaveTextContent("Ayşe Yılmaz"));
+    expect(outgoingQueries.some((q) => q.includes("q=mehmet"))).toBe(true);
+    await userEvent.clear(screen.getByLabelText(/^search$/i)); await userEvent.type(screen.getByLabelText(/^search$/i), "zzz");
+    expect(await screen.findByText(/no invoice matches the search/i)).toBeInTheDocument();
+    r.unmount();
+    outgoing = []; setup({});
+    page();
+    await userEvent.click(await screen.findByRole("tab", { name: /outgoing invoices/i }));
+    expect(await screen.findByText(/no invoice has been issued through e-faturam yet/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /check this page/i })).toBeDisabled();
   });
 });
 

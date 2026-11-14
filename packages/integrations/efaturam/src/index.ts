@@ -7,7 +7,7 @@ import {
   type CreateInvoiceRequest, type CreateInvoiceResponse, type TaxPayer, type TaxSubtotal,
 } from "./endpoints";
 
-import type { EfaturamCallResult, EfaturamOperation } from "@openshelf/shared";
+import type { EfaturamCallResult, EfaturamDiagnosis, EfaturamDiagnosisStep, EfaturamOperation } from "@openshelf/shared";
 import { buildEfaturamRequest, runEfaturamCall, signInFailure, type ConsoleCall } from "./console";
 
 export { jobHandlers, invoiceIssueHandler, drizzleInvoiceRepo } from "./jobs";
@@ -126,7 +126,8 @@ export class EfaturamAdapter implements InvoicingProvider {
       body: JSON.stringify({ email: this.p.secrets.username, password: this.p.secrets.password }),
     });
     if (!res.ok) await EfaturamAdapter.fail(res);
-    const token = res.headers.get(TOKEN_HEADER);
+    // A header repeated by a proxy arrives joined as "a, a"; a JWT never contains a comma, so keep the first value.
+    const token = res.headers.get(TOKEN_HEADER)?.split(",")[0]?.trim();
     if (!token) throw new EfaturamError(`e-faturam: sign-in answered without ${TOKEN_HEADER}`);
     const c = jwtClaims(token);
     // UNVERIFIED: the docs say companyId and userId are inside the token but do not name the claims.
@@ -164,6 +165,64 @@ export class EfaturamAdapter implements InvoicingProvider {
       if (r.status !== 401 || attempt > 0) return r;
       this.session = undefined;
     }
+  }
+
+  /**
+   * Connection diagnosis for the console: signs in, inspects the token, then makes one harmless read call (a taxpayer
+   * lookup, where both "found" and "not found" prove the token is accepted). Reports each step; never returns a secret.
+   */
+  async diagnose(): Promise<EfaturamDiagnosis> {
+    const environment = this.p.config.baseUrl.includes("stage-") ? "test" : "live";
+    const steps: EfaturamDiagnosisStep[] = [];
+    const out = (extra: Partial<EfaturamDiagnosis> = {}): EfaturamDiagnosis => ({ ok: steps.every((x) => x.ok), mock: false, environment, steps, ...extra });
+    const problem = async (res: Response) => {
+      const text = await res.text();
+      let j: any;
+      try { j = text ? JSON.parse(text) : undefined; } catch { /* not JSON */ }
+      const json = j && typeof j === "object";
+      return { blocked: res.status === 403 && !json, title: json ? String(j.title ?? j.detail ?? j.message ?? "") : "", code: json && typeof j.type === "string" ? String(j.type).split("/").pop() : undefined };
+    };
+    this.session = undefined;
+    let token: string | undefined; let raw: string | null = null;
+    try {
+      const res = await this.deps.fetch(this.url(paths.signIn), {
+        method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ email: this.p.secrets.username, password: this.p.secrets.password }),
+      });
+      if (!res.ok) {
+        const pr = await problem(res);
+        steps.push({ id: "signIn", ok: false, status: res.status, code: pr.blocked ? "blocked" : pr.code, detail: pr.blocked ? "Blocked before reaching the gateway (IP not allowed)" : pr.title });
+        return out();
+      }
+      raw = res.headers.get(TOKEN_HEADER);
+      token = raw?.split(",")[0]?.trim() || undefined;
+      steps.push({ id: "signIn", ok: true, status: res.status });
+    } catch (e) { steps.push({ id: "signIn", ok: false, status: 0, detail: e instanceof Error ? e.message : "Network error" }); return out(); }
+
+    if (!token) { steps.push({ id: "token", ok: false, code: "missing", detail: `sign-in answered without the ${TOKEN_HEADER} header` }); return out(); }
+    const c = jwtClaims(token);
+    const claims = Object.keys(c).sort();
+    const expMs = typeof c.exp === "number" ? c.exp * 1000 : undefined;
+    const expired = expMs !== undefined && expMs <= this.deps.now().getTime();
+    const shape = `${token.split(".").length} parts, ${token.length} chars${raw && raw.includes(",") ? ", header repeated" : ""}`;
+    steps.push({ id: "token", ok: claims.length > 0 && !expired, ...(claims.length === 0 ? { code: "not_jwt" } : expired ? { code: "expired" } : {}), detail: shape });
+    const meta = { claims, ...(expMs !== undefined ? { expiresAt: new Date(expMs).toISOString() } : {}) };
+
+    const companyId = this.p.config.companyId ? Number(this.p.config.companyId) : claimNum(c, ["companyId", "company_id"]);
+    const userId = this.p.config.userId ? Number(this.p.config.userId) : claimNum(c, ["userId", "user_id"]);
+    const ids = { ...(companyId != null ? { companyId } : {}), ...(userId != null ? { userId } : {}) };
+    steps.push({ id: "account", ok: companyId != null && userId != null, ...(companyId == null || userId == null ? { code: "ids_missing", detail: "companyId / userId not in the token" } : {}) });
+
+    try {
+      // An arbitrary 10-digit number: 200 (e-Fatura user) and 404 (not a user) both mean the token was accepted.
+      const res = await this.deps.fetch(this.url(paths.taxpayer("1111111111")), { method: "GET", headers: { [TOKEN_HEADER]: token, Accept: "application/json" } });
+      if (res.ok || res.status === 404) { await res.text(); steps.push({ id: "apiCall", ok: true, status: res.status }); }
+      else {
+        const pr = await problem(res);
+        steps.push({ id: "apiCall", ok: false, status: res.status, code: pr.blocked ? "blocked" : pr.code, detail: pr.blocked ? "Blocked before reaching the gateway (IP not allowed)" : pr.title });
+      }
+    } catch (e) { steps.push({ id: "apiCall", ok: false, status: 0, detail: e instanceof Error ? e.message : "Network error" }); }
+    return out({ ...meta, ...ids });
   }
 
   async healthCheck(): Promise<HealthResult> {

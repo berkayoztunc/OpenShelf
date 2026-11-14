@@ -12,7 +12,7 @@ e-Faturam'a giriş yaptığınız e-posta adresi ve şifre (Admin → Ayarlar �
 
 ## Sandbox
 
-Ortamı formdan seçin. Canlı `https://apigateway.trendyolecozum.com`, test `https://stage-apigateway.trendyolefaturam.com`; başka adres kabul edilmez. Test ortamı IP adresinizin e-Faturam tarafından tanımlanmasını ister (entegrasyon@trendyolefaturam.com) ve ayrı kullanıcı bilgisi kullanır; canlı ortamda IP kısıtı yoktur. Cloudflare Worker'ın sabit çıkış IP'si olmadığı için test ortamına yayındaki Worker'dan erişilemez.
+Ortamı formdan seçin. Canlı `https://apigateway.trendyolecozum.com`, test `https://stage-apigateway.trendyolefaturam.com`; başka adres kabul edilmez. Test ortamı IP adresinizin e-Faturam tarafından tanımlanmasını ister ve ayrı kullanıcı bilgisi kullanır. e-Faturam'ın bireysel entegrasyon SSS'si API'nin yalnızca tanımlı IP adreslerinden kullanılabildiğini söyler; pazaryeri dokümanı ise canlı ortamda IP kısıtı olmadığını yazar. Cloudflare Worker'ın sabit çıkış IP'si olmadığı için IP tanımı gereken ortama yayındaki Worker'dan erişilemez; engellenen istek 403 döner ve konsol bunu "IP engeli" olarak gösterir.
 
 ## Uyarılar
 
@@ -22,6 +22,8 @@ Ortamı formdan seçin. Canlı `https://apigateway.trendyolecozum.com`, test `ht
 
 Admin → e-Faturam konsolu (yalnızca sahip ve yöneticiler) bağlantıyı elle denemek içindir:
 
+- **Dene → Bağlantı tanılama**: giriş yapar ve zararsız bir sorgu atar; giriş, oturum anahtarı, firma/kullanıcı ID ve API çağrısı adımlarından hangisinin takıldığını e-Faturam'ın hata koduyla gösterir. "Bağlantıyı test et" yalnızca girişi dener; giriş çalışıp çağrılar 401 veriyorsa bunu çalıştırın.
+- **Giden faturalar**: mağazanın e-Faturam üzerinden kestiği faturalar (sipariş faturaları ve elle kesilenler). e-Faturam giden faturaları listeleyen bir çağrı sunmadığı için liste mağazanın kendi kaydıdır; her satırın e-Faturam'daki durumu ve PDF'i sorgulanabilir.
 - **Dene**: bir VKN / TCKN'nin e-Fatura mükellefi olup olmadığını sorgular; ETTN ile bir faturanın durumuna bakar, PDF bağlantısını alır, e-Arşiv faturayı iptal eder.
 - **Gelen e-Faturalar**: size kesilen e-Faturaları tarih aralığına göre listeler (yalnızca okur).
 - **API gezgini**: katalogdaki her işlemi örnek gövdesiyle çalıştırır. `companyId` ve `userId` boş bırakılırsa oturumdaki hesaptan eklenir.

@@ -12,7 +12,7 @@ The e-mail address and password you sign in to e-Faturam with (Admin → Setting
 
 ## Sandbox
 
-Pick the environment in the form. Live is `https://apigateway.trendyolecozum.com`, test is `https://stage-apigateway.trendyolefaturam.com`; no other host is accepted. The test gateway needs your IP whitelisted by e-Faturam (write to entegrasyon@trendyolefaturam.com) and uses separate credentials; the live gateway has no IP restriction. A Cloudflare Worker has no fixed egress IP, so the test gateway is not reachable from a deployed Worker.
+Pick the environment in the form. Live is `https://apigateway.trendyolecozum.com`, test is `https://stage-apigateway.trendyolefaturam.com`; no other host is accepted. The test gateway needs your IP whitelisted by e-Faturam and uses separate credentials. e-Faturam's FAQ for individual integrations says the API only works from registered IP addresses, while the marketplace reference says the live gateway has no IP restriction. A Cloudflare Worker has no fixed egress IP, so an environment that needs a registered IP is not reachable from a deployed Worker; a blocked request answers 403 and the console reports it as an IP block.
 
 ## Caveats
 
@@ -22,6 +22,8 @@ Pick the environment in the form. Live is `https://apigateway.trendyolecozum.com
 
 Admin → e-Faturam console (owner and admins only) is for trying the connection by hand:
 
+- **Try it → Connection diagnosis**: signs in and makes one harmless query; shows which of sign-in, session token, company/user ID and API call is stuck, with e-Faturam's error code. "Test connection" only tries the sign-in; run this when sign-in works but calls answer 401.
+- **Outgoing invoices**: invoices the store issued through e-Faturam (order invoices and manual ones). e-Faturam has no call that lists outgoing invoices, so the list is the store's own record; each row's status and PDF can be looked up at e-Faturam.
 - **Try it**: checks whether a VKN / TCKN is an e-Fatura user; looks up an invoice by ETTN, gets its PDF link, cancels an e-Arşiv invoice.
 - **Incoming e-Fatura**: lists the e-Fatura invoices issued to you for a date range (read only).
 - **API explorer**: runs every catalog operation with its example body. `companyId` and `userId` are added from the signed-in account when left out.

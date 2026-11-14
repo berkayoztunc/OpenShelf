@@ -89,4 +89,38 @@ describe("efaturam console", () => {
     expect((await call(owner, { operationId: "cancelEArchive", body: "{not json" })).status).toBe(400);
     expect((await call(owner, { operationId: "nope" })).status).toBe(404);
   });
+  it("diagnose: mock answers offline, disabled refuses, staff is blocked", async () => {
+    await setMock(true);
+    const d = await j<any>(await admin(owner, "/efaturam/diagnose", "POST", {}));
+    expect(d).toMatchObject({ ok: true, mock: true, companyId: 1000001, userId: 2000001 });
+    expect(d.steps.map((x: any) => x.id)).toEqual(["signIn", "token", "account", "apiCall"]);
+    expect((await admin(staff, "/efaturam/diagnose", "POST", {})).status).toBe(403);
+    await setMock(false); await wipe();
+    expect((await admin(owner, "/efaturam/diagnose", "POST", {})).status).toBe(409);
+  });
+
+  it("outgoing: lists order and manual invoices issued through e-Faturam, newest first, searchable", async () => {
+    await env.DB.exec("DELETE FROM invoices WHERE id LIKE 'ef-test-%'"); await env.DB.exec("DELETE FROM manual_invoices WHERE id LIKE 'ef-test-%'"); await env.DB.exec("DELETE FROM orders WHERE id LIKE 'ef-test-%'");
+    await env.DB.prepare(`INSERT INTO orders (id, number, email, shipping_address, billing_address, subtotal, total, tracking_token, created_at) VALUES ('ef-test-o1', 'EF-9001', 'a@example.com', ?1, ?2, 24000, 24000, 'tok-ef-1', 1700000000)`)
+      .bind(JSON.stringify({ name: "Kargo Alıcı" }), JSON.stringify({ name: "Ayşe Yılmaz" })).run();
+    await env.DB.prepare(`INSERT INTO invoices (id, order_id, type, provider, provider_invoice_id, number, pdf_url, status, created_at) VALUES ('ef-test-i1', 'ef-test-o1', 'e_arsiv', 'efaturam', ?1, 'ABC2026000000001', 'https://files.example/1.pdf', 'issued', 1700000100)`).bind(UUID).run();
+    await env.DB.prepare(`INSERT INTO invoices (id, order_id, type, provider, provider_invoice_id, number, status, created_at) VALUES ('ef-test-i2', 'ef-test-o1', 'e_fatura', 'efaturam', 'old-fake-id', NULL, 'pending', 1700000050)`).run();
+    await env.DB.prepare(`INSERT INTO invoices (id, order_id, type, provider, provider_invoice_id, status, created_at) VALUES ('ef-test-i3', 'ef-test-o1x', 'e_arsiv', 'other', 'x', 'issued', 1700000300)`).run();
+    await env.DB.prepare(`INSERT INTO manual_invoices (id, status, type, customer, lines, total, tax_total, provider, provider_invoice_id, number, pdf_url, issued_at, created_at) VALUES ('ef-test-m1', 'issued', 'e_fatura', ?1, '[]', 60000, 10000, 'efaturam', '11111111-2222-4333-8444-555555555555', 'EFT2026000000007', 'javascript:alert(1)', 1700000200, 1700000000)`)
+      .bind(JSON.stringify({ name: "Acme A.Ş." })).run();
+    await env.DB.prepare(`INSERT INTO manual_invoices (id, status, customer, lines, created_at) VALUES ('ef-test-m2', 'draft', '{}', '[]', 1700000400)`).run(); // never sent: not listed
+
+    const all = await j<any>(await admin(owner, "/efaturam/outgoing"));
+    const mine = all.items.filter((x: any) => x.id.startsWith("ef-test-"));
+    expect(mine.map((x: any) => x.id)).toEqual(["ef-test-m1", "ef-test-i1", "ef-test-i2"]);
+    expect(mine[0]).toMatchObject({ source: "manual", type: "e_fatura", status: "issued", invoiceUuid: "11111111-2222-4333-8444-555555555555", number: "EFT2026000000007", customerName: "Acme A.Ş.", total: 60000, pdfUrl: null, createdAt: "2023-11-14T22:16:40.000Z" });
+    expect(mine[1]).toMatchObject({ source: "order", type: "e_arsiv", invoiceUuid: UUID, orderId: "ef-test-o1", orderNumber: "EF-9001", customerName: "Ayşe Yılmaz", total: 24000, currency: "TRY", pdfUrl: "https://files.example/1.pdf" });
+    expect(mine[2]).toMatchObject({ status: "pending", invoiceUuid: null, number: null }); // not an ETTN: cannot be looked up
+    const found = await j<any>(await admin(owner, "/efaturam/outgoing?q=EF-9001&pageSize=1"));
+    expect(found).toMatchObject({ total: 2, pageSize: 1 }); expect(found.items).toHaveLength(1);
+    expect((await j<any>(await admin(owner, "/efaturam/outgoing?q=acme"))).items.map((x: any) => x.id).filter((x: string) => x.startsWith("ef-test-"))).toEqual(["ef-test-m1"]);
+    expect((await j<any>(await admin(owner, "/efaturam/outgoing?q=%25"))).total).toBe(0); // % is escaped, not a wildcard
+    expect((await admin(staff, "/efaturam/outgoing")).status).toBe(403);
+    await env.DB.exec("DELETE FROM invoices WHERE id LIKE 'ef-test-%'"); await env.DB.exec("DELETE FROM manual_invoices WHERE id LIKE 'ef-test-%'"); await env.DB.exec("DELETE FROM orders WHERE id LIKE 'ef-test-%'");
+  });
 });

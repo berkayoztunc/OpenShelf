@@ -117,6 +117,7 @@ export const TOOLS: ToolDef[] = [
   t({ name: "trendyol_call_history", title: "Trendyol call history", level: "read", method: "GET", path: "/trendyol/history", query: ["page", "pageSize"], shape: { ...page }, description: "Recent Trendyol API console calls (status/duration; no customer data)." }),
   t({ name: "geliver_list_operations", title: "Geliver API operations", level: "read", method: "GET", path: "/geliver/catalog", shape: {}, description: "Catalog of Geliver (shipping) operations, mode and sender address. Use with geliver_call." }),
   t({ name: "efaturam_list_operations", title: "e-Faturam API operations", level: "read", method: "GET", path: "/efaturam/catalog", shape: {}, description: "Catalog of e-Faturam (e-Fatura / e-Arşiv) operations, mode and environment (live or test). Use with efaturam_call." }),
+  t({ name: "efaturam_list_outgoing", title: "Invoices issued through e-Faturam", level: "read", method: "GET", path: "/efaturam/outgoing", query: ["q", "page", "pageSize"], shape: { q: q("invoice number, order number, customer name or ETTN"), ...page }, description: "Invoices this store issued through e-Faturam (order invoices and manual invoices), newest first, with the ETTN (invoiceUuid) to use in efaturam_call status/download operations." }),
 
   /* ================= write ================= */
   t({ name: "create_product", title: "Create product", level: "write", method: "POST", path: "/products", shape: { body: ProductInput },
@@ -241,6 +242,7 @@ export const TOOLS: ToolDef[] = [
     description: "Call any Trendyol operation from the catalog (trendyol_list_operations). Read operations just run; write/destructive operations on the LIVE environment need body.confirm equal to the operationId. Mock mode returns fake data." }),
   t({ name: "geliver_call", title: "Raw Geliver API call", level: "full", noConfirm: true, method: "POST", path: "/geliver/call", shape: { body: GeliverCallBody },
     description: "Call any Geliver (shipping) operation from the catalog (geliver_list_operations). Billed operations (acceptOffer) and destructive ones need body.confirm equal to the operationId on LIVE accounts." }),
+  t({ name: "efaturam_diagnose", title: "Diagnose the e-Faturam connection", level: "write", method: "POST", path: "/efaturam/diagnose", shape: {}, description: "Signs in to e-Faturam and makes one harmless read call, reporting each step (sign-in, token, account ids, API call). Use when calls fail with 401/403. Changes nothing." }),
   t({ name: "efaturam_call", title: "Raw e-Faturam API call", level: "full", noConfirm: true, method: "POST", path: "/efaturam/call", shape: { body: EfaturamCallBody },
     description: "Call any e-Faturam operation from the catalog (efaturam_list_operations). companyId/userId are filled in from the signed-in account. Operations that issue a real invoice (createEArchive, createOutgoingEInvoice) and other writes need body.confirm equal to the operationId on LIVE accounts." }),
 ];

@@ -11,6 +11,7 @@ export const enums = {
   "enum.payment.succeeded": "Succeeded",
   "enum.payment.failed": "Failed",
   "enum.payment.refunded": "Refunded",
+  "enum.invoice.pending": "Pending",
   "enum.invoice.draft": "Draft",
   "enum.invoice.issuing": "Issuing",
   "enum.invoice.issued": "Issued",

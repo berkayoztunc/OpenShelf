@@ -90,3 +90,40 @@ describe("efaturam adapter consoleCall", () => {
     await expect(b.adapter.consoleCall(op("getTaxPayersByTaxId"), { path: {}, query: {} })).rejects.toThrow(EfaturamConsoleError);
   });
 });
+
+describe("efaturam adapter diagnose", () => {
+  const steps = (d: Awaited<ReturnType<EfaturamAdapter["diagnose"]>>) => d.steps.map((x) => `${x.id}:${x.ok ? "ok" : x.code ?? x.status}`);
+  it("all steps pass; found and not-found both prove the token works; no secret is returned", async () => {
+    for (const status of [200, 404]) {
+      const { adapter, seen } = mk(() => new Response(status === 200 ? "[]" : JSON.stringify({ title: "Tax payer not found." }), { status }));
+      const d = await adapter.diagnose();
+      expect(d).toMatchObject({ ok: true, mock: false, environment: "live", companyId: 77, userId: 5, claims: ["companyId", "exp", "userId"], expiresAt: "2100-01-01T00:00:00.000Z" });
+      expect(steps(d)).toEqual(["signIn:ok", "token:ok", "account:ok", "apiCall:ok"]);
+      expect(seen[0]!.url).toContain("/api/invoice/taxpayers/"); expect(seen[0]!.headers["x-access-token"]).toBe(TOKEN);
+      expect(JSON.stringify(d)).not.toContain(TOKEN); expect(JSON.stringify(d)).not.toContain("SECRET-PW");
+    }
+  });
+  it("names the step that fails", async () => {
+    const wrong = await mk(() => new Response("[]"), () => new Response(JSON.stringify({ type: "https://api.trendyol.com/etransformation/gateway/username-or-password-wrong", title: "Username or Password is wrong." }), { status: 401 })).adapter.diagnose();
+    expect(wrong.ok).toBe(false); expect(wrong.steps).toEqual([{ id: "signIn", ok: false, status: 401, code: "username-or-password-wrong", detail: "Username or Password is wrong." }]);
+    const blocked = await mk(() => new Response("[]"), () => new Response("<html>Attention Required!</html>", { status: 403 })).adapter.diagnose();
+    expect(steps(blocked)).toEqual(["signIn:blocked"]);
+    const noHeader = await mk(() => new Response("[]"), () => new Response("5", { status: 200 })).adapter.diagnose();
+    expect(steps(noHeader)).toEqual(["signIn:ok", "token:missing"]);
+    // signed in fine, but the gateway refuses the token on a real call: the case the health check cannot see
+    const refused = await mk(() => new Response(JSON.stringify({ type: "https://api.trendyol.com/etransformation/gateway/unauthorized", title: "Unauthorized." }), { status: 401 })).adapter.diagnose();
+    expect(steps(refused)).toEqual(["signIn:ok", "token:ok", "account:ok", "apiCall:unauthorized"]);
+    expect(refused).toMatchObject({ ok: false, companyId: 77 });
+    const bare = `${b64({ alg: "none" })}.${b64({ exp: 4102444800 })}.sig`;
+    const noIds = await mk(() => new Response("[]"), () => new Response("5", { status: 200, headers: { "x-access-token": bare } })).adapter.diagnose();
+    expect(steps(noIds)).toEqual(["signIn:ok", "token:ok", "account:ids_missing", "apiCall:ok"]);
+  });
+  it("a repeated token header is reduced to one token", async () => {
+    const { adapter, seen } = mk(() => new Response("[]"), () => new Response("5", { status: 200, headers: { "x-access-token": `${TOKEN}, ${TOKEN}` } }));
+    const d = await adapter.diagnose();
+    expect(d.ok).toBe(true); expect(d.steps[1]!.detail).toContain("header repeated");
+    expect(seen[0]!.headers["x-access-token"]).toBe(TOKEN);
+    await adapter.consoleCall(op("getTaxPayersByTaxId"), { path: { taxId: "1" }, query: {} });
+    expect(seen[1]!.headers["x-access-token"]).toBe(TOKEN);
+  });
+});

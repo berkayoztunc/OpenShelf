@@ -1,17 +1,17 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, ExternalLink, RefreshCw, X } from "lucide-react";
-import { EFATURAM_GROUPS, type EfaturamCallResult, type EfaturamOperation } from "@openshelf/shared";
-import { Badge, Banner, Button, Card, Drawer, EmptyState, ErrorState, FilterBar, PageHeader, Skeleton, SelectField, Table, Tabs, Td, TextArea, TextField } from "../components/ui";
-import { httpsUrl, invoiceAliases, isoDay, pick, rowsOf, statusKey, statusTone, useEfaturamCall, type EfaturamCall, type EfaturamInput } from "../lib/efaturam";
+import { Check, ExternalLink, Minus, RefreshCw, X } from "lucide-react";
+import { EFATURAM_GROUPS, type EfaturamCallResult, type EfaturamDiagnosisStep, type EfaturamOperation, type EfaturamOutgoingRow } from "@openshelf/shared";
+import { Badge, Banner, Button, Card, Drawer, EmptyState, ErrorState, FilterBar, Loading, PageHeader, Pagination, Skeleton, SelectField, Table, Tabs, Td, TextArea, TextField, useDebounced } from "../components/ui";
+import { OUTGOING_PAGE_SIZE, httpsUrl, invoiceAliases, isoDay, outgoingLink, pick, recordTone, rowsOf, statusKey, statusTone, useEfaturamCall, useEfaturamDiagnose, useEfaturamOutgoing, type EfaturamCall, type EfaturamInput } from "../lib/efaturam";
 import { gloc } from "../lib/geliver";
-import { dateTime, money } from "../lib/format";
+import { dateTime, enumLabel, money } from "../lib/format";
 import { JsonPanel } from "../components/geliver/JsonPanel";
 import { useAdmin } from "../lib/auth";
 import { useT } from "../i18n";
 
 const pretty = (v: unknown) => { try { return JSON.stringify(v, null, 2); } catch { return String(v); } };
-const TABS = ["check", "incoming", "explorer"] as const;
+const TABS = ["check", "outgoing", "incoming", "explorer"] as const;
 type TabId = (typeof TABS)[number];
 type DocKind = "e_arsiv" | "e_fatura";
 
@@ -46,9 +46,47 @@ function StatusBadge({ code }: { code: unknown }) {
   const key = statusKey(code);
   return <Badge tone={statusTone(code)}>{key ? `${String(code)} · ${t(key)}` : String(code ?? "—")}</Badge>;
 }
-const failText = (r: EfaturamCallResult) => `HTTP ${r.status}${r.error?.message ? `: ${r.error.message}` : ""}`;
+/** "HTTP 401: Username or Password is wrong. [username-or-password-wrong]": status, provider text and the gateway's problem code. */
+const failText = (r: EfaturamCallResult) => `HTTP ${r.status}${r.error?.message ? `: ${r.error.message}` : ""}${r.error?.code ? ` [${r.error.code}]` : ""}`;
 
 /* ------------------------------------------------------------------ Try it */
+
+const STEP_IDS = ["signIn", "token", "account", "apiCall"] as const;
+
+/** Signs in and makes one harmless read call, then shows which step works: the first thing to run when a call fails. */
+function ConnectionCard({ call }: { call: EfaturamCall }) {
+  const { t } = useT();
+  const diag = useEfaturamDiagnose();
+  const d = diag.result;
+  const failed = d?.steps.find((x) => !x.ok);
+  const line = (id: (typeof STEP_IDS)[number]) => {
+    const step: EfaturamDiagnosisStep | undefined = d?.steps.find((x) => x.id === id);
+    const extra = !step ? "" : step.ok
+      ? id === "account" && d?.companyId != null ? `companyId ${d.companyId}, userId ${d.userId}` : id === "token" && d?.expiresAt ? t("efaturam.conn.expires", { at: dateTime(d.expiresAt) }) : step.status ? `HTTP ${step.status}` : ""
+      : [step.status ? `HTTP ${step.status}` : "", step.detail ?? "", step.code ? `[${step.code}]` : ""].filter(Boolean).join(" ");
+    return (
+      <li key={id} data-step={id} data-state={!step ? "skipped" : step.ok ? "ok" : "fail"} className="flex items-start gap-2 text-sm">
+        <span className={`mt-0.5 shrink-0 ${!step ? "text-muted" : step.ok ? "text-success" : "text-danger"}`}>{!step ? <Minus size={15} /> : step.ok ? <Check size={15} /> : <X size={15} />}</span>
+        <span className="min-w-0 flex-1"><span className={step && !step.ok ? "font-medium text-danger" : !step ? "text-muted" : "font-medium"}>{t(`efaturam.conn.step.${id}`)}</span>{extra && <span className="ml-2 break-words text-muted">{extra}</span>}</span>
+      </li>
+    );
+  };
+  return (
+    <Card title={t("efaturam.conn.title")}>
+      <p className="mb-3 text-sm text-muted">{t("efaturam.conn.body")}</p>
+      <Button loading={diag.pending} disabled={!call.cat.canSend} onClick={() => void diag.run()}>{t("efaturam.conn.run")}</Button>
+      {d && (
+        <div data-testid="ef-conn" data-state={d.ok ? "ok" : "fail"} className="mt-4 space-y-3">
+          <ul className="space-y-1.5">{STEP_IDS.map(line)}</ul>
+          <p role="status" className={`rounded-lg px-3 py-2 text-sm ${d.ok ? "bg-success-soft text-success" : "bg-danger-soft text-danger"}`}>
+            {d.ok ? t("efaturam.conn.ok") : t(`efaturam.conn.fail.${failed?.code === "blocked" ? "blocked" : failed?.id ?? "signIn"}`)}
+          </p>
+          {d.claims && d.claims.length > 0 && <p className="break-words text-xs text-muted">{t("efaturam.conn.claims")}: <span className="font-mono">{d.claims.join(", ")}</span></p>}
+        </div>
+      )}
+    </Card>
+  );
+}
 
 function TaxpayerCard({ call }: { call: EfaturamCall }) {
   const { t } = useT();
@@ -128,6 +166,77 @@ function DocumentCard({ call }: { call: EfaturamCall }) {
             ? <p><a className="inline-flex items-center gap-1 break-all text-brand-700 underline" href={url} target="_blank" rel="noreferrer noopener">{t("efaturam.doc.open")} <ExternalLink size={12} /></a></p>
             : <p className="text-danger">{link.ok ? t("efaturam.doc.noLink") : failText(link)}</p>)}
           {cancel && (cancel.ok ? <p className="flex items-center gap-2 text-success"><Check size={15} />{t("efaturam.doc.cancelled")}</p> : <p className="text-danger">{failText(cancel)}</p>)}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/* ---------------------------------------------------------------- Outgoing */
+
+type Live = { status?: EfaturamCallResult; link?: EfaturamCallResult };
+
+/** The store's own record of invoices issued through e-Faturam; each row can be checked against the gateway. */
+function Outgoing({ call }: { call: EfaturamCall }) {
+  const { t } = useT();
+  const [q, setQ] = useState(""); const dq = useDebounced(q);
+  const [page, setPage] = useState(1);
+  const list = useEfaturamOutgoing(dq, page, true);
+  const [live, setLive] = useState<Record<string, Live>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const rows = list.data?.items ?? [];
+  const key = (r: EfaturamOutgoingRow) => `${r.source}:${r.id}`;
+  const put = (k: string, v: Live) => setLive((m) => ({ ...m, [k]: { ...m[k], ...v } }));
+  const check = async (r: EfaturamOutgoingRow) => {
+    if (!r.invoiceUuid) return;
+    const res = await call.run(r.type === "e_fatura" ? "getOutgoingEInvoiceStatus" : "getEArchiveStatus", { path: { invoiceUuid: r.invoiceUuid } });
+    if (res) put(key(r), { status: res });
+  };
+  const one = async (r: EfaturamOutgoingRow) => { setBusy(key(r)); await check(r); setBusy(null); };
+  const all = async () => { setBusy("all"); for (const r of rows) await check(r); setBusy(null); };
+  const pdf = async (r: EfaturamOutgoingRow) => {
+    if (!r.invoiceUuid) return;
+    setBusy(`pdf:${key(r)}`);
+    const res = await call.run("getPermanentDocumentDownloadUrl", { body: { documentType: r.type === "e_fatura" ? "EINVOICE" : "EARCHIVE", fileExtension: "pdf", invoiceUuid: r.invoiceUuid } });
+    if (res) put(key(r), { link: res }); setBusy(null);
+  };
+  const checkable = rows.some((r) => r.invoiceUuid);
+  return (
+    <Card title={t("efaturam.out.title")} description={t("efaturam.out.body")}
+      actions={<Button size="sm" variant="secondary" loading={busy === "all"} disabled={!call.cat.canSend || !checkable || !!busy} onClick={() => void all()}><RefreshCw size={13} />{t("efaturam.out.checkAll")}</Button>}>
+      <div className="mb-4 w-full sm:w-80"><TextField label={t("common.search")} type="search" placeholder={t("efaturam.out.search")} value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} /></div>
+      {list.isPending ? <Loading /> : list.error ? <ErrorState error={list.error} retry={() => void list.refetch()} /> : !rows.length ? <EmptyState title={t(dq ? "efaturam.out.noMatch" : "efaturam.out.empty")} description={dq ? undefined : t("efaturam.out.emptyBody")} /> : (
+        <div className="space-y-3" data-testid="ef-outgoing">
+          <Table caption={t("efaturam.out.title")} head={[t("efaturam.col.date"), t("efaturam.col.number"), t("efaturam.col.recipient"), t("efaturam.col.amount"), t("efaturam.col.record"), t("efaturam.col.gateway"), <span key="a" className="sr-only">{t("efaturam.col.actions")}</span>]}>
+            {rows.map((r) => {
+              const k = key(r); const st = live[k]?.status; const lk = live[k]?.link;
+              const url = httpsUrl(lk?.response.body) ?? r.pdfUrl ?? undefined;
+              const to = outgoingLink(r);
+              const label = r.source === "manual" ? t("efaturam.out.manual") : r.orderNumber ? `#${r.orderNumber}` : t("efaturam.out.order");
+              return (
+                <tr key={k} data-row={k}>
+                  <Td className="whitespace-nowrap text-[13px]">{dateTime(r.createdAt)}</Td>
+                  <Td>
+                    <div className="font-mono text-[13px]">{r.number ?? "—"}</div>
+                    <div className="mt-0.5 flex items-center gap-1.5 text-[12px] text-muted">{r.type && <Badge tone="neutral">{t(`efaturam.doc.kind.${r.type}`)}</Badge>}</div>
+                  </Td>
+                  <Td className="text-[13px]"><div>{r.customerName || "—"}</div><div className="text-muted">{to ? <Link className="text-brand-700 underline" to={to}>{label}</Link> : label}</div></Td>
+                  <Td className="whitespace-nowrap tabular-nums">{r.total != null ? money(r.total, r.currency || "TRY") : "—"}</Td>
+                  <Td><Badge tone={recordTone(r.status)}>{enumLabel("invoice", r.status)}</Badge></Td>
+                  <Td>
+                    {!r.invoiceUuid ? <span className="text-[12px] text-muted">{t("efaturam.out.noUuid")}</span>
+                      : st ? (st.ok ? <StatusBadge code={(st.response.body as any)?.status} /> : <span className="text-[12px] text-danger">{failText(st)}</span>)
+                        : <Button size="sm" variant="ghost" loading={busy === k} disabled={!call.cat.canSend || !!busy} onClick={() => void one(r)}>{t("efaturam.out.check")}</Button>}
+                  </Td>
+                  <Td className="text-right"><div className="flex justify-end gap-1">
+                    {url ? <a className="inline-flex h-8 items-center gap-1 px-2 text-[13px] text-brand-700 underline" href={url} target="_blank" rel="noreferrer noopener">PDF <ExternalLink size={12} /></a>
+                      : r.invoiceUuid ? <Button size="sm" variant="ghost" loading={busy === `pdf:${k}`} disabled={!call.cat.canSend || !!busy} onClick={() => void pdf(r)}>{t("efaturam.in.pdf")}</Button> : null}
+                  </div>{lk && !url && <div className="text-[12px] text-danger">{lk.ok ? t("efaturam.doc.noLink") : failText(lk)}</div>}</Td>
+                </tr>
+              );
+            })}
+          </Table>
+          <Pagination page={page} pageSize={OUTGOING_PAGE_SIZE} total={list.data?.total ?? 0} onPage={(p) => { setPage(p); setLive({}); }} />
         </div>
       )}
     </Card>
@@ -290,7 +399,8 @@ export default function Efaturam() {
       {call.cat.error ? <ErrorState error={call.cat.error} retry={call.cat.refetch} /> : (
         <div className="space-y-5">
           <Tabs<TabId> tabs={TABS.map((x) => ({ id: x, label: t(`efaturam.tab.${x}`) }))} value={tab} onChange={setTab} label={t("efaturam.tabs.label")} />
-          {tab === "check" && <div className="grid gap-5 lg:grid-cols-2"><TaxpayerCard call={call} /><DocumentCard call={call} /></div>}
+          {tab === "check" && <div className="grid gap-5 lg:grid-cols-2"><div className="lg:col-span-2"><ConnectionCard call={call} /></div><TaxpayerCard call={call} /><DocumentCard call={call} /></div>}
+          {tab === "outgoing" && <Outgoing call={call} />}
           {tab === "incoming" && <Incoming call={call} />}
           {tab === "explorer" && !call.cat.isPending && <Explorer call={call} />}
         </div>

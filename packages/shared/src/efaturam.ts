@@ -50,3 +50,33 @@ export interface EfaturamCatalogResponse {
   environment: "live" | "test";
   operations: EfaturamOperation[];
 }
+
+/** One step of the connection diagnosis. `code` is the gateway's problem slug, e.g. `username-or-password-wrong`. */
+export interface EfaturamDiagnosisStep {
+  id: "signIn" | "token" | "account" | "apiCall";
+  ok: boolean; status?: number; code?: string;
+  /** provider text or a stable phrase; never a secret */
+  detail?: string;
+}
+/** Result of signing in and making one harmless read call, step by step. No token or password is ever included. */
+export interface EfaturamDiagnosis {
+  ok: boolean; mock: boolean; environment: "live" | "test";
+  steps: EfaturamDiagnosisStep[];
+  /** names (not values) of the claims in the sign-in token, to see what the account carries */
+  claims?: string[];
+  companyId?: number; userId?: number;
+  /** token expiry, ISO */
+  expiresAt?: string;
+}
+
+/** An invoice OpenShelf issued through e-Faturam (order invoice or manual invoice). */
+export interface EfaturamOutgoingRow {
+  source: "order" | "manual"; id: string;
+  type: "e_fatura" | "e_arsiv" | null; status: string;
+  /** ETTN at e-Faturam; null for invoices that never reached the gateway */
+  invoiceUuid: string | null; number: string | null; pdfUrl: string | null;
+  orderId: string | null; orderNumber: string | null; customerName: string | null;
+  total: number | null; currency: string | null;
+  /** ISO */
+  createdAt: string;
+}

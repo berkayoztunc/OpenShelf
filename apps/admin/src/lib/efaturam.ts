@@ -1,9 +1,10 @@
 import { createElement, useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import type { EfaturamCallResult, EfaturamCatalogResponse, EfaturamOperation } from "@openshelf/shared";
+import type { EfaturamCallResult, EfaturamCatalogResponse, EfaturamDiagnosis, EfaturamOperation, EfaturamOutgoingRow } from "@openshelf/shared";
 import { ConfirmDialog, useToast } from "../components/ui";
 import type { Tone } from "../components/ui";
-import { api, errMsg } from "./api";
+import { api, errMsg, qs } from "./api";
+import type { Paged } from "./types";
 import { useT, type MessageKey } from "../i18n";
 
 export const EFATURAM_CATALOG_KEY = ["efaturam", "catalog"] as const;
@@ -55,6 +56,23 @@ export function useEfaturamCall() {
   return { run, pending: mut.isPending, confirmNode, cat };
 }
 export type EfaturamCall = ReturnType<typeof useEfaturamCall>;
+
+/** POST /api/admin/efaturam/diagnose: sign-in + one harmless read call, step by step. */
+export function useEfaturamDiagnose() {
+  const toast = useToast();
+  const mut = useMutation({ mutationFn: () => api.post<EfaturamDiagnosis>("/api/admin/efaturam/diagnose", {}) });
+  const run = useCallback(async () => { try { return await mut.mutateAsync(); } catch (e) { toast.error(errMsg(e)); return null; } }, [mut, toast]);
+  return { run, pending: mut.isPending, result: mut.data ?? null };
+}
+
+export const OUTGOING_PAGE_SIZE = 20;
+/** Invoices the store issued through e-Faturam (its own record; the gateway cannot list them). */
+export function useEfaturamOutgoing(q: string, page: number, enabled: boolean) {
+  return useQuery({ queryKey: ["efaturam", "outgoing", q, page], enabled, queryFn: () => api.get<Paged<EfaturamOutgoingRow>>(`/api/admin/efaturam/outgoing${qs({ q, page, pageSize: OUTGOING_PAGE_SIZE })}`) });
+}
+export const outgoingLink = (r: EfaturamOutgoingRow) => (r.source === "manual" ? `/invoices/${r.id}` : r.orderId ? `/orders/${r.orderId}` : undefined);
+/** Tone of the store's own invoice status (order invoices: pending|issued, manual: draft|issuing|issued|failed|cancelling|cancelled). */
+export const recordTone = (s: string): Tone => ({ issued: "success", failed: "danger", cancelled: "neutral", pending: "warning", draft: "warning" } as Record<string, Tone>)[s] ?? "info";
 
 /* ------------------------------------------------------------ data helpers */
 

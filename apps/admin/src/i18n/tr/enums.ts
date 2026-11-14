@@ -11,6 +11,7 @@ export const enums = {
   "enum.payment.succeeded": "Başarılı",
   "enum.payment.failed": "Başarısız",
   "enum.payment.refunded": "İade edildi",
+  "enum.invoice.pending": "Bekliyor",
   "enum.invoice.draft": "Taslak",
   "enum.invoice.issuing": "Kesiliyor",
   "enum.invoice.issued": "Kesildi",
