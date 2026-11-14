@@ -41,7 +41,7 @@ describe("efaturam", () => {
   });
   it("signs in once and sends the token header", async () => {
     const { adapter, calls } = mk(taxpayers([]));
-    expect(await adapter.healthCheck()).toEqual({ ok: true });
+    expect(await adapter.healthCheck()).toEqual({ ok: true, detail: "signed in (live): companyId 77, userId 5" });
     await adapter.resolveInvoiceType({ ...base, customer: company });
     await adapter.resolveInvoiceType({ ...base, customer: company });
     expect(calls.filter((c) => c.path === "/api/auth/signin")).toHaveLength(1);
@@ -51,7 +51,14 @@ describe("efaturam", () => {
   it("health check reports missing ids; config ids fill the gap", async () => {
     const bare = jwt({ exp: 4102444800 });
     expect((await mk(undefined, {}, bare).adapter.healthCheck()).ok).toBe(false);
-    expect(await mk(undefined, { companyId: "77", userId: "5" }, bare).adapter.healthCheck()).toEqual({ ok: true });
+    expect((await mk(undefined, { companyId: "77", userId: "5" }, bare).adapter.healthCheck()).ok).toBe(true);
+  });
+  it("health check tells an IP block from rejected credentials", async () => {
+    const hc = (res: Response, baseUrl = PROD) => (factory.create({ config: { baseUrl }, secrets }, { now: () => new Date(), fetch: async () => res }) as EfaturamAdapter).healthCheck();
+    expect(await hc(new Response("<html>Attention Required! | Cloudflare</html>", { status: 403 }), "https://stage-apigateway.trendyolefaturam.com")).toEqual({ ok: false, detail: "sign-in blocked (test): HTTP 403" });
+    expect(await hc(new Response(JSON.stringify({ title: "Username or Password is wrong.", detail: "Invalid credentials." }), { status: 401 }))).toEqual({ ok: false, detail: "sign-in rejected (live): HTTP 401: Username or Password is wrong." });
+    expect(await hc(new Response(JSON.stringify({ title: "User account is locked out." }), { status: 403 }))).toEqual({ ok: false, detail: "sign-in rejected (live): HTTP 403: User account is locked out." });
+    expect((await hc(new Response("{}", { status: 500 }))).detail).toMatch(/^sign-in failed \(live\): e-faturam HTTP 500/);
   });
   it("type selection", async () => {
     const alias = [{ alias: "urn:mail:pk@acme.com", aliasType: "INVOICE" }];

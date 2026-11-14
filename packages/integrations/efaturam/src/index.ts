@@ -44,7 +44,8 @@ export const manifest: IntegrationManifest = {
   schema: configSchema,
 };
 
-export class EfaturamError extends Error { constructor(m: string, readonly status?: number) { super(m); this.name = "EfaturamError"; } }
+/** `blocked`: the answer was not the gateway's JSON (a firewall / IP block page), so the request never reached e-Faturam. */
+export class EfaturamError extends Error { constructor(m: string, readonly status?: number, readonly blocked = false) { super(m); this.name = "EfaturamError"; } }
 
 const jwtClaims = (token: string): Record<string, unknown> => {
   try { const p = token.split(".")[1]!.replace(/-/g, "+").replace(/_/g, "/"); return JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(p), (c) => c.charCodeAt(0)))); } catch { return {}; }
@@ -105,9 +106,10 @@ export class EfaturamAdapter implements InvoicingProvider {
 
   private static async fail(res: Response): Promise<never> {
     const text = await res.text();
-    let j: any = {};
-    try { j = text ? JSON.parse(text) : {}; } catch { /* non-JSON */ }
-    throw new EfaturamError(`e-faturam HTTP ${res.status}: ${String(j?.detail ?? j?.title ?? j?.message ?? "").slice(0, 300)}`, res.status);
+    let j: any;
+    try { j = text ? JSON.parse(text) : undefined; } catch { /* non-JSON */ }
+    const blocked = res.status === 403 && (j === undefined || typeof j !== "object");
+    throw new EfaturamError(`e-faturam HTTP ${res.status}: ${blocked ? "blocked before reaching the gateway" : String(j?.title ?? j?.detail ?? j?.message ?? "").slice(0, 300)}`, res.status, blocked);
   }
 
   private async signIn() {
@@ -145,7 +147,18 @@ export class EfaturamAdapter implements InvoicingProvider {
   }
 
   async healthCheck(): Promise<HealthResult> {
-    try { this.session = undefined; await this.signIn(); return { ok: true }; } catch (e) { return { ok: false, detail: (e as Error).message }; }
+    // Stable phrases: the admin panel translates them (apps/admin TestResult.localizeDetail).
+    const env = this.p.config.baseUrl.includes("stage-") ? "test" : "live";
+    try {
+      this.session = undefined;
+      const s = await this.signIn();
+      return { ok: true, detail: `signed in (${env}): companyId ${s.companyId}, userId ${s.userId}` };
+    } catch (e) {
+      const x = e as EfaturamError;
+      if (x.blocked) return { ok: false, detail: `sign-in blocked (${env}): HTTP ${x.status}` };
+      if (x.status === 401 || x.status === 403) return { ok: false, detail: `sign-in rejected (${env}): ${x.message.replace(/^e-faturam /, "")}` };
+      return { ok: false, detail: `sign-in failed (${env}): ${x.message}` };
+    }
   }
 
   /** Active e-Fatura alias of a VKN, or undefined when the taxpayer is not an e-Fatura user. */

@@ -24,6 +24,11 @@ export function localizeDetail(detail: string): string {
   for (const [re, key] of exact) if (re.test(d)) return tNow(key);
   const kv: [RegExp, string][] = [[/^balance: (.+)$/i, "testResult.detail.balance"], [/^account status: (.+)$/i, "testResult.detail.accountStatus"], [/^token status: (.+)$/i, "testResult.detail.tokenStatus"]];
   for (const [re, key] of kv) { const m = re.exec(d); if (m) return tNow(key, { v: m[1]! }); }
+  const signIn = /^(signed in|sign-in blocked|sign-in rejected|sign-in failed) \((live|test)\): (.+)$/i.exec(d);
+  if (signIn) {
+    const key = { "signed in": "signedIn", "sign-in blocked": "signInBlocked", "sign-in rejected": "signInRejected", "sign-in failed": "signInFailed" }[signIn[1]!.toLowerCase()]!;
+    return tNow(`testResult.detail.${key}`, { env: tNow(`testResult.detail.env.${signIn[2]!.toLowerCase()}`), v: signIn[3]! });
+  }
   const http = /^HTTP (\d{3})\b/.exec(d);
   if (http) {
     const n = Number(http[1]);
