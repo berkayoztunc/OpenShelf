@@ -12,6 +12,7 @@ import { enforceRateLimit, verifyTurnstile } from "../middleware/security";
 import { getAllSettings, getSettings, publicConfig } from "../lib/settings";
 import { getAdapter, isMockModeFresh, logIntegrationEvent } from "../lib/integrations";
 import { activePaymentProvider } from "../lib/payments";
+import { buildPaymentBasket } from "../lib/basket";
 import { purchaseEventId } from "../lib/eventId";
 import { hydrateProducts, availableOf } from "../lib/catalog";
 import { randomToken, timingSafeEqual } from "../lib/crypto";
@@ -233,6 +234,7 @@ store.post("/checkout", async (c) => {
     throw e;
   }
   let couponClaimed = false;
+  let settled = false; // failure already fully compensated (stock, coupon, cart): the outer handler must not compensate again
 
   try {
     if (priced.couponCode) {
@@ -274,18 +276,29 @@ store.post("/checkout", async (c) => {
       session = await provider.adapter.createCheckout({
         orderId, orderNumber: number, amount: priced.total, currency: priced.currency,
         buyer: { id: cust!.id, name: first, surname: surname || first, email: b.email, phone: addr.phone, ip, address: [addr.line1, addr.line2].filter(Boolean).join(" "), city: addr.city, country: addr.country === "TR" ? "Turkey" : addr.country, zip: addr.zip, identityNumber: addr.identityNumber },
-        items: priced.lines.map((l) => ({ id: l.variantId, name: l.name, category: "General", price: l.lineTotal / l.quantity, quantity: l.quantity })),
+        // must add up to the amount charged: shipping is its own line, discounts are spread over the product lines
+        items: buildPaymentBasket(priced.lines, priced.total, priced.shipping),
         callbackUrl: `${env.API_ORIGIN}/api/store/payment/callback/${provider.id}`,
       });
     } catch (e) {
-      log("error", "createCheckout failed", { provider: provider.id, error: e instanceof Error ? e.message : String(e) });
-      await logIntegrationEvent(db, provider.id, "error", "createCheckout failed").catch(() => {});
-      await transitionOrder(db, orderId, "cancelled").catch(() => {});
+      const detail = e instanceof Error ? e.message : String(e);
+      log("error", "createCheckout failed", { provider: provider.id, error: detail });
+      await logIntegrationEvent(db, provider.id, "error", `createCheckout failed: ${detail}`.slice(0, 500), { orderNumber: number, amount: priced.total }).catch(() => {});
+      await transitionOrder(db, orderId, "cancelled").catch(() => {}); // releases stock + coupon use
+      // The customer never reached the payment page: remove the attempt, otherwise every retry leaves another cancelled order behind.
+      await db.batch([
+        db.delete(utmAttributions).where(eq(utmAttributions.orderId, orderId)),
+        db.delete(orderItems).where(eq(orderItems.orderId, orderId)),
+        db.delete(orders).where(and(eq(orders.id, orderId), eq(orders.status, "cancelled"))),
+      ]).catch(() => {});
+      await unclaimCart();
+      settled = true;
       throw new ApiError(502, "payment_provider_error", "Could not start payment, please try again");
     }
     await db.insert(payments).values({ id: crypto.randomUUID(), orderId, provider: provider.id, providerToken: session.providerToken, status: "pending", amount: priced.total, currency: priced.currency, isMock: mock });
     return c.json({ orderNumber: number, trackingToken, payment: { redirectUrl: session.redirectUrl, htmlContent: session.htmlContent } }, 201);
   } catch (e) {
+    if (settled) throw e;
     // compensation if we failed before an order row existed (after it exists, cancellation path above releases stock)
     const [o] = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, orderId)).limit(1);
     if (!o) {
