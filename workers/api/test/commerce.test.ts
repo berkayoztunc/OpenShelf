@@ -56,7 +56,11 @@ describe("checkout", () => {
 
   it("public order view needs the tracking token", async () => {
     const { body } = await placeOrder();
-    expect((await call(`/api/store/orders/${body.orderNumber}?t=${body.trackingToken}`)).status).toBe(200);
+    const pub = await call(`/api/store/orders/${body.orderNumber}?t=${body.trackingToken}`);
+    expect(pub.status).toBe(200);
+    const line = (await j<any>(pub)).items[0];
+    expect(line).toMatchObject({ imageUrl: null, variantTitle: null }); expect(line.variantId).toBeTruthy();
+    expect(line.productName).toMatch(/^Ürün /); expect(line.slug).toMatch(/^prod-/);
     expect((await call(`/api/store/orders/${body.orderNumber}?t=wrong`)).status).toBe(404);
     expect((await call(`/api/store/orders/${body.orderNumber}`)).status).toBe(404);
   });
