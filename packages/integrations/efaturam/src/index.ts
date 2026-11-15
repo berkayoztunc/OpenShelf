@@ -28,6 +28,7 @@ export const configSchema = z.object({
     companyId: numericId, // only needed when the sign-in token does not carry them
     userId: numericId,
     // Fixed-IP relay (VPS): the gateway only accepts a whitelisted IP, which Workers do not have.
+    useRelay: z.boolean().default(true), // switch: false = connect directly even when a relay address is saved (address/secret are kept)
     relayUrl: z.string().url().refine((u) => u.startsWith("https://"), "relayUrl must be https").optional().or(z.literal("").transform(() => undefined)),
   }),
   secrets: z.object({ username: z.string().min(1), password: z.string().min(1), relaySecret: z.string().optional() }),
@@ -44,6 +45,7 @@ export const manifest: IntegrationManifest = {
     { key: "seriesPrefixEArsiv", label: "e-Arşiv seri (3 harf)", type: "text" },
     { key: "companyId", label: "Firma ID (companyId)", type: "text", help: "Boş bırakın; bağlantı testi bulunamadığını söylerse e-Faturam'dan aldığınız değeri girin." },
     { key: "userId", label: "Kullanıcı ID (userId)", type: "text", help: "Boş bırakın; bağlantı testi bulunamadığını söylerse e-Faturam'dan aldığınız değeri girin." },
+    { key: "useRelay", label: "Relay sunucusunu kullan", type: "boolean", help: "Kapalıyken istekler relay üzerinden değil doğrudan e-Faturam'a gider; relay adresi ve secret silinmez, tekrar açabilirsiniz." },
     { key: "relayUrl", label: "Relay adresi (sabit IP)", type: "text", help: "Boş = doğrudan bağlan. Sabit IP'li VPS relay'i kullanacaksanız https://relay.example.com biçiminde kendi relay adresinizi girin ve aşağıya relay secret'ını yazın." },
   ],
   secretFields: [
@@ -125,7 +127,7 @@ export class EfaturamAdapter implements InvoicingProvider {
   private session?: { token: string; exp: number; companyId: number; userId: number };
   constructor(private p: Parsed, private deps: AdapterDeps) {
     if (!hostOk(p.config.baseUrl)) throw new EfaturamError("host not allowlisted");
-    this.deps = { ...deps, fetch: relayFetch(p.config.relayUrl, p.secrets.relaySecret, deps.fetch) };
+    this.deps = { ...deps, fetch: relayFetch(p.config.useRelay === false ? undefined : p.config.relayUrl, p.secrets.relaySecret, deps.fetch) };
   }
   async validateConfig() { configSchema.parse({ config: this.p.config, secrets: this.p.secrets }); }
 

@@ -20,3 +20,12 @@ describe("relayFetch", () => {
     expect(inner.mock.calls[0]![0]).toBe("https://other.example.com/x");
   });
 });
+
+describe("useRelay switch", () => {
+  it("is on by default and parses off", async () => {
+    const { configSchema } = await import("../src/index");
+    const base = { baseUrl: "https://apigateway.trendyolecozum.com", relayUrl: "https://r.example.com" };
+    expect(configSchema.shape.config.parse(base).useRelay).toBe(true);
+    expect(configSchema.shape.config.parse({ ...base, useRelay: false }).useRelay).toBe(false);
+  });
+});
