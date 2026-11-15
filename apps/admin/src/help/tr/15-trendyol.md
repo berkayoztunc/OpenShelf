@@ -100,6 +100,10 @@ Her satırın sağında küçük işlem simgeleri vardır (üzerine gelince adı
 
 **Eşleştirmeler** sekmesi (**Yerel varyant eşleştirmeleri**), bir Trendyol barkodunu mağazanızdaki bir varyanta bağlar. Eşleşen varyantın stoku ve fiyatı Trendyol'a gönderilebilir ve Trendyol listelemesi açılır. **Eşleştirme ekle** ile veya bir ürün satırındaki bağ simgesiyle ekleyebilirsiniz. Eşleştirmeyi silmek Trendyol listelemesini kapatır; Trendyol'daki ürün silinmez.
 
+**Eşleştirme önerileri.** Eşleştirmeler sekmesindeki **Eşleşmeleri bul** düğmesi Trendyol'daki ürünlerinizi (onaylı, onay bekleyen ve reddedilen) henüz bağlanmamış yerel varyantlarla karşılaştırır: önce barkod, sonra stok kodu = SKU. Her öneri nasıl eşleştiğini ve ürünün durumunu gösterir; **Bağla** (veya **Hepsini bağla**) demeden hiçbir şey bağlanmaz. Birden çok yerel varyantın istediği barkod ve artık Trendyol'da olmayan bir barkoda bağlı eşleştirmeler ayrıca listelenir, elle çözersiniz. Eşleştirme model kodunu (`productMainId`) kullanmaz: satıcı verisi çoğu zaman burada tutarsızdır. Reddedilen ürünlerin Trendyol'daki gerekçesi (örneğin görselde yasaklı kelime) **Onay bekleyenler** sekmesinde görünür.
+
+Barkodu Trendyol'da zaten olan bir ürünü oluşturursanız varyant ona bağlanır, yeniden oluşturulmaz.
+
 ## Ürün oluşturma sihirbazı {#urun-olusturma-sihirbazi}
 
 > [!NOTE]
@@ -111,6 +115,7 @@ Her satırın sağında küçük işlem simgeleri vardır (üzerine gelince adı
 > * **Marka:** ürünün markası (yoksa mağaza adı) Trendyol'da aranır; adı birebir aynı olan marka seçilir, aynı olan yoksa öneri olarak sunulur.
 > * **Kategori:** mağaza kategorisinin adı Trendyol'un kategori ağacındaki yaprak kategorilerle eşleştirilir (Trendyol'dan içe aktarılan kategoriler doğrudan bulunur). Adı aynı olan tek kategori seçilir; emin olamazsa en yakın beş kategoriyi öneri olarak gösterir.
 > * **Özellikler:** renk, beden gibi varyantı ayıran özellikler, varyant adından ("Pembe") ve seçeneklerinden otomatik seçilir. Tek seçeneği olan zorunlu özellik kendiliğinden seçilir. Varyant ağırlığından desi hesaplanır.
+> * **Kargo:** sizin yerinize kargo firması seçilmez; boş bırakırsanız Trendyol'daki varsayılan anlaşmanız kullanılır.
 > * **Hatırlama:** ürünü gönderdiğinizde seçimleriniz (Trendyol kategorisi, marka, malzeme gibi ortak özellikler, kargo, teslim süresi, menşei) mağaza kategorisi için saklanır. Aynı kategorideki sonraki ürünlerde hepsi hazır gelir.
 >
 > Sistem hiçbir zaman tahminle seçim yapmaz: birden çok eşleşme varsa boş bırakır ve öneri sunar.

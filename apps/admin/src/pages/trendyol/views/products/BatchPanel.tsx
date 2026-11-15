@@ -7,7 +7,7 @@ import { Term } from "../../../../components/help/Term";
 import { StatusBadge, TyErrorBox, VIEW_KEY, arr, rec, str, useTyQuery } from "../../../../components/trendyol/views/shared";
 import type { TrendyolOperation } from "../../../../lib/trendyol";
 import { useT } from "../../../../i18n";
-import { batchFinished } from "./build";
+import { batchFinished } from "@openshelf/shared";
 
 export const POLL_MS = 2000;
 const MAX_POLLS = 90;

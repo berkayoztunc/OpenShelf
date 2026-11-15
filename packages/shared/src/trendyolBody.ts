@@ -1,5 +1,5 @@
-/** Pure helpers of the "add product to Trendyol" wizard: createProducts V2 body builder + validation derived from the catalog field hints. */
-
+/** createProducts V2 body builder and its validation. Pure functions, no network. */
+// ---------------------------------------------------------------- body builder + validation
 export interface AttrChoice { ids: number[]; custom: string }
 export interface WizardForm {
   barcode: string; stockCode: string; productMainId: string; title: string; description: string;
@@ -32,8 +32,6 @@ export function buildItem(f: WizardForm): Record<string, unknown> {
     images: f.images.filter(Boolean).map((url) => ({ url })), attributes,
   };
 }
-import { norm } from "./autofill";
-
 /** One sellable variant of the local product in the wizard: its own barcode, stock, prices and variant-defining attributes. */
 export interface VariantRow {
   variantId: string; label: string; include: boolean;
@@ -106,38 +104,16 @@ export const isPublicHttps = (url: string): boolean => {
   try { const u = new URL(url); return u.protocol === "https:" && !/^(localhost|127\.|0\.0\.0\.0)/.test(u.hostname); } catch { return false; }
 };
 
-/**
- * Flatten Trendyol's category tree into leaves with their path. The real API answers `{ "categories": [...] }` (the mock and older docs
- * show a bare array), nodes may carry `subCategories: null`, and ids may be numeric strings: all of that is accepted. Only a node without
- * children is a leaf, because Trendyol only accepts products in leaf categories.
- */
-export interface Leaf { id: number; name: string; path: string }
-export function leaves(tree: unknown, trail: string[] = []): Leaf[] {
-  const nodes = Array.isArray(tree) ? tree : Array.isArray((tree as { categories?: unknown } | null)?.categories) ? (tree as { categories: unknown[] }).categories : [];
-  const out: Leaf[] = [];
-  for (const raw of nodes) {
-    const c = (raw ?? {}) as { id?: number | string; name?: string; subCategories?: unknown };
-    const here = [...trail, String(c.name ?? "")];
-    const id = typeof c.id === "number" ? c.id : typeof c.id === "string" && /^\d+$/.test(c.id) ? Number(c.id) : null;
-    if (Array.isArray(c.subCategories) && c.subCategories.length) out.push(...leaves(c.subCategories, here));
-    else if (id != null) out.push({ id, name: String(c.name ?? ""), path: here.join(" › ") });
-  }
-  return out;
-}
 
-/** Leaves whose path contains EVERY word the user typed (any order, Turkish letters folded), shortest path first. */
-export function filterLeaves(all: Leaf[], text: string, limit = 40): Leaf[] {
-  const words = norm(text).split(" ").filter(Boolean);
-  if (!words.length) return all.slice(0, limit);
-  return all.filter((l) => { const p = norm(l.path); return words.every((w) => p.includes(w)); })
-    .sort((a, b) => Number(norm(b.name).includes(words.join(" "))) - Number(norm(a.name).includes(words.join(" "))) || a.path.length - b.path.length).slice(0, limit);
-}
+/** English texts of the validation keys (`trendyolviews.products.v.*` in the admin i18n), for the MCP / API answers. */
+const MESSAGES: Record<string, string> = {
+  items: "no items", "barcode.required": "barcode is missing", "barcode.format": "barcode must be at most 40 characters of letters, digits . _ -", "barcode.duplicate": "barcode {barcode} is used by two variants",
+  "title.required": "title is missing", "title.long": "title is longer than {max} characters", "main.required": "productMainId is missing", "main.long": "productMainId is longer than {max} characters",
+  "brand.required": "brand is not chosen", "category.required": "category is not chosen", "quantity.range": "stock must be a whole number from 0 to {max}", "stockCode.long": "stock code is too long",
+  "description.required": "description is missing", "description.long": "description is too long", "price.list": "list price must be above 0", "price.sale": "sale price must be above 0",
+  "price.order": "sale price is above the list price", "vat.value": "KDV must be 0, 1, 10 or 20", "images.required": "at least one image is needed", "images.max": "at most {max} images",
+  "images.https": "every image must be a public https URL", "attr.required": "required attribute {id} has no value",
+};
+export const problemText = (p: { key: string; vars?: Record<string, string | number> }) =>
+  (MESSAGES[p.key.replace("trendyolviews.products.v.", "")] ?? p.key).replace(/\{(\w+)\}/g, (_, k: string) => String(p.vars?.[k] ?? `{${k}}`));
 
-/** Batch finished? (`status: COMPLETED`, or every item has SUCCESS/FAILED when the batch carries no status — stock/price updates). */
-export function batchFinished(body: unknown): boolean {
-  const b = (body ?? {}) as { status?: string; items?: { status?: string }[] };
-  if (b.status === "COMPLETED") return true;
-  if (b.status === "IN_PROGRESS") return false;
-  const items = Array.isArray(b.items) ? b.items : [];
-  return items.length > 0 && items.every((x) => x.status === "SUCCESS" || x.status === "FAILED");
-}

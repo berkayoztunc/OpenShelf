@@ -1,9 +1,5 @@
-/**
- * Pure matching helpers that let the "create product on Trendyol" wizard fill brand, category and attributes by itself from what the
- * store already knows (the local product's brand and category, the variants' option values) and from what was chosen last time.
- * Nothing here talks to the network; the wizard feeds in Trendyol's own lists.
- */
-
+/** Trendyol matching: brand / category / attribute values from the names the store uses. Pure functions, no network. */
+// ---------------------------------------------------------------- matching
 /** Lower-case, Turkish letters folded to ASCII, punctuation gone: "Çanta Süsü!" -> "canta susu". */
 export const norm = (s: unknown): string =>
   String(s ?? "").trim().toLocaleLowerCase("tr-TR").replace(/ı/g, "i").replace(/ğ/g, "g").replace(/ü/g, "u").replace(/ş/g, "s").replace(/ö/g, "o").replace(/ç/g, "c")
@@ -81,3 +77,5 @@ export interface RememberedDefaults {
   attrs: Record<string, { ids: number[]; custom: string }>;
   cargo: string; vatRate: string; dimensionalWeight: string; deliveryDuration: string; origin: string;
 }
+
+

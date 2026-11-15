@@ -200,7 +200,7 @@ adminTrendyolSync.put("/trendyol/sync", async (c) => {
 // The create-product wizard remembers, per LOCAL category, what was chosen last time (Trendyol category, brand, shared attributes,
 // cargo...), so the next product of that category is filled without matching anything by hand. Stored in sync_cursors under
 // `trendyol:defaults:<local category id>` (small JSON, wiped by the factory reset like the other sync state).
-const DEFAULTS_PREFIX = "trendyol:defaults:";
+const DEFAULTS_PREFIX = "trendyol:defaults:"; // same prefix as lib/trendyolDraft
 const AttrChoice = z.object({ ids: z.array(z.number().int()).max(50), custom: z.string().max(300) });
 const RememberedBody = z.object({
   localCategoryId: z.string().min(1).max(64),

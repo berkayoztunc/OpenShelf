@@ -156,7 +156,12 @@ const getCategoryAttributes: MockHandler = async (req, state) => {
   const list = isLeaf(cats, id) ? categoryAttributeList(id) : [];
   const categoryAttributes = list
     .filter((a) => requiredQ === undefined || a.required === (requiredQ === "true"))
-    .map((a) => ({ allowCustom: a.def.allowCustom, attribute: { id: a.def.id, name: a.def.name }, categoryId: id, required: a.required, varianter: a.def.varianter, slicer: a.def.slicer, allowMultipleAttributeValues: a.def.multi }));
+    .map((a) => ({
+      allowCustom: a.def.allowCustom, attribute: { id: a.def.id, name: a.def.name },
+      // like the real API: the values come inline for closed lists; free-text attributes (allowCustom) list them only through the values endpoint
+      attributeValues: a.def.allowCustom ? [] : a.def.values.map(([vid, vname]) => ({ id: vid, name: vname })),
+      categoryId: id, required: a.required, varianter: a.def.varianter, slicer: a.def.slicer, allowMultipleAttributeValues: a.def.multi,
+    }));
   return ok({ id, name: cat.name, displayName: cat.name, categoryAttributes });
 };
 
@@ -168,7 +173,7 @@ const getCategoryAttributeValues: MockHandler = async (req, state) => {
   if (!attr || !isLeaf(cats, catId)) return fail(404, [{ key: "attribute.not.found", message: `Kategoride ${req.path.attributeId} numaralı özellik bulunamadı` }]);
   const page = qInt(req.query, "page", 0), size = qInt(req.query, "size", 1000);
   if (!(page >= 0 && page <= 1000) || !(size >= 1 && size <= 1000)) return fail(400, [{ key: "invalid.paging", message: "page ve size 0-1000 aralığında olmalıdır (size en az 1)" }]);
-  const all = attr.def.values.map(([attributeValueId, attributeValueName]) => ({ attributeValueId, attributeValueName }));
+  const all = attr.def.values.map(([attributeValueId, attributeValue]) => ({ attributeValueId, attributeValue }));
   return ok({ totalElements: all.length, totalPages: Math.max(1, Math.ceil(all.length / size)), page, size, content: all.slice(page * size, page * size + size) });
 };
 

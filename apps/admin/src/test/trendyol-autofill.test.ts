@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { desiFromGrams, importedCategoryId, matchAttrValue, matchBrand, norm, rankCategories } from "../pages/trendyol/views/products/autofill";
+import { desiFromGrams, importedCategoryId, matchAttrValue, matchBrand, norm, rankCategories } from "@openshelf/shared";
 
 const leaves = [
   { id: 1, name: "Çanta Süsü", path: "Aksesuar › Çanta Süsü" },

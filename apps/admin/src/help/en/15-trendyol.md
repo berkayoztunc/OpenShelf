@@ -100,6 +100,10 @@ Each row has small action icons on the right (the name appears on hover):
 
 The **Mappings** sub-tab (**Local variant mappings**) links a Trendyol barcode to a variant in your store. A mapped variant can have its stock and price sent to Trendyol and its Trendyol listing is switched on. Add one with **Add mapping** or with the link icon on a product row. Deleting a mapping switches the Trendyol listing off; the product on Trendyol is not deleted.
 
+**Match suggestions.** The **Find matches** button on the Mappings sub-tab compares your Trendyol listings (approved, pending approval and rejected) with the local variants that are not linked yet: first by barcode, then by stock code = SKU. Each suggestion shows how it matched and the listing's status; nothing is linked until you press **Link** (or **Link all**). A barcode wanted by several local variants and mappings that point to a barcode no longer on Trendyol are listed separately for you to resolve by hand. Matching never uses the model code (`productMainId`): sellers' own data is often inconsistent there. Rejected products show Trendyol's reason (for example a forbidden word in an image) in the **Pending approval** tab.
+
+If you create a product whose barcode already exists on Trendyol, the variant is linked to it and nothing is created again.
+
 ## Create-product wizard {#urun-olusturma-sihirbazi}
 
 > [!NOTE]
@@ -111,6 +115,7 @@ The **Mappings** sub-tab (**Local variant mappings**) links a Trendyol barcode t
 > * **Brand:** the product's brand (or the store name) is looked up on Trendyol; the brand with exactly the same name is chosen, otherwise suggestions are shown.
 > * **Category:** the store category's name is matched against Trendyol's leaf categories (categories imported from Trendyol are found directly). The one category with the same name is chosen; if it cannot be sure it shows the five closest as suggestions.
 > * **Attributes:** attributes that tell variants apart, such as colour or size, are picked automatically from the variant's name ("Pink") and options. A required attribute with only one possible value is taken. Desi is computed from the variant weight.
+> * **Cargo:** no carrier is chosen for you; leave it empty to use your default agreement with Trendyol.
 > * **Memory:** when you send the product your choices (Trendyol category, brand, shared attributes such as material, cargo, delivery time, origin) are stored for the store category. The next products in that category come with everything ready.
 >
 > The system never chooses by guessing: with several matches it leaves the field empty and offers suggestions.

@@ -1,8 +1,9 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { channelListings, integrationConfigs, integrationEvents, outboxJobs, syncCursors, productMappings, productVariants, products, trendyolCalls } from "@openshelf/db";
 import {
-  TrendyolCallBody, type MockHandler, type TrendyolCatalogResponse, type TrendyolEnv, type TrendyolOperation,
+  TrendyolCallBody, type MockHandler, type TrendyolCallResult, type TrendyolCatalogResponse, type TrendyolEnv, type TrendyolOperation,
 } from "@openshelf/shared";
 import {
   ConsoleError, MAX_BODY_BYTES, MAX_RESPONSE_BYTES, TRENDYOL_MOCKS, TRENDYOL_OPERATIONS, loadImportStatus, opAvailableOn, runCall, stockDriftReport, ORDERS_CURSOR_KEY, htmlToText, looksLikeHtml,
@@ -16,6 +17,7 @@ import { hit } from "../middleware/security";
 import { adapterDeps, isIntegrationEnabled, isMockModeFresh, loadSecrets } from "../lib/integrations";
 import { scrub } from "../lib/log";
 import { resetMockTrendyol, runMock } from "../lib/trendyolMock";
+import { barcodeOwners, linkVariant, unlinkVariant } from "../lib/trendyolMapping";
 
 /** Groups whose responses contain customer data (names, addresses, phones, questions): the call log keeps only status + size for them. */
 const PII_GROUPS = new Set(["orders", "split", "shipping", "labels", "claims", "questions", "invoices", "seller", "finance", "cargoInvoice", "express", "test"]);
@@ -71,6 +73,14 @@ const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n) : s);
 
 adminTrendyol.post("/trendyol/call", async (c) => {
   const b = await body(c, TrendyolCallBody);
+  return c.json(await runTrendyolOp(c, b));
+});
+
+/**
+ * One Trendyol API call, exactly as the console runs it (mock or live, rate limits, production confirmation for writes, call history, audit).
+ * Shared by the console route and the server-side product draft/creation used by the MCP tools.
+ */
+export async function runTrendyolOp(c: Context<AppEnv>, b: TrendyolCallBody): Promise<TrendyolCallResult> {
   const db = c.get("db"); const admin = c.get("admin")!;
   const op = operations().find((o) => o.id === b.operationId);
   if (!op) throw new ApiError(404, "unknown_operation", `Unknown operation: ${b.operationId}`);
@@ -121,8 +131,8 @@ adminTrendyol.post("/trendyol/call", async (c) => {
       : scrub(clip(respText, 200), secrets),
   }).returning({ id: trendyolCalls.id });
   await audit(c, "trendyol.call", "trendyol_call", ins ? String(ins.id) : undefined, { operationId: op.id, risk: op.risk, env, status: result.status, mock: st.mock });
-  return c.json(result);
-});
+  return result;
+}
 
 adminTrendyol.get("/trendyol/history", async (c) => {
   const p = paging(c, 20, 100);
@@ -171,16 +181,9 @@ adminTrendyol.post("/trendyol/mappings", async (c) => {
   const b = await body(c, MappingBody); const db = c.get("db");
   const [v] = await db.select({ id: productVariants.id, sku: productVariants.sku }).from(productVariants).where(eq(productVariants.id, b.variantId)).limit(1);
   if (!v) throw notFound("Variant");
-  const [taken] = await db.select({ v: productMappings.variantId }).from(productMappings)
-    .where(and(eq(productMappings.provider, "trendyol"), eq(productMappings.externalBarcode, b.barcode))).limit(1);
-  if (taken && taken.v !== b.variantId) throw new ApiError(409, "barcode_taken", "This barcode is already mapped to another variant");
+  if ((await barcodeOwners(db, [b.barcode], b.variantId)).has(b.barcode)) throw new ApiError(409, "barcode_taken", "This barcode is already mapped to another variant");
   const enabled = b.listingEnabled ?? true;
-  const values = { id: crypto.randomUUID(), variantId: b.variantId, provider: "trendyol", externalSku: v.sku, externalBarcode: b.barcode, externalId: b.externalId ?? null };
-  await db.batch([
-    db.insert(productMappings).values(values).onConflictDoUpdate({ target: [productMappings.provider, productMappings.variantId], set: { externalSku: v.sku, externalBarcode: b.barcode, externalId: b.externalId ?? null } }),
-    db.insert(channelListings).values({ variantId: b.variantId, channel: "trendyol", enabled, externalId: b.externalId ?? null })
-      .onConflictDoUpdate({ target: [channelListings.variantId, channelListings.channel], set: { enabled, externalId: b.externalId ?? null } }),
-  ]);
+  await linkVariant(db, { variantId: b.variantId, barcode: b.barcode, sku: v.sku, externalId: b.externalId, enabled });
   await audit(c, "trendyol.mapping.upsert", "variant", b.variantId, { barcode: b.barcode, listingEnabled: enabled });
   return c.json({ variantId: b.variantId, sku: v.sku, barcode: b.barcode, externalId: b.externalId ?? null, listingEnabled: enabled });
 });
@@ -192,10 +195,7 @@ adminTrendyol.delete("/trendyol/mappings", async (c) => {
   if (!variantId) throw new ApiError(400, "validation_error", "variantId is required");
   const [m] = await db.select({ id: productMappings.id }).from(productMappings).where(and(eq(productMappings.provider, "trendyol"), eq(productMappings.variantId, variantId))).limit(1);
   if (!m) throw notFound("Mapping");
-  await db.batch([
-    db.delete(productMappings).where(and(eq(productMappings.provider, "trendyol"), eq(productMappings.variantId, variantId))),
-    db.delete(channelListings).where(and(eq(channelListings.channel, "trendyol"), eq(channelListings.variantId, variantId))),
-  ]);
+  await unlinkVariant(db, variantId);
   await audit(c, "trendyol.mapping.delete", "variant", variantId);
   return c.body(null, 204);
 });
@@ -243,12 +243,18 @@ adminTrendyol.get("/trendyol/health", async (c) => {
   const lst = await one<{ enabled: number; errors: number; lastPush: number | null }>(sql`
     SELECT COUNT(*) AS enabled, SUM(CASE WHEN last_error IS NOT NULL THEN 1 ELSE 0 END) AS errors, MAX(last_synced_at) AS lastPush
     FROM channel_listings WHERE channel = 'trendyol' AND enabled = 1`);
+  const map = await one<{ variants: number; mapped: number; pending: number; dupBarcodes: number }>(sql`
+    SELECT (SELECT COUNT(*) FROM product_variants WHERE active = 1) AS variants,
+      (SELECT COUNT(*) FROM product_mappings WHERE provider = 'trendyol') AS mapped,
+      (SELECT COUNT(*) FROM channel_listings WHERE channel = 'trendyol' AND last_error = 'pending_approval') AS pending,
+      (SELECT COUNT(*) FROM (SELECT external_barcode FROM product_mappings WHERE provider = 'trendyol' AND external_barcode IS NOT NULL GROUP BY external_barcode HAVING COUNT(*) > 1)) AS dupBarcodes`);
   const drift = await stockDriftReport(db).catch(() => []);
   const events = await db.select().from(integrationEvents).where(and(eq(integrationEvents.provider, "trendyol"), sql`${integrationEvents.level} IN ('warn','error')`)).orderBy(desc(integrationEvents.id)).limit(5);
   const sec = (v: number | null | undefined) => (v ? new Date(v * 1000).toISOString() : null);
   return c.json({
     orders: { total: ord?.total ?? 0, last7d: ord?.week ?? 0, lastAt: sec(ord?.last), withoutCargo: ord?.noCargo ?? 0, unmappedLines: ord?.unmapped ?? 0 },
     reconcile: { lastRunAt: cur?.updatedAt ? new Date(cur.updatedAt).toISOString() : null },
+    mapping: { variants: map?.variants ?? 0, mapped: map?.mapped ?? 0, unmapped: Math.max(0, (map?.variants ?? 0) - (map?.mapped ?? 0)), awaitingApproval: map?.pending ?? 0, duplicateBarcodes: map?.dupBarcodes ?? 0 },
     stock: { listings: lst?.enabled ?? 0, errors: lst?.errors ?? 0, drift: drift.length, lastPushAt: sec(lst?.lastPush), truth: "local" },
     import: await loadImportStatus(db),
     errors: events.map((e) => ({ id: e.id, level: e.level, message: e.message, at: e.at ? new Date(e.at as unknown as number).toISOString() : null })),

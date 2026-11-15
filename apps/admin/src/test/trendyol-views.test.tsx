@@ -15,7 +15,7 @@ import Questions, { answerProblem } from "../pages/trendyol/views/Questions";
 import Finance from "../pages/trendyol/views/Finance";
 import Products, { normalizeRows } from "../pages/trendyol/views/Products";
 import { toCsv, presetRange, tryMoney } from "../components/trendyol/views/shared";
-import { buildBody, emptyForm, validateBody, batchFinished, leaves, filterLeaves, absoluteImage } from "../pages/trendyol/views/products/build";
+import { buildBody, emptyForm, validateBody, batchFinished, leaves, filterLeaves, absoluteImage } from "@openshelf/shared";
 
 const OPS = [...orderOps, ...claimOps, ...productOps, ...catalogOps] as TrendyolOperation[];
 const cat = (mode: TrendyolCatalogResponse["mode"] = "mock", extra: Partial<TrendyolCatalogResponse> = {}): TrendyolCatalogResponse =>
@@ -460,7 +460,7 @@ describe("product wizard body", () => {
     await waitFor(() => expect(find(calls, "createProducts")).toHaveLength(1));
     // remembered for the local category; the colour is per variant, so it is NOT remembered
     await waitFor(() => expect(put).toHaveBeenCalledWith("/api/admin/trendyol/defaults", expect.objectContaining({
-      localCategoryId: "c1", trendyolCategoryId: 411, categoryPath: "Aksesuar › Çanta Süsü", brandId: 9002, brandName: "OpenShelf", cargo: "YKMP",
+      localCategoryId: "c1", trendyolCategoryId: 411, categoryPath: "Aksesuar › Çanta Süsü", brandId: 9002, brandName: "OpenShelf", cargo: "",   // no carrier is ever picked silently
       attrs: { 48: { ids: [5], custom: "" }, 49: { ids: [8], custom: "" } } })));
   });
   it("attribute values show their names whichever field Trendyol uses (the select options were blank with 'attributeValue'); Menşei follows the origin; optional attributes are folded", async () => {
