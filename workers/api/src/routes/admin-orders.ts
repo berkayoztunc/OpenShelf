@@ -4,7 +4,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { addresses, auditLogs, customerConsents, customers, integrationConfigs, inventory, invoices, orderItems, orders, paymentEvents, payments, productVariants, products, refunds, shipments, utmAttributions } from "@openshelf/db";
 import { InvalidTransitionError, enqueueJob, transitionOrder } from "@openshelf/core";
 import type { PaymentProvider, ShipmentInput, ShippingProvider } from "@openshelf/integration-sdk";
-import { ORDER_STATUSES, OrderStatusBody, RefundBody, ShipmentBody, type OrderStatus } from "@openshelf/shared";
+import { ORDER_STATUSES, OrderAddressBody, OrderStatusBody, RefundBody, ShipmentBody, type OrderStatus } from "@openshelf/shared";
 import type { AppEnv } from "../env";
 import { ApiError, body, likeEscape, notFound, paged, paging } from "../lib/http";
 import { audit } from "../lib/audit";
@@ -200,6 +200,25 @@ adminOrders.post("/orders/:id/refund", requireRole("admin"), async (c) => {
   }
   await audit(c, "order.refund", "order", id, { amount: b.amount, full });
   return c.json({ id: refundId, ok: true, full });
+});
+
+/** Correct the delivery address of a website order that has not shipped yet (typo, wrong district the carrier rejects...). */
+adminOrders.put("/orders/:id/shipping-address", requireRole("staff"), async (c) => {
+  const id = c.req.param("id"); const b = await body(c, OrderAddressBody); const db = c.get("db");
+  const [o] = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
+  if (!o) throw notFound("Order");
+  if (o.source !== "website") throw new ApiError(409, "channel_managed", `The address of ${o.source} orders is managed by the marketplace`);
+  if (!["pending", "awaiting_payment", "paid", "fulfilling"].includes(o.status)) throw new ApiError(409, "invalid_order_state", "The address can only be changed before the order ships");
+  const prev = (o.shippingAddress ?? {}) as Record<string, unknown>;
+  const clean = (v: string | undefined) => { const t = v?.trim(); return t ? t : undefined; };
+  const next: Record<string, unknown> = { ...prev, name: b.name.trim(), phone: b.phone.trim(), line1: b.line1.trim(), city: b.city.trim() };
+  for (const k of ["surname", "line2", "district", "zip"] as const) { const v = clean(b[k]); if (v === undefined) delete next[k]; else next[k] = v; }
+  const changed = Object.keys(next).concat(Object.keys(prev)).filter((k, i, a) => a.indexOf(k) === i && prev[k] !== next[k]);
+  if (changed.length) {
+    await db.update(orders).set({ shippingAddress: next as typeof o.shippingAddress, updatedAt: new Date() }).where(eq(orders.id, id));
+    await audit(c, "order.address", "order", id, { changed }); // field names only: no personal data in the audit log
+  }
+  return c.json({ id, shippingAddress: next, changed });
 });
 
 /** Order + enabled shipping provider + the parcel/recipient data both the quote list and the shipment creation use. */

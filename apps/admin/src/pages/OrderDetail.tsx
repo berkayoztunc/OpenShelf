@@ -13,6 +13,7 @@ import { typeLabel } from "./Invoices";
 import { dateTime, enumLabel, label, money, toMajor, toMinor } from "../lib/format";
 import { orderDetailFromApi } from "../lib/adapt";
 import { NotificationHistory } from "../components/NotificationHistory";
+import { AddressDialog, AddressSummary, addressIssue, type OrderAddr } from "../components/OrderAddress";
 import { Badge, Button, Card, ConfirmDialog, EmptyState, ErrorState, Loading, Modal, PageHeader, SelectField, Skeleton, statusTone, Table, Td, TextField, useToast } from "../components/ui";
 
 export default function OrderDetail() {
@@ -24,6 +25,7 @@ export default function OrderDetail() {
   const [transition, setTransition] = useState<string | null>(null);
   const [refund, setRefund] = useState<{ amount: string; reason: string } | null>(null);
   const [ship, setShip] = useState<string | null>(null);
+  const [editAddr, setEditAddr] = useState(false);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const done = (msg: string) => () => { qc.invalidateQueries({ queryKey: ["order", id] }); qc.invalidateQueries({ queryKey: ["orders"] }); toast.success(msg); };
   const fail = (e: unknown) => toast.error(describeOrderError(e).message);
@@ -76,6 +78,8 @@ export default function OrderDetail() {
   ].sort((a, b) => a.at.localeCompare(b.at));
 
   const managed = o.source !== "website"; // marketplace order: the marketplace ships + invoices it, we only mirror it
+  const addr = o.shippingAddress as OrderAddr | undefined;
+  const canEditAddr = !managed && ["pending", "awaiting_payment", "paid", "fulfilling"].includes(o.status);
   const mockPay = o.payments.some((p) => p.isMock);
   return (
     <>
@@ -114,6 +118,9 @@ export default function OrderDetail() {
               </>
             )}
           </Card>
+          <Card testId="order-address-card" title={t("orders.address.title")} actions={canEditAddr && <Button size="sm" variant="secondary" onClick={() => setEditAddr(true)}>{t("common.edit")}</Button>}>
+            <AddressSummary a={addr} />
+          </Card>
           <Card title={t("orders.detail.timeline")}>
             {timeline.length === 0 ? <EmptyState title={t("orders.detail.timeline.empty")} description={t("orders.detail.timeline.emptyBody")} /> : (
               <ol className="space-y-3 border-l border-line pl-4">{timeline.map((e, i) => (
@@ -138,9 +145,14 @@ export default function OrderDetail() {
           <p role="note" className="rounded-lg border border-warn-line bg-warn-soft px-3 py-2 text-sm text-warn">{t("orders.refund.consequences")}</p>
         </div>}
       </Modal>
-      <Modal open={ship !== null} onClose={() => setShip(null)} title={t("orders.ship.title")}
-        footer={<><Button variant="ghost" onClick={() => setShip(null)}>{t("common.cancel")}</Button><Button loading={doShip.isPending} disabled={!ship} onClick={() => doShip.mutate()}>{t("orders.ship.action")}</Button></>}>
+      {editAddr && <AddressDialog orderId={o.id} address={addr} onClose={() => setEditAddr(false)} />}
+      <Modal open={ship !== null && !editAddr} onClose={() => setShip(null)} title={t("orders.ship.title")}
+        footer={<><Button variant="ghost" onClick={() => setShip(null)}>{t("common.cancel")}</Button><Button loading={doShip.isPending} disabled={!ship || !!addressIssue(addr)} onClick={() => doShip.mutate()}>{t("orders.ship.action")}</Button></>}>
         <div className="space-y-3">
+          <div className="rounded-lg border border-line bg-canvas p-3">
+            <div className="mb-1 flex items-center justify-between gap-2"><p className="text-xs font-semibold uppercase tracking-wide text-muted">{t("orders.address.title")}</p>{canEditAddr && <Button size="sm" variant="ghost" onClick={() => setEditAddr(true)}>{t("common.edit")}</Button>}</div>
+            <AddressSummary a={addr} />
+          </div>
           {quotes.data?.testMode && <p role="note" className="rounded-lg border border-warn-line bg-warn-soft px-3 py-2 text-sm text-warn">{t("orders.ship.testMode")} <Link to="/integrations?configure=geliver" className="font-medium underline">{t("orders.ship.testMode.link")}</Link></p>}
           {quotes.isPending ? <Skeleton className="h-16" />
             : quotes.data?.items.length ? (

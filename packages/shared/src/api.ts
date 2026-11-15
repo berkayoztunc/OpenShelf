@@ -114,6 +114,9 @@ export const ShippingAddress = z.object({
   isCompany: z.boolean().optional(),
 });
 export type ShippingAddress = z.infer<typeof ShippingAddress>;
+/** Admin correction of an order's delivery address (before it ships). Other stored fields (tax id, identity number...) are kept. */
+export const OrderAddressBody = ShippingAddress.pick({ name: true, surname: true, phone: true, line1: true, line2: true, city: true, district: true, zip: true });
+export type OrderAddressBody = z.infer<typeof OrderAddressBody>;
 export const Attribution = z.object({
   utm_source: z.string().max(200).optional(), utm_medium: z.string().max(200).optional(), utm_campaign: z.string().max(200).optional(),
   utm_term: z.string().max(200).optional(), utm_content: z.string().max(200).optional(),

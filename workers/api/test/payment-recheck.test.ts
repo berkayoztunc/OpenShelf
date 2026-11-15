@@ -92,3 +92,28 @@ describe("GET /orders/:id/shipment/quotes", () => {
     expect((await admin(s, "/orders/nope/shipment/quotes")).status).toBe(404);
   });
 });
+
+describe("PUT /orders/:id/shipping-address", () => {
+  const GOOD = { name: "Ayşe", surname: "Yılmaz", phone: "+905551112233", line1: "Atatürk Cad. No 1", city: "Mersin", district: "Yenişehir", zip: "33140" };
+  it("corrects the address before shipping, keeps other stored fields, audits field names only", async () => {
+    const { s, order } = await place();
+    await env.DB.prepare("UPDATE orders SET shipping_address = json_set(shipping_address, '$.taxId', '1234567890', '$.district', 'Yeni') WHERE id = ?1").bind(order.id).run();
+    const r = await admin(s, `/orders/${order.id}/shipping-address`, "PUT", { ...GOOD, line2: "  " });
+    expect(r.status).toBe(200);
+    const b = await j<any>(r);
+    expect(b.changed).toEqual(expect.arrayContaining(["district", "city", "zip", "surname"]));
+    const saved = JSON.parse((await orderOf(order.number)).shipping_address);
+    expect(saved).toMatchObject({ ...GOOD, taxId: "1234567890", country: "TR" }); expect(saved.line2).toBeUndefined();
+    const log = await env.DB.prepare("SELECT meta FROM audit_logs WHERE action = 'order.address' AND entity_id = ?1").bind(order.id).first<{ meta: string }>();
+    expect(log!.meta).not.toContain("Atatürk"); expect(log!.meta).toContain("district");
+    // unchanged save is a no-op
+    expect((await j<any>(await admin(s, `/orders/${order.id}/shipping-address`, "PUT", GOOD))).changed).toEqual([]);
+  });
+  it("rejects bad input, shipped orders and unknown orders", async () => {
+    const { s, order } = await place();
+    expect((await admin(s, `/orders/${order.id}/shipping-address`, "PUT", { ...GOOD, line1: "x" })).status).toBe(400);
+    await env.DB.prepare("UPDATE orders SET status = 'shipped' WHERE id = ?1").bind(order.id).run();
+    expect((await admin(s, `/orders/${order.id}/shipping-address`, "PUT", GOOD)).status).toBe(409);
+    expect((await admin(s, "/orders/nope/shipping-address", "PUT", GOOD)).status).toBe(404);
+  });
+});

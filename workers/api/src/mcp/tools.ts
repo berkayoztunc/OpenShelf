@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-  BrandingSettings, CategoryInput, CheckoutSettings, ComposeEmailBody, GeneralSettings, LegalSettings, HomepageSettings, MenuSettings, MerchandisingSettings, NotificationSettings, SeoSettings, TrackingSettings, CouponInput, EfaturamCallBody, GeliverCallBody, InventoryAdjustBody, ManualInvoiceBody, OrderStatusBody, ProductBulkBody, ProductInput, RefundBody, SETTING_GROUPS, VariantPriceBody,
+  BrandingSettings, CategoryInput, CheckoutSettings, ComposeEmailBody, GeneralSettings, LegalSettings, HomepageSettings, MenuSettings, MerchandisingSettings, NotificationSettings, SeoSettings, TrackingSettings, CouponInput, EfaturamCallBody, GeliverCallBody, InventoryAdjustBody, ManualInvoiceBody, OrderAddressBody, OrderStatusBody, ProductBulkBody, ProductInput, RefundBody, SETTING_GROUPS, VariantPriceBody,
   ShipmentBody, TrendyolCallBody,
 } from "@openshelf/shared";
 import { CampaignBody } from "../lib/campaigns";
@@ -134,6 +134,7 @@ export const TOOLS: ToolDef[] = [
     description: "Set the website price of one variant in minor units (kuruş: 1999 = 19.99 TRY); compareAtPrice (optional, must be higher) is the strike-through price. Pushed to Trendyol automatically." }),
   t({ name: "bulk_update_products", title: "Bulk update products", level: "write", method: "POST", path: "/products/bulk", shape: { body: ProductBulkBody },
     description: "Up to 100 products at once: action status (draft|active|archived), category (categoryId or null) or price (percent, e.g. 10 = +10%, -15 = -15%, applied to every active variant's website price and compare-at price)." }),
+  t({ name: "update_order_address", title: "Correct order delivery address", level: "write", method: "PUT", path: "/orders/:id/shipping-address", shape: { id: id("order"), body: OrderAddressBody }, description: "Correct the delivery address (name, phone, lines, city = province, district, zip) of a WEBSITE order before it ships, e.g. when the carrier rejects the district. For Turkey use the province and district names the shipping provider lists." }),
   t({ name: "update_order_status", title: "Update order status", level: "write", method: "POST", path: "/orders/:id/status", shape: { id: id("order"), body: OrderStatusBody },
     description: "Move an order along its allowed transitions (paid/refunded are set by payment flows and are rejected). Trendyol orders are managed by Trendyol." }),
   t({ name: "update_settings", title: "Update settings group", level: "write", method: "PUT", path: "/settings/:group",
