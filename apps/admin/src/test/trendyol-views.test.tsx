@@ -410,6 +410,65 @@ describe("product wizard body", () => {
     expect(absoluteImage("/media/x", undefined, "https://shop.example.com")).toBe("https://shop.example.com/media/x");
     expect(absoluteImage(undefined, "m1", "https://shop.example.com/")).toBe("https://shop.example.com/media/m1");
   });
+  it("buildBody with variant rows: one item per ticked variant, shared content, own barcode/stock/price and varianter attribute", () => {
+    const row = (id: string, o: object) => ({ variantId: id, label: id, include: true, barcode: `BC-${id}`, stockCode: `SK-${id}`, quantity: "5", listPrice: "690", salePrice: "690", attrs: {}, ...o });
+    const body = buildBody(form(), [row("a", { attrs: { 47: { ids: [2001], custom: "" } } }), row("b", { quantity: "8", attrs: { 47: { ids: [2002], custom: "" } } }), row("c", { include: false })]);
+    expect(body.items.map((i) => [i.barcode, i.stockCode, i.quantity, i.productMainId, i.title])).toEqual([["BC-a", "SK-a", 5, "VAZO", "Seramik Vazo"], ["BC-b", "SK-b", 8, "VAZO", "Seramik Vazo"]]);
+    expect(body.items[0]!.attributes).toEqual([{ attributeId: 47, attributeValueId: 2001 }, { attributeId: 1201, customAttributeValue: "Seramik" }]);
+    expect(body.items[1]!.attributes).toEqual([{ attributeId: 47, attributeValueId: 2002 }, { attributeId: 1201, customAttributeValue: "Seramik" }]);
+    expect(validateBody(body, [47])).toEqual([]);
+    const dup = buildBody(form(), [row("a", {}), row("b", { barcode: "BC-a" })]);
+    expect(validateBody(dup).map((p) => p.key)).toContain("trendyolviews.products.v.barcode.duplicate");
+    // a single-variant product keeps using the shared form
+    expect(buildBody(form(), [row("a", {})]).items).toEqual(buildBody(form()).items);
+  });
+  it("wizard opened from a product (?create=): all variants in one request, colour per variant, variants linked afterwards", async () => {
+    const calls = setup({
+      filterApprovedProducts: () => result("filterApprovedProducts", { content: [], page: 0, size: 50, totalElements: 0, totalPages: 1 }),
+      getCargoProviders: () => result("getCargoProviders", [{ code: "YKMP", name: "Yurtiçi" }]),
+      getBrandsByName: () => result("getBrandsByName", [{ id: 9001, name: "OpenShelf" }]),
+      getCategoryTree: () => result("getCategoryTree", [{ id: 400, name: "Aksesuar", subCategories: [{ id: 411, name: "Çanta Süsü", subCategories: [] }] }]),
+      getCategoryAttributes: () => result("getCategoryAttributes", { categoryAttributes: [{ attribute: { id: 47, name: "Color" }, required: true, varianter: true }] }),
+      getCategoryAttributeValues: () => result("getCategoryAttributeValues", { content: [{ attributeValueId: 1001, attributeValueName: "Pink" }, { attributeValueId: 1002, attributeValueName: "Blue" }] }),
+      createProducts: () => result("createProducts", { batchRequestId: "b-10" }),
+      getBatchRequestResult: () => result("getBatchRequestResult", { items: [] }),
+    }, "mock", {
+      "GET /api/admin/products/p9": () => ({ id: "p9", nameTr: "don't touch my bag charm", slug: "bag-charm", descriptionTr: "Çanta süsü", taxRate: 20, images: [{ url: "https://cdn.example.com/c.jpg" }], variants: [
+        { id: "va", sku: "2411198546", barcode: "2411198546", title: "Pembe", prices: { website: 69000, trendyol: 69000 }, stock: { total: 20, reserved: 1, safetyStock: 0 } },
+        { id: "vb", sku: "2411198547", barcode: "2411198547", title: "Mavi", prices: { website: 69000, trendyol: 69000 }, stock: { total: 20, reserved: 0, safetyStock: 0 } }] }),
+      "POST /api/admin/trendyol/mappings": () => ({ ok: true }),
+      "POST /api/admin/trendyol/sync/verify": () => ({ approved: 0, pending: 2, notListed: 0 }),
+    });
+    const post = vi.mocked((await import("../lib/api")).api.post);
+    renderRoutes({ "/*": <Products /> }, "/?create=p9");
+    // no search step: the product is already chosen
+    expect(await screen.findByText("don't touch my bag charm")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Local product or variant")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    const table = await screen.findByTestId("tdyv-wizard-variants");
+    expect((within(table).getByLabelText("Barcode: Pembe") as HTMLInputElement).value).toBe("2411198546");
+    expect((within(table).getByLabelText("Stock: Pembe") as HTMLInputElement).value).toBe("19");
+    expect((within(table).getByLabelText("Sale price: Mavi") as HTMLInputElement).value).toBe("690.00");
+    expect(screen.queryByLabelText(/^Barcode$/)).not.toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText(/^Brand/), "open");
+    await userEvent.click(await screen.findByRole("button", { name: "OpenShelf" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Aksesuar › Çanta Süsü" }));
+    await userEvent.selectOptions(await screen.findByLabelText("Color: Pembe"), "1001");
+    await userEvent.selectOptions(screen.getByLabelText("Color: Mavi"), "1002");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    const body = JSON.parse((await screen.findByLabelText(/Request body/) as HTMLTextAreaElement).value);
+    expect(body.items.map((i: any) => [i.barcode, i.quantity, i.salePrice, i.productMainId, i.title, i.attributes])).toEqual([
+      ["2411198546", 19, 690, "BAG-CHARM", "don't touch my bag charm", [{ attributeId: 47, attributeValueId: 1001 }]],
+      ["2411198547", 20, 690, "BAG-CHARM", "don't touch my bag charm", [{ attributeId: 47, attributeValueId: 1002 }]]]);
+    expect(screen.getByText(/No problems/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Send to Trendyol" }));
+    await waitFor(() => expect(find(calls, "createProducts")).toHaveLength(1));
+    expect(await screen.findByTestId("tdyv-wizard-linked")).toHaveTextContent("2 variant(s) linked");
+    expect(post).toHaveBeenCalledWith("/api/admin/trendyol/mappings", { variantId: "va", barcode: "2411198546" });
+    expect(post).toHaveBeenCalledWith("/api/admin/trendyol/mappings", { variantId: "vb", barcode: "2411198547" });
+    expect(post).toHaveBeenCalledWith("/api/admin/trendyol/sync/verify", { productIds: ["p9"] });
+  });
   it("wizard: pick a local variant, defaults flow into the body, createProducts + mapping", async () => {
     const calls = setup({
       filterApprovedProducts: () => result("filterApprovedProducts", { content: [], page: 0, size: 50, totalElements: 0, totalPages: 1 }),

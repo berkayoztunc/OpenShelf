@@ -131,6 +131,8 @@ export async function runScheduled(env: Env, now = new Date()) {
       await enqueueJob(db, { kind: "trendyol.reconcile_orders", payload: {}, dedupeKey: `trendyol.reconcile_orders:${Math.floor(minute / 5)}` }, now);
       // Safety net: whatever changed stock (sale, refund, cancel, reservation, manual edit), drifted listings are pushed within 10 minutes.
       if (minute % 10 === 0) await enqueueJob(db, { kind: "trendyol.stock_push", payload: { stockOnly: true }, dedupeKey: `trendyol.stock_push:sweep:${Math.floor(minute / 10)}` }, now);
+      // Listings waiting for a product to be created/approved on Trendyol are re-checked every 30 minutes (then stock starts flowing).
+      if (minute % 30 === 15) await enqueueJob(db, { kind: "trendyol.verify_listings", payload: {}, dedupeKey: `trendyol.verify_listings:cron:${Math.floor(minute / 30)}` }, now);
       // Products whose content or price follows Trendyol are refreshed every 30 minutes.
       if (minute % 30 === 0 && await hasFollowedProducts(db)) await enqueueJob(db, { kind: "trendyol.pull_products", payload: {}, dedupeKey: `trendyol.pull_products:cron:${Math.floor(minute / 30)}:first` }, now);
     }

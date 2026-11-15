@@ -8,15 +8,15 @@ import { TrendyolSyncCard } from "../components/trendyol/SyncCard";
 import type { SyncDetail, SyncList, SyncRow } from "../lib/trendyolSync";
 
 const row = (o: Partial<SyncRow>): SyncRow => ({
-  productId: "p1", name: "Keten Gömlek", status: "active", imageUrl: null, mode: "website_only", variants: 2, withBarcode: 2, linked: 0, enabled: 0, errors: 0, available: 14,
+  productId: "p1", name: "Keten Gömlek", status: "active", imageUrl: null, mode: "website_only", variants: 2, withBarcode: 2, linked: 0, enabled: 0, errors: 0, notListed: 0, pending: 0, available: 14,
   contentSource: "local", priceSource: "local", lastSyncedAt: null, lastPulledAt: null, ...o,
 });
-const list = (items: SyncRow[], available = true): SyncList => ({ items, total: items.length, page: 1, pageSize: 25, available, summary: { total: 2, synced: 1, websiteOnly: 1, errors: 0, following: 0 } });
+const list = (items: SyncRow[], available = true): SyncList => ({ items, total: items.length, page: 1, pageSize: 25, available, summary: { total: 2, synced: 1, websiteOnly: 1, errors: 0, notListed: 0, following: 0 } });
 const detail = (o: Partial<SyncDetail> = {}): SyncDetail => ({
   ...row({ mode: "synced", linked: 2, enabled: 2 }), available: true, stock: 14,
   variantRows: [
-    { variantId: "v1", sku: "GML-S", title: "S", barcode: "8690001", linked: true, enabled: true, available: 9, lastSyncedStock: 9, lastSyncedAt: "2026-11-14T10:00:00Z", lastError: null },
-    { variantId: "v2", sku: "GML-M", title: "M", barcode: "8690002", linked: true, enabled: true, available: 5, lastSyncedStock: 7, lastSyncedAt: "2026-11-14T10:00:00Z", lastError: "8690002: barcode not found" },
+    { variantId: "v1", sku: "GML-S", title: "S", barcode: "8690001", linked: true, enabled: true, available: 9, lastSyncedStock: 9, lastSyncedAt: "2026-11-14T10:00:00Z", lastError: null, state: "listed" },
+    { variantId: "v2", sku: "GML-M", title: "M", barcode: "8690002", linked: true, enabled: true, available: 5, lastSyncedStock: 7, lastSyncedAt: "2026-11-14T10:00:00Z", lastError: "8690002: barcode not found", state: "listed" },
   ], ...o,
 });
 
@@ -74,6 +74,28 @@ describe("Product page → Trendyol card", () => {
     expect(m.post).not.toHaveBeenCalledWith("/api/admin/trendyol/sync/pull", expect.anything());
     await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Take stock from Trendyol" }));
     await waitFor(() => expect(m.post).toHaveBeenCalledWith("/api/admin/trendyol/sync/pull", { productIds: ["p1"], stock: true }));
+  });
+  it("product that does not exist on Trendyol: says so, offers to create it there and to re-check", async () => {
+    const m = mockApi({
+      "GET /api/admin/trendyol/sync/p1": () => detail({ notListed: 2, variantRows: detail().variantRows.map((v) => ({ ...v, state: "not_listed" as const, lastSyncedStock: null, lastError: null })) }),
+      "POST /api/admin/trendyol/sync/verify": () => ({ approved: 0, pending: 0, notListed: 2 }),
+    });
+    renderRoutes({ "/p": <TrendyolSyncCard productId="p1" /> }, "/p");
+    const card = await screen.findByTestId("product-trendyol-card");
+    const box = within(card).getByTestId("trendyol-not-listed");
+    expect(box).toHaveTextContent("2 variant(s) were not found on Trendyol");
+    expect(within(box).getByRole("link", { name: "Create on Trendyol" })).toHaveAttribute("href", "/trendyol/products?create=p1");
+    expect(within(card).getAllByText("Not on Trendyol").length).toBeGreaterThanOrEqual(2);
+    expect(within(card).queryByText("In sync")).not.toBeInTheDocument();
+    await userEvent.click(within(box).getByRole("button", { name: "Check on Trendyol again" }));
+    await waitFor(() => expect(m.post).toHaveBeenCalledWith("/api/admin/trendyol/sync/verify", { productIds: ["p1"] }));
+  });
+  it("product sent to Trendyol and awaiting approval is shown as such", async () => {
+    mockApi({ "GET /api/admin/trendyol/sync/p1": () => detail({ pending: 2, variantRows: detail().variantRows.map((v) => ({ ...v, state: "pending" as const, lastSyncedStock: null, lastError: null })) }) });
+    renderRoutes({ "/p": <TrendyolSyncCard productId="p1" /> }, "/p");
+    const card = await screen.findByTestId("product-trendyol-card");
+    expect(within(card).getByTestId("trendyol-pending")).toHaveTextContent("await approval");
+    expect(within(card).queryByTestId("trendyol-not-listed")).not.toBeInTheDocument();
   });
   it("website-only product: only the switch, with a barcode hint when none is set", async () => {
     mockApi({ "GET /api/admin/trendyol/sync/p1": () => detail({ mode: "website_only", linked: 0, enabled: 0, withBarcode: 0, variantRows: [] }) });

@@ -70,6 +70,11 @@ The first time you turn the switch on, variants are linked to Trendyol by their 
 > [!WARNING]
 > **Take stock from Trendyol** **replaces** the sellable stock here with Trendyol's quantity. Use it only as a one-off correction when the numbers have drifted apart. The change is written to the [stock ledger](term:ledger).
 
+**When the product is not on Trendyol.** Sync only updates the stock and price of a product that **already exists** on Trendyol; it does not open a new listing. When you turn the switch on, the barcodes are looked up on Trendyol:
+
+* *Not on Trendyol*: the product was not found in your Trendyol catalog. The **Create on Trendyol** button on the product card opens the [create-product wizard](#urun-olusturma-sihirbazi) with this product.
+* *Awaiting approval*: the product was sent to Trendyol and waits for approval. Sync starts by itself once it is approved; the state is checked every 30 minutes, or right away with **Check on Trendyol again**.
+
 **Status badges:** *In sync* means the quantity last sent equals the quantity here. *Pending* means a change is waiting in the queue. *Error* means Trendyol rejected the last push; the reason is shown under the variant on the product card (most often the barcode was not found on Trendyol).
 
 ## Products {#urunler}
@@ -96,6 +101,9 @@ Each row has small action icons on the right (the name appears on hover):
 The **Mappings** sub-tab (**Local variant mappings**) links a Trendyol barcode to a variant in your store. A mapped variant can have its stock and price sent to Trendyol and its Trendyol listing is switched on. Add one with **Add mapping** or with the link icon on a product row. Deleting a mapping switches the Trendyol listing off; the product on Trendyol is not deleted.
 
 ## Create-product wizard {#urun-olusturma-sihirbazi}
+
+> [!NOTE]
+> If you open the wizard from the Trendyol card on the product page (**Create on Trendyol**) the product is already chosen. For a product with several variants, all variants are sent in one request: each variant's barcode, stock and price is shown in a table, and the attribute that tells the variants apart (colour, size...) is picked per variant. After sending, the variants are linked to their Trendyol barcodes automatically.
 
 The **Add a product to Trendyol** button opens a four-step wizard:
 

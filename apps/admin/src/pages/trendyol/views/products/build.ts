@@ -32,7 +32,23 @@ export function buildItem(f: WizardForm): Record<string, unknown> {
     images: f.images.filter(Boolean).map((url) => ({ url })), attributes,
   };
 }
-export const buildBody = (f: WizardForm): { items: Record<string, unknown>[] } => ({ items: [buildItem(f)] });
+/** One sellable variant of the local product in the wizard: its own barcode, stock, prices and variant-defining attributes. */
+export interface VariantRow {
+  variantId: string; label: string; include: boolean;
+  barcode: string; stockCode: string; quantity: string; listPrice: string; salePrice: string;
+  /** values of the category's "varianter" attributes (colour, size...) for this variant; override the shared ones */
+  attrs: Record<number, AttrChoice>;
+}
+/**
+ * One item per included variant. Trendyol groups items that share productMainId into one product page, so every variant is
+ * sent with the same title/brand/category/description/images and differs only in barcode, stock, price and varianter attributes.
+ * Without rows (or with a single one) the shared form alone describes the item.
+ */
+export function buildBody(f: WizardForm, rows?: VariantRow[]): { items: Record<string, unknown>[] } {
+  const picked = (rows ?? []).filter((r) => r.include);
+  if (!rows || rows.length <= 1) return { items: [buildItem(f)] };
+  return { items: picked.map((r) => buildItem({ ...f, barcode: r.barcode, stockCode: r.stockCode, quantity: r.quantity, listPrice: r.listPrice, salePrice: r.salePrice, attrs: { ...f.attrs, ...r.attrs } })) };
+}
 
 export interface Problem { field: string; key: string; vars?: Record<string, string | number> }
 const VAT = [0, 1, 10, 20];
@@ -42,6 +58,8 @@ export function validateBody(body: unknown, requiredAttrs: number[] = []): Probl
   const out: Problem[] = [];
   const items = (body as { items?: unknown })?.items;
   if (!Array.isArray(items) || items.length === 0) return [{ field: "items", key: "trendyolviews.products.v.items" }];
+  const seen = new Set<string>();
+  for (const raw of items) { const bc = String((raw as { barcode?: unknown })?.barcode ?? ""); if (bc && seen.has(bc)) out.push({ field: "items", key: "trendyolviews.products.v.barcode.duplicate", vars: { barcode: bc } }); seen.add(bc); }
   items.forEach((raw, i) => {
     const it = (raw ?? {}) as Record<string, unknown>;
     const p = (field: string, key: string, vars?: Problem["vars"]) => out.push({ field: items.length > 1 ? `items[${i}].${field}` : field, key: `trendyolviews.products.v.${key}`, vars });

@@ -70,6 +70,11 @@ Anahtarı ilk kez açtığınızda varyantlar [barkodlarıyla](term:barcode) Tre
 > [!WARNING]
 > **Stoku Trendyol'dan al** buradaki satılabilir stoğu Trendyol'daki adetle **değiştirir**. Yalnızca sayılar birbirinden koptuğunda, tek seferlik düzeltme olarak kullanın. Değişiklik [stok defterine](term:ledger) yazılır.
 
+**Ürün Trendyol'da yoksa.** Senkron yalnızca Trendyol'da **zaten var olan** ürünün stok ve fiyatını günceller; yeni ilan açmaz. Anahtarı açtığınızda barkodlar Trendyol'da aranır:
+
+* *Trendyol'da yok*: ürün Trendyol kataloğunuzda bulunamadı. Ürün kartındaki **Trendyol'da oluştur** düğmesi [ürün oluşturma sihirbazını](#urun-olusturma-sihirbazi) bu ürünle açar.
+* *Onay bekliyor*: ürün Trendyol'a gönderildi, onayı bekleniyor. Onaylanınca senkron kendiliğinden başlar; durum 30 dakikada bir denetlenir, **Trendyol'da yeniden kontrol et** ile hemen denetleyebilirsiniz.
+
 **Durum rozetleri:** *Güncel* son gönderilen adet buradaki adetle aynı demektir. *Gönderilecek* bir değişikliğin sırada beklediğini gösterir. *Hata* Trendyol'un son gönderimi reddettiğini gösterir; nedeni ürün kartında varyantın altında yazar (çoğu zaman barkod Trendyol'da bulunamamıştır).
 
 ## Ürünler {#urunler}
@@ -96,6 +101,9 @@ Her satırın sağında küçük işlem simgeleri vardır (üzerine gelince adı
 **Eşleştirmeler** sekmesi (**Yerel varyant eşleştirmeleri**), bir Trendyol barkodunu mağazanızdaki bir varyanta bağlar. Eşleşen varyantın stoku ve fiyatı Trendyol'a gönderilebilir ve Trendyol listelemesi açılır. **Eşleştirme ekle** ile veya bir ürün satırındaki bağ simgesiyle ekleyebilirsiniz. Eşleştirmeyi silmek Trendyol listelemesini kapatır; Trendyol'daki ürün silinmez.
 
 ## Ürün oluşturma sihirbazı {#urun-olusturma-sihirbazi}
+
+> [!NOTE]
+> Sihirbazı ürün sayfasındaki Trendyol kartından (**Trendyol'da oluştur**) açarsanız ürün seçili gelir. Birden çok varyantı olan üründe tüm varyantlar tek istekte gönderilir: her varyantın barkodu, stoku ve fiyatı tabloda ayrı ayrı görünür, varyantları ayıran özelliği (renk, beden gibi) her varyant için ayrı seçersiniz. Gönderimden sonra varyantlar Trendyol barkodlarına kendiliğinden bağlanır.
 
 **Trendyol'a ürün ekle** düğmesi dört adımlı bir sihirbaz açar:
 

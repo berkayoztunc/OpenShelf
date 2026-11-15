@@ -94,11 +94,14 @@ export interface MarketplaceProduct {
 }
 /** One node of the marketplace category tree, flattened. */
 export interface MarketplaceCategory { externalId: string; parentId: string | null; name: string }
+export interface MarketplaceListingState { state: "approved" | "pending"; externalId?: string }
 export interface MarketplaceProvider extends OpenShelfIntegration {
   /** Whole category tree, flattened (parents may appear after children). */
   fetchCategories?(): Promise<MarketplaceCategory[]>;
   /** Pages through the seller's catalog (approved products). Cursor is opaque. */
   fetchProducts?(cursor?: string): Promise<{ products: MarketplaceProduct[]; nextCursor?: string }>;
+  /** Which of these barcodes exist in the seller's marketplace catalog: approved (on sale) or still pending approval. Missing key = not there. */
+  lookupProducts?(barcodes: string[]): Promise<Record<string, MarketplaceListingState>>;
   pushStockAndPrice(updates: MarketplaceStockUpdate[]): Promise<{ ok: boolean; batchId?: string; errors?: string[] }>;
   fetchOrders(since: Date, cursor?: string): Promise<{ orders: MarketplaceOrder[]; nextCursor?: string }>;
   updateShipment?(externalId: string, tracking: { carrier: string; trackingNumber: string }): Promise<{ ok: boolean }>;
