@@ -127,3 +127,13 @@ describe("efaturam adapter diagnose", () => {
     expect(seen[1]!.headers["Authorization"]).toBe(`Bearer ${TOKEN}`);
   });
 });
+
+import { problemMessage } from "../src/console";
+describe("problemMessage", () => {
+  it("lists the rejected fields of a 422", () => {
+    expect(problemMessage({ title: "Request is not valid", errors: [{ field: "pagination.size", message: "must be <= 100" }, { message: "startDate is required" }] }))
+      .toBe("Request is not valid: pagination.size - must be <= 100; startDate is required");
+    expect(problemMessage({ title: "Nope" })).toBe("Nope");
+    expect(problemMessage(undefined)).toBeUndefined();
+  });
+});

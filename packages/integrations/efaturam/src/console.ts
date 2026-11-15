@@ -57,6 +57,22 @@ export function signInFailure(op: EfaturamOperation, req: BuiltEfaturamRequest, 
   return { ok: false, status: status ?? 0, durationMs: 0, mock: false, operationId: op.id, risk: op.risk, request: describe(req), response: { body: null }, error: { message, code: "sign_in_failed" } };
 }
 
+/** "title: field - message; ..." so a 422 says WHICH fields the gateway rejected, not just "Request is not valid". */
+export function problemMessage(p: { title?: string; detail?: string; message?: string; errors?: unknown } | undefined): string | undefined {
+  if (!p) return undefined;
+  const head = p.title ?? p.detail ?? p.message;
+  const list = Array.isArray(p.errors) ? p.errors : [];
+  const items = list.slice(0, 8).map((e) => {
+    if (typeof e === "string") return e;
+    if (!e || typeof e !== "object") return "";
+    const o = e as Record<string, unknown>;
+    const field = [o.field, o.property, o.path, o.name, o.parameter].find((v) => typeof v === "string") as string | undefined;
+    const msg = [o.message, o.defaultMessage, o.detail, o.reason, o.error, o.title].find((v) => typeof v === "string") as string | undefined;
+    return field && msg ? `${field} - ${msg}` : msg ?? field ?? JSON.stringify(o).slice(0, 160);
+  }).filter(Boolean);
+  return items.length ? `${head ?? "Request is not valid"}: ${items.join("; ")}${list.length > 8 ? "; ..." : ""}` : head;
+}
+
 /** Executes one built request. The token only ever goes into the request header and never into the result. */
 export async function runEfaturamCall(deps: { fetch: FetchLike }, token: string, op: EfaturamOperation, req: BuiltEfaturamRequest): Promise<EfaturamCallResult> {
   if (!ALLOWED_HOSTS.includes(new URL(req.url).hostname)) throw new EfaturamConsoleError("invalid_params", "host not allowlisted");
@@ -73,12 +89,12 @@ export async function runEfaturamCall(deps: { fetch: FetchLike }, token: string,
     if (text.length > MAX_RESPONSE_BYTES) { text = text.slice(0, MAX_RESPONSE_BYTES); truncated = true; }
     let parsed: unknown = text; let json = false;
     try { parsed = text ? JSON.parse(text) : null; json = true; } catch { /* keep text (download links are plain text) */ }
-    const problem = json && parsed && typeof parsed === "object" ? (parsed as { title?: string; detail?: string; message?: string; type?: string }) : undefined;
+    const problem = json && parsed && typeof parsed === "object" ? (parsed as { title?: string; detail?: string; message?: string; type?: string; errors?: unknown }) : undefined;
     // A 403 that is not the gateway's JSON is a firewall page: the request never reached e-Faturam.
     const blocked = res.status === 403 && !problem;
     if (blocked) parsed = null;
     return { ...base, ok: res.ok, status: res.status, durationMs: Date.now() - started, response: { body: parsed, ...(truncated ? { truncated } : {}) },
-      ...(res.ok ? {} : { error: { message: blocked ? "Blocked before reaching the gateway (IP not allowed)" : problem?.title ?? problem?.detail ?? problem?.message ?? `HTTP ${res.status}`, ...(blocked ? { code: "blocked" } : problem?.type ? { code: problem.type.split("/").pop()! } : {}) } }) };
+      ...(res.ok ? {} : { error: { message: blocked ? "Blocked before reaching the gateway (IP not allowed)" : problemMessage(problem) ?? `HTTP ${res.status}`, ...(blocked ? { code: "blocked" } : problem?.type ? { code: problem.type.split("/").pop()! } : {}) } }) };
   } catch (e) {
     const aborted = e instanceof Error && e.name === "AbortError";
     return { ...base, ok: false, status: 0, durationMs: Date.now() - started, response: { body: null }, error: { message: aborted ? "Timed out" : e instanceof Error ? e.message : "Network error" } };
