@@ -66,20 +66,32 @@ export class IyzicoAdapter implements PaymentProvider {
     } catch (e) { return { ok: false, detail: (e as Error).message }; }
   }
 
+  /**
+   * `retries` is only for idempotent reads (retrieve, health): a gateway error or dropped connection between the Worker and iyzico
+   * (seen live: HTTP 522) is retried with a short pause. Every attempt is signed again (fresh random).
+   */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private async call(path: string, payload: unknown): Promise<any> {
+  private async call(path: string, payload: unknown, retries = 0): Promise<any> {
     const body = JSON.stringify(payload);
-    const rnd = `${this.deps.now().getTime()}${crypto.randomUUID().replace(/-/g, "").slice(0, 9)}`;
-    const auth = await iyzicoAuthHeader(this.p.secrets.apiKey, this.p.secrets.secretKey, rnd, path, body);
-    const res = await this.deps.fetch(this.base + path, {
-      method: "POST",
-      headers: { Authorization: auth, "x-iyzi-rnd": rnd, "Content-Type": "application/json", Accept: "application/json" },
-      body,
-    });
-    let json: any;
-    try { json = await res.json(); } catch { throw new IyzicoError(`iyzico HTTP ${res.status}: non-JSON response`); }
-    return json;
+    let last: Error = new IyzicoError("iyzico request failed");
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, this.retryDelayMs * attempt));
+      const rnd = `${this.deps.now().getTime()}${crypto.randomUUID().replace(/-/g, "").slice(0, 9)}`;
+      const auth = await iyzicoAuthHeader(this.p.secrets.apiKey, this.p.secrets.secretKey, rnd, path, body);
+      let res: Response;
+      try {
+        res = await this.deps.fetch(this.base + path, {
+          method: "POST",
+          headers: { Authorization: auth, "x-iyzi-rnd": rnd, "Content-Type": "application/json", Accept: "application/json" },
+          body,
+        });
+      } catch (e) { last = new IyzicoError(`iyzico unreachable: ${e instanceof Error ? e.message : "network error"}`); continue; }
+      try { return await res.json(); } catch { last = new IyzicoError(`iyzico HTTP ${res.status}: non-JSON response`); }
+    }
+    throw last;
   }
+  /** pause before retry n is n x this (tests set it to 0) */
+  retryDelayMs = 700;
 
   async createCheckout(input: CheckoutInput): Promise<CheckoutSession> {
     if (!CURRENCIES.includes(input.currency)) throw new IyzicoError(`unsupported currency ${input.currency}`);
@@ -116,7 +128,7 @@ export class IyzicoAdapter implements PaymentProvider {
   }
 
   async retrieve(providerToken: string, expected?: ExpectedPayment): Promise<PaymentEvent> {
-    const r = await this.call(PATHS.checkoutRetrieve, { locale: "tr", conversationId: "retrieve", token: providerToken });
+    const r = await this.call(PATHS.checkoutRetrieve, { locale: "tr", conversationId: "retrieve", token: providerToken }, 2);
     if (r.status !== "success") {
       return { eventId: `iyz:${providerToken}:failed`, providerTxId: r.paymentId ?? providerToken, orderId: r.basketId ?? "", status: "failed", amount: 0, currency: r.currency ?? "TRY", raw: { errorCode: r.errorCode, errorMessage: r.errorMessage } };
     }
