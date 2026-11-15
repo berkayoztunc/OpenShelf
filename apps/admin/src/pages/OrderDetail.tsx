@@ -31,6 +31,15 @@ export default function OrderDetail() {
   const status = useMutation({ mutationFn: (s: string) => api.post(`/api/admin/orders/${id}/status`, { status: s }), onSuccess: () => { setTransition(null); done(t("orders.toast.statusUpdated"))(); }, onError: fail });
   const doRefund = useMutation({ mutationFn: () => api.post(`/api/admin/orders/${id}/refund`, { amount: toMinor(refund!.amount), reason: refund!.reason }), onSuccess: () => { setRefund(null); done(t("orders.toast.refundRequested"))(); }, onError: fail });
   const doShip = useMutation({ mutationFn: () => api.post(`/api/admin/orders/${id}/shipment`, { serviceId: ship }), onSuccess: () => { setShip(null); done(t("orders.toast.shipmentCreated"))(); }, onError: fail });
+  const recheck = useMutation({
+    mutationFn: () => api.post<{ result: "paid" | "already_paid" | "not_paid" | "pending" | "no_payment" | "out_of_stock" | "amount_mismatch" }>(`/api/admin/orders/${id}/payment/recheck`),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["order", id] }); qc.invalidateQueries({ queryKey: ["orders"] });
+      const msg = t(`orders.recheck.${r.result}`);
+      if (r.result === "paid" || r.result === "already_paid") toast.success(msg); else if (r.result === "out_of_stock" || r.result === "amount_mismatch") toast.error(msg); else toast.info(msg);
+    },
+    onError: fail,
+  });
   const invoice = useMutation({ mutationFn: () => api.post(`/api/admin/orders/${id}/invoice`), onSuccess: () => { setInvoiceOpen(false); done(t("orders.toast.invoiceQueued"))(); }, onError: (e) => { setInvoiceOpen(false); fail(e); } });
 
   if (q.isPending) return <Loading />;
@@ -80,7 +89,7 @@ export default function OrderDetail() {
             ))}</Table>
             <p className="mt-3 text-right font-semibold">{t("orders.detail.totalLine", { total: money(o.total, o.currency) })}</p>
           </Card>
-          <Card title={t("orders.detail.payments")}>{o.payments.length === 0 ? <EmptyState title={t("orders.detail.payments.empty")} description={t("orders.detail.payments.emptyBody")} /> : (
+          <Card title={t("orders.detail.payments")} actions={!managed && o.payments.length > 0 && ["awaiting_payment", "pending", "cancelled"].includes(o.status) && <Button size="sm" variant="secondary" title={t("orders.recheck.title")} loading={recheck.isPending} onClick={() => recheck.mutate()}>{t("orders.recheck.action")}</Button>}>{o.payments.length === 0 ? <EmptyState title={t("orders.detail.payments.empty")} description={t("orders.detail.payments.emptyBody")} /> : (
             <Table head={[t("orders.detail.col.provider"), t("orders.detail.col.status"), t("orders.detail.col.amount"), t("orders.detail.col.date")]}>{o.payments.map((p) => <tr key={p.id}><Td>{enumLabel("provider", p.provider)}{p.isMock && <span className="ml-2"><Badge tone="danger">{t("orders.mockBadge")}</Badge></span>}</Td><Td><Badge tone={statusTone(p.status)}>{enumLabel("payment", p.status)}</Badge></Td><Td>{money(p.amount, o.currency)}</Td><Td>{dateTime(p.createdAt)}</Td></tr>)}</Table>)}</Card>
           <Card title={t("orders.detail.shipments")}>{o.shipments.length === 0 ? <EmptyState title={t("orders.detail.shipments.empty")} description={managed ? t("orders.detail.shipments.managedBody") : t("orders.detail.shipments.emptyBody")} /> : (
             <Table head={[<Term key="c" id="carrier">{t("orders.detail.col.carrier")}</Term>, <Term key="t" id="trackingno">{t("orders.detail.col.tracking")}</Term>, t("orders.detail.col.status"), t("orders.detail.col.label")]}>{o.shipments.map((s) => <tr key={s.id}><Td>{s.carrier ?? "-"}</Td><Td>{s.trackingNumber ? (s.trackingUrl ? <a className="text-brand-ink underline" href={s.trackingUrl} target="_blank" rel="noopener noreferrer">{s.trackingNumber}</a> : s.trackingNumber) : "-"}</Td><Td><Badge tone={statusTone(s.status)}>{enumLabel("shipment", s.status)}</Badge></Td><Td>{s.labelUrl ? <a className="text-brand-ink underline" href={s.labelUrl} target="_blank" rel="noopener noreferrer">{t("common.open")}</a> : "-"}</Td></tr>)}</Table>)}</Card>

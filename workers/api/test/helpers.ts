@@ -51,7 +51,7 @@ export const admin = (s: Session, path: string, method = "GET", json?: unknown) 
 const fakeSchema = z.object({ config: z.record(z.unknown()), secrets: z.object({ apiKey: z.string().min(1), secretKey: z.string().min(1) }) });
 export const SIG = "valid-signature";
 /** Test seam for the fake payment provider: last checkout input, and an error message to fail the next checkouts with. */
-export const fakePay: { lastInput: import("@openshelf/integration-sdk").CheckoutInput | null; fail: string | null } = { lastInput: null, fail: null };
+export const fakePay: { lastInput: import("@openshelf/integration-sdk").CheckoutInput | null; fail: string | null; retrieve: ((token: string) => import("@openshelf/integration-sdk").PaymentEvent) | null } = { lastInput: null, fail: null, retrieve: null };
 export const fakePaymentFactory: AdapterFactory<PaymentProvider> = {
   manifest: {
     id: "iyzico", name: "Fake Pay", description: "test", publicFields: [{ key: "sandbox", label: "Sandbox", type: "boolean" }],
@@ -74,7 +74,7 @@ export const fakePaymentFactory: AdapterFactory<PaymentProvider> = {
       const b = JSON.parse(raw) as { eventId: string; orderId: string; status: "succeeded" | "failed"; amount: number; currency: string; providerTxId: string };
       return b;
     },
-    async retrieve() { throw new Error("n/a"); },
+    async retrieve(token) { if (!fakePay.retrieve) throw new Error("n/a"); return fakePay.retrieve(token); },
     async refund() { return { ok: true, refundId: "r1" }; },
   }),
 };

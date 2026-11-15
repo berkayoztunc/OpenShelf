@@ -120,7 +120,8 @@ export class IyzicoAdapter implements PaymentProvider {
     if (r.status !== "success") {
       return { eventId: `iyz:${providerToken}:failed`, providerTxId: r.paymentId ?? providerToken, orderId: r.basketId ?? "", status: "failed", amount: 0, currency: r.currency ?? "TRY", raw: { errorCode: r.errorCode, errorMessage: r.errorMessage } };
     }
-    if (r.basketId && r.conversationId && r.basketId !== r.conversationId) throw new PaymentMismatchError("basketId/conversationId mismatch");
+    // NOTE: the response's conversationId only echoes THIS retrieve request, so it says nothing about the order. basketId is the
+    // order id we set at initialize; the caller matches it (and the amount) against the stored payment.
     if (!r.basketId) throw new PaymentMismatchError("missing basketId");
     const price = toMinor(r.price), paid = toMinor(r.paidPrice);
     if (!this.p.config.allowPaidPriceDiff && paid !== price) throw new PaymentMismatchError(`paidPrice ${paid} != price ${price}`);

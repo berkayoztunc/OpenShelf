@@ -152,6 +152,15 @@ export const orders = {
   "orders.transition.effect.delivered": "Sipariş teslim edildi olarak işaretlenir ve müşteriye bildirim gidebilir.",
   "orders.transition.effect.cancelled": "Sipariş iptal edilir ve müşteriye bildirim gidebilir. Ödeme alınmadan iptal ederseniz ayrılan stok serbest kalır ve kupon hakkı geri verilir. Ödeme zaten alınmışsa ürünler stoğa geri eklenir ancak ÖDEME OTOMATİK İADE EDİLMEZ; parayı geri vermek için ayrıca “İade et” işlemini yapmalısınız. Bu işlem geri alınamaz.",
   "orders.transition.effect.default": "Sipariş durumu güncellenir ve müşteriye bildirim gidebilir.",
+  "orders.recheck.action": "Ödemeyi yeniden kontrol et",
+  "orders.recheck.title": "Ödeme sağlayıcısına bu siparişin ödenip ödenmediğini yeniden sorar. Para çekildiyse sipariş ödendi olarak tamamlanır.",
+  "orders.recheck.paid": "Ödeme doğrulandı: sipariş ödendi olarak tamamlandı.",
+  "orders.recheck.already_paid": "Bu sipariş zaten ödenmiş.",
+  "orders.recheck.not_paid": "Ödeme sağlayıcısında başarılı bir ödeme yok. Sipariş değişmedi.",
+  "orders.recheck.pending": "Ödeme sağlayıcıda hâlâ beklemede (inceleme). Biraz sonra yeniden deneyin.",
+  "orders.recheck.no_payment": "Bu siparişte kontrol edilecek bir ödeme denemesi yok.",
+  "orders.recheck.out_of_stock": "Para çekilmiş ama sipariş iptal ve stok kalmamış. Sipariş tamamlanamadı: müşteriye iade yapın.",
+  "orders.recheck.amount_mismatch": "Çekilen tutar sipariş tutarıyla uyuşmuyor. Sipariş tamamlanmadı; ödeme sağlayıcı panelinden kontrol edin.",
   "orders.toast.statusUpdated": "Durum güncellendi",
 
   // ---- İade

@@ -152,6 +152,15 @@ export const orders = {
   "orders.transition.effect.delivered": "The order is marked as delivered and the customer may be notified.",
   "orders.transition.effect.cancelled": "The order is cancelled and the customer may be notified. If it is cancelled before payment, reserved stock is released and the coupon use is given back. If it was already paid, the items go back into stock but THE PAYMENT IS NOT REFUNDED AUTOMATICALLY; use \"Refund\" separately to give the money back. This cannot be undone.",
   "orders.transition.effect.default": "The order status is updated and the customer may be notified.",
+  "orders.recheck.action": "Re-check payment",
+  "orders.recheck.title": "Asks the payment provider again whether this order was paid. If the money was taken the order is completed as paid.",
+  "orders.recheck.paid": "Payment confirmed: the order is now paid.",
+  "orders.recheck.already_paid": "This order is already paid.",
+  "orders.recheck.not_paid": "The payment provider has no successful payment. The order was not changed.",
+  "orders.recheck.pending": "The payment is still pending at the provider (review). Try again a little later.",
+  "orders.recheck.no_payment": "This order has no payment attempt to check.",
+  "orders.recheck.out_of_stock": "The money was taken but the order is cancelled and the stock is gone. The order could not be completed: refund the customer.",
+  "orders.recheck.amount_mismatch": "The amount taken does not match the order total. The order was not completed; check the payment provider's panel.",
   "orders.toast.statusUpdated": "Status updated",
 
   // ---- Refund

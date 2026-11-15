@@ -8,7 +8,8 @@ import type { AppEnv } from "../env";
 import { ApiError, body, likeEscape, notFound, paged, paging } from "../lib/http";
 import { audit } from "../lib/audit";
 import { requireRole } from "../middleware/auth";
-import { getAdapter, isIntegrationEnabled, isMockModeFresh } from "../lib/integrations";
+import { getAdapter, isIntegrationEnabled, isMockModeFresh, logIntegrationEvent } from "../lib/integrations";
+import { recheckPayment } from "../lib/payments";
 import { getSettings } from "../lib/settings";
 import { INVOICING_PROVIDER_IDS, SHIPPING_PROVIDER_IDS } from "../integrations/registry";
 import { availableOf } from "../lib/catalog";
@@ -148,6 +149,21 @@ adminOrders.post("/orders/:id/status", requireRole("staff"), async (c) => {
     if (e instanceof Error && e.message === "order_not_found") throw notFound("Order");
     throw e;
   }
+});
+
+/** Ask the payment provider again whether this order was paid; completes the order when the money was taken (lost callback). */
+adminOrders.post("/orders/:id/payment/recheck", requireRole("staff"), async (c) => {
+  const id = c.req.param("id");
+  let r;
+  try { r = await recheckPayment(c.env, c.get("db"), id); }
+  catch (e) {
+    const reason = e instanceof Error ? e.message : String(e);
+    if (reason === "order_not_found") throw notFound("Order");
+    await logIntegrationEvent(c.get("db"), "iyzico", "warn", `Payment re-check failed: ${reason}`.slice(0, 500)).catch(() => {});
+    throw new ApiError(502, "payment_provider_error", `Could not check the payment: ${reason}`.slice(0, 300));
+  }
+  await audit(c, "order.payment_recheck", "order", id, { result: r.result, providerStatus: r.providerStatus });
+  return c.json({ id, ...r });
 });
 
 adminOrders.post("/orders/:id/refund", requireRole("admin"), async (c) => {

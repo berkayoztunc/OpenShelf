@@ -23,8 +23,9 @@ async function verifyAndHandle(c: Context<AppEnv>, providerParam: string) {
   let ev;
   try { ev = await a.adapter.verifyWebhook(req, raw); }
   catch (e) {
-    log("warn", "payment webhook verification failed", { provider: id, reason: e instanceof Error ? e.message : "unknown" });
-    await logIntegrationEvent(db, id, "warn", "Rejected webhook: signature/verification failed").catch(() => {});
+    const reason = e instanceof Error ? e.message : "unknown";
+    log("warn", "payment webhook verification failed", { provider: id, reason });
+    await logIntegrationEvent(db, id, "warn", `Rejected webhook: signature/verification failed: ${reason}`.slice(0, 500)).catch(() => {});
     throw new ApiError(401, "invalid_signature", "Webhook verification failed");
   }
   const r = await handlePaymentEvent(c.env as Env, db, id, ev);

@@ -1,7 +1,7 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import type { PaymentEvent, PaymentProvider } from "@openshelf/integration-sdk";
-import { integrationConfigs, orderItems, orders, paymentEvents, payments, webhookReceipts } from "@openshelf/db";
-import { confirmPurchase, type JobSpec } from "@openshelf/core";
+import { coupons, integrationConfigs, orderItems, orders, paymentEvents, payments, webhookReceipts } from "@openshelf/db";
+import { confirmPurchase, InsufficientStockError, reserveStock, type JobSpec } from "@openshelf/core";
 import type { ProviderId } from "@openshelf/shared";
 import type { Db, Env } from "../env";
 import { getAdapter, isIntegrationEnabled, isMockMode, logIntegrationEvent } from "./integrations";
@@ -73,4 +73,53 @@ export async function handlePaymentEvent(env: Env, db: Db, providerId: ProviderI
     await db.delete(webhookReceipts).where(eq(webhookReceipts.id, receiptId)); // allow provider retry
     throw e;
   }
+}
+
+
+export type RecheckResult = "paid" | "already_paid" | "not_paid" | "pending" | "no_payment" | "out_of_stock" | "amount_mismatch";
+
+/**
+ * Admin "re-check payment": asks the payment provider (server to server) what really happened to this order's payment and, if the
+ * money was taken, completes the order exactly like the callback would have. Safe to press any number of times.
+ *  - a paid order is left alone
+ *  - an unpaid result changes nothing
+ *  - a CANCELLED order whose payment did succeed (callback lost, reservation expired) is revived: stock is reserved again and the
+ *    normal purchase flow runs. If the stock is gone the order stays cancelled and a refund is needed ("out_of_stock").
+ * Throws when the provider cannot be asked (not configured, network, provider error).
+ */
+export async function recheckPayment(env: Env, db: Db, orderId: string): Promise<{ result: RecheckResult; providerStatus?: string; orderStatus: string }> {
+  const [o] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+  if (!o) throw new Error("order_not_found");
+  const [pay] = await db.select().from(payments).where(eq(payments.orderId, orderId)).orderBy(desc(payments.createdAt)).limit(1);
+  if (!pay?.providerToken) return { result: "no_payment", orderStatus: o.status };
+  if (pay.status === "succeeded" && !["awaiting_payment", "pending", "cancelled"].includes(o.status)) return { result: "already_paid", providerStatus: "succeeded", orderStatus: o.status };
+  const providerId = pay.provider as ProviderId;
+  const a = await getAdapter<PaymentProvider>(env, db, providerId);
+  if (!a) throw new Error("payment_provider_unavailable");
+  const ev = await a.adapter.retrieve(pay.providerToken);
+  if (ev.status !== "succeeded") return { result: ev.status === "pending" ? "pending" : "not_paid", providerStatus: ev.status, orderStatus: o.status };
+  if (ev.orderId !== orderId) throw new Error("provider returned a payment for a different order");
+  if (ev.amount !== pay.amount || ev.currency.toUpperCase() !== pay.currency.toUpperCase()) {
+    await logIntegrationEvent(db, providerId, "error", `Re-check: amount/currency mismatch for order ${o.number}: expected ${pay.amount} ${pay.currency}, got ${ev.amount} ${ev.currency}`);
+    return { result: "amount_mismatch", providerStatus: ev.status, orderStatus: o.status };
+  }
+
+  if (o.status === "cancelled") {
+    const items = await db.select({ variantId: orderItems.variantId, quantity: orderItems.quantity }).from(orderItems).where(eq(orderItems.orderId, orderId));
+    try {
+      await reserveStock(db, items.filter((i): i is { variantId: string; quantity: number } => !!i.variantId), { orderId, ttlSeconds: 600 });
+    } catch (e) {
+      if (!(e instanceof InsufficientStockError)) throw e;
+      await logIntegrationEvent(db, providerId, "error", `Re-check: payment succeeded for CANCELLED order ${o.number} but stock is gone: manual refund required`, { providerTxId: ev.providerTxId });
+      return { result: "out_of_stock", providerStatus: ev.status, orderStatus: o.status };
+    }
+    await db.update(orders).set({ status: "awaiting_payment", updatedAt: new Date() }).where(and(eq(orders.id, orderId), eq(orders.status, "cancelled")));
+    if (o.couponCode) await db.update(coupons).set({ used: sql`${coupons.used} + 1` }).where(eq(coupons.code, o.couponCode)); // the cancel gave the use back
+  }
+  // an earlier, rejected attempt (late payment, mismatch) may have left a receipt that would make this look like a duplicate
+  await db.delete(webhookReceipts).where(and(eq(webhookReceipts.provider, providerId), eq(webhookReceipts.eventId, ev.eventId), ne(webhookReceipts.status, "processed")));
+  const r = await handlePaymentEvent(env, db, providerId, ev);
+  const [after] = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, orderId)).limit(1);
+  const paid = !!after && !["awaiting_payment", "pending", "cancelled"].includes(after.status);
+  return { result: paid ? (r.result === "duplicate" ? "already_paid" : "paid") : r.result === "amount_mismatch" ? "amount_mismatch" : "not_paid", providerStatus: ev.status, orderStatus: after?.status ?? o.status };
 }
