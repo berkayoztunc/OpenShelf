@@ -34,7 +34,7 @@ export default function OrderDetail() {
   // carrier offers for the "create shipment" dialog, loaded when it opens; the cheapest is preselected
   const quotes = useQuery({
     queryKey: ["order", id, "shipment-quotes"], enabled: ship !== null, retry: false, staleTime: 60_000,
-    queryFn: () => api.get<{ provider: string; weightKg: number; items: { carrier: string; serviceId: string; price: number; currency: string; etaDays?: number }[] }>(`/api/admin/orders/${id}/shipment/quotes`),
+    queryFn: () => api.get<{ provider: string; weightKg: number; testMode?: boolean; items: { carrier: string; serviceId: string; price: number; currency: string; etaDays?: number }[] }>(`/api/admin/orders/${id}/shipment/quotes`),
   });
   const firstQuote = quotes.data?.items[0]?.serviceId;
   useEffect(() => { if (firstQuote) setShip((cur) => (cur === "" ? firstQuote : cur)); }, [firstQuote, ship]);
@@ -141,6 +141,7 @@ export default function OrderDetail() {
       <Modal open={ship !== null} onClose={() => setShip(null)} title={t("orders.ship.title")}
         footer={<><Button variant="ghost" onClick={() => setShip(null)}>{t("common.cancel")}</Button><Button loading={doShip.isPending} disabled={!ship} onClick={() => doShip.mutate()}>{t("orders.ship.action")}</Button></>}>
         <div className="space-y-3">
+          {quotes.data?.testMode && <p role="note" className="rounded-lg border border-warn-line bg-warn-soft px-3 py-2 text-sm text-warn">{t("orders.ship.testMode")} <Link to="/integrations?configure=geliver" className="font-medium underline">{t("orders.ship.testMode.link")}</Link></p>}
           {quotes.isPending ? <Skeleton className="h-16" />
             : quotes.data?.items.length ? (
               <SelectField label={t("orders.ship.service")} help="orders.shipService" hint={t("orders.ship.service.hint", { weight: quotes.data.weightKg })} value={ship ?? ""} onChange={(e) => setShip(e.target.value)}>

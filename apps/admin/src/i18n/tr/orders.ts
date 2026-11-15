@@ -183,6 +183,8 @@ export const orders = {
   "orders.ship.quotesFailed": "Kargo teklifleri alınamadı: {reason}",
   "orders.ship.noQuotes": "Bu paket için kargo teklifi dönmedi.",
   "orders.ship.retry": "Teklifleri yeniden al",
+  "orders.ship.testMode": "Geliver test modunda: yalnızca ücretsiz test kargosu oluşturulur, gerçek kargo firması gelip paketi almaz. Gerçek gönderi için entegrasyon ayarında test modunu kapatın.",
+  "orders.ship.testMode.link": "Geliver ayarlarını aç",
   "orders.ship.serviceId": "Kargo hizmet kimliği",
   "orders.ship.serviceId.hint": "Teklif listesi alınamadıysa kargo entegrasyonunuzdaki (Geliver) hizmet kodunu elle yazabilirsiniz.",
   "orders.ship.consequences": "Sipariş ödenmiş ya da hazırlanıyor durumunda olmalıdır. Kargo firmasında bir gönderi ve etiket oluşturulur; sipariş “Hazırlanıyor” durumuna geçer. Etiketi Yazdır menüsünden ya da kargo tablosundan alabilirsiniz.",

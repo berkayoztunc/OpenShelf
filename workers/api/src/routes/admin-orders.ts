@@ -231,7 +231,9 @@ adminOrders.get("/orders/:id/shipment/quotes", requireRole("staff"), async (c) =
   }
   const seen = new Set<string>();
   const items = quotes.filter((q) => q.serviceId && !seen.has(q.serviceId) && seen.add(q.serviceId)).sort((x, y) => x.price - y.price);
-  return c.json({ provider: pid, weightKg: input.parcels[0]!.weightKg, items });
+  // Geliver test mode: labels are free test labels, no real carrier pick-up
+  const testMode = (adapter as { testMode?: boolean }).testMode === true;
+  return c.json({ provider: pid, weightKg: input.parcels[0]!.weightKg, testMode, items });
 });
 
 adminOrders.post("/orders/:id/shipment", requireRole("staff"), async (c) => {

@@ -7,6 +7,8 @@ const secrets = { apiToken: "tok-12345678" };
 const calls: { url: string; init: any }[] = [];
 const mk = (routes: (u: string, init: any) => any) =>
   factory.create({ config: cfg, secrets }, { now: () => new Date(), fetch: async (u: string, init: any) => { calls.push({ url: u, init }); return new Response(JSON.stringify(routes(u, init)), { status: 200 }); } }) as GeliverAdapter;
+const mkLive = (routes: (u: string, init: any) => any) =>
+  factory.create({ config: { ...cfg, test: false }, secrets }, { now: () => new Date(), fetch: async (u: string, init: any) => { calls.push({ url: u, init }); return new Response(JSON.stringify(routes(u, init)), { status: 200 }); } }) as GeliverAdapter;
 const input = { orderId: "o1", recipient: { name: "A B", phone: "+905051234567", address: "Addr", city: "34", district: "Kadikoy" }, parcels: [{ weightKg: 2 }] };
 
 describe("geliver", () => {
@@ -14,8 +16,15 @@ describe("geliver", () => {
     expect(() => factory.create({ config: {}, secrets }, { now: () => new Date(), fetch: fetch as any })).toThrow();
     expect(() => factory.create({ config: cfg, secrets: {} }, { now: () => new Date(), fetch: fetch as any })).toThrow();
   });
+  it("test mode offers only Geliver's test carrier (no API call) and explains a rejected service", async () => {
+    const before = calls.length;
+    const a = mk(() => ({ result: false, code: "E1064", message: "Teklif bulunamadı", additionalMessage: "offerId is empty" }));
+    expect(await a.quote(input)).toEqual([{ carrier: "GELIVER", serviceId: "GELIVER_STANDART", price: 0, currency: "TRY" }]);
+    expect(calls.length).toBe(before);
+    await expect(a.createShipment(input, "SURAT_STANDART")).rejects.toThrow(/service SURAT_STANDART has no offer for this shipment; Geliver is in TEST mode, where only GELIVER_STANDART is offered/);
+  });
   it("quote flattens offers, bearer auth, host allowlisted", async () => {
-    const a = mk(() => ({ result: true, priceList: [{ desi: "1", offers: [{ totalAmount: "115.76", currency: "TL", providerCode: "SURAT", providerServiceCode: "SURAT_STANDART" }] }] }));
+    const a = mkLive(() => ({ result: true, priceList: [{ desi: "1", offers: [{ totalAmount: "115.76", currency: "TL", providerCode: "SURAT", providerServiceCode: "SURAT_STANDART" }] }] }));
     const q = await a.quote(input);
     expect(q).toEqual([{ carrier: "SURAT", serviceId: "SURAT_STANDART", price: 11576, currency: "TRY" }]);
     const c = calls.at(-1)!; expect(c.url.startsWith("https://api.geliver.io/api/v1/priceList?")).toBe(true);

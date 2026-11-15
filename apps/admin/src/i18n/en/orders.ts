@@ -183,6 +183,8 @@ export const orders = {
   "orders.ship.quotesFailed": "Could not load shipping offers: {reason}",
   "orders.ship.noQuotes": "No shipping offers were returned for this parcel.",
   "orders.ship.retry": "Load offers again",
+  "orders.ship.testMode": "Geliver is in test mode: only a free test shipment is created and no real carrier will collect the parcel. Turn test mode off in the integration settings for real shipments.",
+  "orders.ship.testMode.link": "Open Geliver settings",
   "orders.ship.serviceId": "Carrier service ID",
   "orders.ship.serviceId.hint": "If the offer list could not be loaded you can type the service code from your carrier integration (Geliver) by hand.",
   "orders.ship.consequences": "The order must be paid or being prepared. A shipment and label are created with the carrier and the order moves to \"Fulfilling\". You can get the label from the Print menu or the shipments table.",

@@ -14,6 +14,10 @@ export { BASE_URL as GELIVER_BASE_URL } from "./endpoints";
 export { jobHandlers, createShipmentHandler, drizzleShipmentRepo } from "./jobs";
 export type { JobHandler, ShipmentRepo } from "./jobs";
 
+/** Geliver's free test carrier: the only service that gets offers while `test` is on. */
+export const TEST_CARRIER = "GELIVER";
+export const TEST_SERVICE = "GELIVER_STANDART";
+
 /** Turkish provinces in plate-code order (index + 1 = plate code = Geliver cityCode). */
 const TR_PROVINCES = "Adana,Adıyaman,Afyonkarahisar,Ağrı,Amasya,Ankara,Antalya,Artvin,Aydın,Balıkesir,Bilecik,Bingöl,Bitlis,Bolu,Burdur,Bursa,Çanakkale,Çankırı,Çorum,Denizli,Diyarbakır,Edirne,Elazığ,Erzincan,Erzurum,Eskişehir,Gaziantep,Giresun,Gümüşhane,Hakkari,Hatay,Isparta,Mersin,İstanbul,İzmir,Kars,Kastamonu,Kayseri,Kırklareli,Kırşehir,Kocaeli,Konya,Kütahya,Malatya,Manisa,Kahramanmaraş,Mardin,Muğla,Muş,Nevşehir,Niğde,Ordu,Rize,Sakarya,Samsun,Siirt,Sinop,Sivas,Tekirdağ,Tokat,Trabzon,Tunceli,Şanlıurfa,Uşak,Van,Yozgat,Zonguldak,Aksaray,Bayburt,Karaman,Kırıkkale,Batman,Şırnak,Bartın,Ardahan,Iğdır,Yalova,Karabük,Kilis,Osmaniye,Düzce".split(",");
 const fold = (x: string) => x.trim().toLocaleLowerCase("tr-TR").replace(/ı/g, "i").replace(/ğ/g, "g").replace(/ü/g, "u").replace(/ş/g, "s").replace(/ö/g, "o").replace(/ç/g, "c").replace(/[^a-z]/g, "");
@@ -113,6 +117,9 @@ export class GeliverAdapter implements ShippingProvider {
   }
 
   async quote(input: ShipmentInput): Promise<ShippingQuote[]> {
+    // Test mode (docs: "Test kargosu"): Geliver only issues offers for its free test carrier, so the real price list would offer
+    // services that createShipment then rejects with E1064 "Teklif bulunamadı".
+    if (this.p.config.test) return [{ carrier: TEST_CARRIER, serviceId: TEST_SERVICE, price: 0, currency: "TRY" }];
     const d = this.dims(input);
     const q = new URLSearchParams({ paramType: "parcel", length: String(d.length), width: String(d.width), height: String(d.height), weight: String(d.weight) });
     const j = await this.call("GET", `${paths.priceList}?${q}`);
@@ -127,7 +134,9 @@ export class GeliverAdapter implements ShippingProvider {
     const d = this.dims(input), r = input.recipient;
     const code = trCityCode(r.city);
     const cod = (input.codAmount ?? 0) > 0;
-    const j = await this.call("POST", paths.transactions, {
+    let j;
+    try {
+      j = await this.call("POST", paths.transactions, {
       providerServiceCode: serviceId,
       shipment: {
         test: this.p.config.test,
@@ -143,7 +152,14 @@ export class GeliverAdapter implements ShippingProvider {
         productPaymentOnDelivery: cod,
         order: { sourceCode: "API", sourceIdentifier: this.p.config.storeUrl, orderNumber: input.orderId, totalAmount: cod ? (input.codAmount as number) / 100 : 0, totalAmountCurrency: "TL" },
       },
-    });
+      });
+    } catch (e) {
+      // E1064: this service issued no offer for this shipment
+      if (e instanceof GeliverError && (e.code === "E1064" || /offerId is empty/i.test(e.message))) {
+        throw new GeliverError(`${e.message} (service ${serviceId} has no offer for this shipment${this.p.config.test ? `; Geliver is in TEST mode, where only ${TEST_SERVICE} is offered` : ""})`, e.code);
+      }
+      throw e;
+    }
     const s = j.data?.shipment;
     if (!s?.id) throw new GeliverError("geliver: shipment missing in transaction response");
     return { providerShipmentId: s.id, trackingNumber: s.trackingNumber || undefined, labelUrl: s.labelURL, carrier: s.providerCode };
