@@ -537,6 +537,7 @@ export const trendyolviews = {
   "trendyolviews.wizard.auto.category.imported": "Kategori: {path} (Trendyol'dan içe aktarılan kategoriden)",
   "trendyolviews.wizard.auto.category.name": "Kategori: {path} (mağaza kategorisinin adından)",
   "trendyolviews.wizard.auto.remembered": "Kargo, teslimat süresi ve menşei “{category}” kategorisinde son kullandığınızdan alındı.",
+  "trendyolviews.wizard.attrs.optional": "İsteğe bağlı özellikler ({n}): ithalatçı, üretici, paket ölçüleri gibi. Zorunlu değil, ürününüzü zenginleştirmek isterseniz açın.",
   "trendyolviews.wizard.done": "Bitti",
   "trendyolviews.map.title": "Yerel varyantla eşleştir",
   "trendyolviews.map.cta": "Yerel varyantla eşleştir",

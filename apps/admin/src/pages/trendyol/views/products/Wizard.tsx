@@ -11,7 +11,7 @@ import { checkJson, prettyJson } from "../../../../lib/trendyol";
 import { useT } from "../../../../i18n";
 import { BatchPanel } from "./BatchPanel";
 import { absoluteImage, buildBody, emptyForm, filterLeaves, isPublicHttps, leaves, validateBody, type Leaf } from "./build";
-import { desiFromGrams, importedCategoryId, matchAttrValue, matchBrand, rankCategories, type BrandHit, type CategoryLeaf, type RememberedDefaults } from "./autofill";
+import { desiFromGrams, importedCategoryId, matchAttrValue, norm, matchBrand, rankCategories, type BrandHit, type CategoryLeaf, type RememberedDefaults } from "./autofill";
 import { useCategories } from "../../../Categories";
 import { useSettings } from "../../../../lib/settings";
 import type { AttrChoice, VariantRow, WizardForm } from "./build";
@@ -25,6 +25,8 @@ interface LocalProduct { id: string; nameTr: string; slug: string; brand?: strin
 const STEPS = ["local", "fields", "preview", "submit"] as const;
 const VAT = ["0", "1", "10", "20"];
 const major = (minor: number) => (minor / 100).toFixed(2);
+/** One attribute value of a category. Trendyol's docs disagree about the name field (OpenAPI: attributeValueName; the guide and the real answers: attributeValue), so all spellings are read. */
+export const valueOf = (o: Record<string, unknown>): { id: number; name: string } => ({ id: num(o.attributeValueId ?? o.id), name: str(o.attributeValueName ?? o.attributeValue ?? o.name) });
 
 /**
  * Creates a local product on Trendyol (createProducts V2). `productId` opens it straight on that product (from the product page);
@@ -285,7 +287,7 @@ function FieldsStep({ notes, brandSugg, catSugg, onManual, setVarianters, rows, 
         <BrandPicker w={w} ops={ops} value={form.brandId} name={brandName} suggestions={brandSugg} onPick={(id, n) => { onManual("brand"); set({ brandId: id }); setBrandName(n); }} />
         <CategoryPicker w={w} ops={ops} value={form.categoryId} path={catPath} suggestions={catSugg} onPick={(id, p) => { onManual("category"); set({ categoryId: id, attrs: {} }); setCatPath(p); }} />
       </div>
-      {form.categoryId && <Attributes w={w} ops={ops} categoryId={form.categoryId} attrs={form.attrs} onChange={(attrs) => set({ attrs })} setRequired={setRequired} setVarianters={setVarianters} rows={many ? rows.filter((r) => r.include) : []} setRow={setRow} sharedHints={many ? [] : rows[0]?.hints ?? []} />}
+      {form.categoryId && <Attributes origin={form.origin} w={w} ops={ops} categoryId={form.categoryId} attrs={form.attrs} onChange={(attrs) => set({ attrs })} setRequired={setRequired} setVarianters={setVarianters} rows={many ? rows.filter((r) => r.include) : []} setRow={setRow} sharedHints={many ? [] : rows[0]?.hints ?? []} />}
       {many && (
         <fieldset className="space-y-2" data-testid="tdyv-wizard-variants">
           <legend className="text-[13px] font-medium">{t("trendyolviews.wizard.variants.title")}</legend>
@@ -388,7 +390,7 @@ function CategoryPicker({ w, ops, value, path, onPick, suggestions }: { w: W; op
   );
 }
 
-function Attributes({ w, ops, categoryId, attrs, onChange, setRequired, setVarianters, rows, setRow, sharedHints }: { w: W; ops: Ops; categoryId: number; attrs: Record<number, AttrChoice>; onChange: (a: Record<number, AttrChoice>) => void; setRequired: (ids: number[]) => void; setVarianters: (ids: number[]) => void; rows: VariantRow[]; setRow: (id: string, p: Partial<VariantRow>) => void; sharedHints: string[] }) {
+function Attributes({ origin, w, ops, categoryId, attrs, onChange, setRequired, setVarianters, rows, setRow, sharedHints }: { origin: string; w: W; ops: Ops; categoryId: number; attrs: Record<number, AttrChoice>; onChange: (a: Record<number, AttrChoice>) => void; setRequired: (ids: number[]) => void; setVarianters: (ids: number[]) => void; rows: VariantRow[]; setRow: (id: string, p: Partial<VariantRow>) => void; sharedHints: string[] }) {
   const { t } = useT();
   const q = useTyQuery(w.call.run, ops.getCategoryAttributes, { path: { categoryId } });
   const list = arr(rec(q.data?.response.body).categoryAttributes);
@@ -400,26 +402,39 @@ function Attributes({ w, ops, categoryId, attrs, onChange, setRequired, setVaria
     <fieldset className="space-y-3">
       <legend className="text-[13px] font-medium">{t("trendyolviews.wizard.attrs")}</legend>
       <p className="text-xs text-muted">{t("trendyolviews.wizard.attrs.hint")}</p>
-      <div className="grid gap-4 lg:grid-cols-2">
-        {sorted.map((a) => <AttrField key={num(rec(a.attribute).id)} a={a} w={w} ops={ops} categoryId={categoryId} choice={attrs[num(rec(a.attribute).id)] ?? { ids: [], custom: "" }} onChange={(c) => onChange({ ...attrs, [num(rec(a.attribute).id)]: c })} rows={rows} setRow={setRow} sharedHints={sharedHints} />)}
-      </div>
+      {(() => {
+        const field = (a: Record<string, unknown>) => <AttrField key={num(rec(a.attribute).id)} a={a} w={w} ops={ops} categoryId={categoryId} choice={attrs[num(rec(a.attribute).id)] ?? { ids: [], custom: "" }} onChange={(c) => onChange({ ...attrs, [num(rec(a.attribute).id)]: c })} rows={rows} setRow={setRow} sharedHints={sharedHints} origin={origin} />;
+        const must = sorted.filter((a) => a.required === true || a.varianter === true); const opt = sorted.filter((a) => !(a.required === true || a.varianter === true));
+        // the required ones (and the variant-defining ones) up front; the long tail of optional attributes (importer, manufacturer, package size...) is folded away
+        return (<>
+          <div className="grid gap-4 lg:grid-cols-2">{must.map(field)}</div>
+          {opt.length > 0 && (
+            <details className="rounded-xl border border-line p-3" data-testid="tdyv-optional-attrs">
+              <summary className="cursor-pointer text-[13px] font-medium">{t("trendyolviews.wizard.attrs.optional", { n: opt.length })}</summary>
+              <div className="mt-3 grid gap-4 lg:grid-cols-2">{opt.map(field)}</div>
+            </details>
+          )}
+        </>);
+      })()}
     </fieldset>
   );
 }
 
-function AttrField({ a, w, ops, categoryId, choice, onChange, rows, setRow, sharedHints }: { a: Record<string, unknown>; w: W; ops: Ops; categoryId: number; choice: AttrChoice; onChange: (c: AttrChoice) => void; rows: VariantRow[]; setRow: (id: string, p: Partial<VariantRow>) => void; sharedHints: string[] }) {
+function AttrField({ origin, a, w, ops, categoryId, choice, onChange, rows, setRow, sharedHints }: { origin: string; a: Record<string, unknown>; w: W; ops: Ops; categoryId: number; choice: AttrChoice; onChange: (c: AttrChoice) => void; rows: VariantRow[]; setRow: (id: string, p: Partial<VariantRow>) => void; sharedHints: string[] }) {
   const { t } = useT();
   const attr = rec(a.attribute); const id = num(attr.id);
   const vals = useTyQuery(w.call.run, ops.getCategoryAttributeValues, { path: { categoryId, attributeId: id }, query: { size: 1000 } });
   const options = arr(rec(vals.data?.response.body).content);
   const multi = a.allowMultipleAttributeValues === true;
-  const optList = useMemo(() => options.map((o) => ({ id: num(o.attributeValueId), name: str(o.attributeValueName) })), [vals.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  const optList = useMemo(() => options.map(valueOf).filter((o) => o.id > 0 && o.name), [vals.data]); // eslint-disable-line react-hooks/exhaustive-deps
   // Automatic value: for a one-variant product from what the variant is called; a required attribute with a single possible value is simply taken.
   // Only fills an EMPTY field, and only when the options arrive: whatever the user (or last time's memory) set is never touched.
   const hintKey = sharedHints.join("|");
   useEffect(() => {
-    if (rows.length > 1 || choice.ids.length || choice.custom.trim() || !optList.length) return;
-    const hit = a.varianter === true || sharedHints.length ? matchAttrValue(optList, sharedHints) : null;
+    if ((rows.length > 1 && a.varianter === true) || choice.ids.length || choice.custom.trim() || !optList.length) return; // per-variant cells fill the variant-defining ones
+    // "Menşei" (country of origin) is the product's origin field: TR -> "TR"/"Türkiye"
+    const originHints = norm(attr.name) === "mensei" ? [origin, origin.toUpperCase() === "TR" ? "Türkiye" : ""].filter(Boolean) : [];
+    const hit = originHints.length ? matchAttrValue(optList, originHints) : a.varianter === true || sharedHints.length ? matchAttrValue(optList, sharedHints) : null;
     const only = a.required === true && optList.length === 1 ? optList[0]! : null;
     const pick = hit ?? only;
     if (pick) onChange({ ids: [pick.id], custom: "" });
@@ -443,7 +458,7 @@ function AttrField({ a, w, ops, categoryId, choice, onChange, rows, setRow, shar
       <SelectField label={`${str(attr.name)}${a.required === true ? " *" : ""}`} hint={hint} help="trendyolviews.attribute" multiple={multi} value={multi ? choice.ids.map(String) : String(choice.ids[0] ?? "")}
         onChange={(e) => onChange({ ...choice, ids: multi ? Array.from(e.target.selectedOptions, (o) => Number(o.value)) : e.target.value ? [Number(e.target.value)] : [] })}>
         {!multi && <option value="">{vals.isPending ? t("ui.loading") : t("trendyolviews.wizard.attr.pick")}</option>}
-        {options.map((o) => <option key={num(o.attributeValueId)} value={num(o.attributeValueId)}>{str(o.attributeValueName)}</option>)}
+        {optList.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
       </SelectField>
       {a.allowCustom === true && <TextField label={t("trendyolviews.wizard.attr.custom")} hint={t("trendyolviews.wizard.attr.custom.hint")} help="trendyolviews.attributeCustom" value={choice.custom} onChange={(e) => onChange({ ...choice, custom: e.target.value })} />}
     </div>

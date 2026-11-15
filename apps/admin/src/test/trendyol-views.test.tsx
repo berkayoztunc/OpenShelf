@@ -410,16 +410,16 @@ describe("product wizard body", () => {
     expect(absoluteImage("/media/x", undefined, "https://shop.example.com")).toBe("https://shop.example.com/media/x");
     expect(absoluteImage(undefined, "m1", "https://shop.example.com/")).toBe("https://shop.example.com/media/m1");
   });
-  const autoSetup = (defaults: unknown, brandHits = [{ id: 9001, name: "OpenShelf Home" }, { id: 9002, name: "OpenShelf" }]) => setup({
+  const autoSetup = (defaults: unknown, brandHits = [{ id: 9001, name: "OpenShelf Home" }, { id: 9002, name: "OpenShelf" }], valueKey = "attributeValueName") => setup({
     filterApprovedProducts: () => result("filterApprovedProducts", { content: [], page: 0, size: 50, totalElements: 0, totalPages: 1 }),
     getCargoProviders: () => result("getCargoProviders", [{ code: "YKMP", name: "Yurtiçi" }]),
     getBrandsByName: () => result("getBrandsByName", brandHits),
     getCategoryTree: () => result("getCategoryTree", [{ id: 400, name: "Aksesuar", subCategories: [{ id: 411, name: "Çanta Süsü", subCategories: [] }, { id: 412, name: "Anahtarlık", subCategories: [] }] }]),
     getCategoryAttributes: () => result("getCategoryAttributes", { categoryAttributes: [
-      { attribute: { id: 47, name: "Color" }, required: true, varianter: true }, { attribute: { id: 48, name: "Material" }, required: true }] }),
-    getCategoryAttributeValues: (c) => result("getCategoryAttributeValues", { content: c.path?.attributeId === 47
-      ? [{ attributeValueId: 1001, attributeValueName: "Pembe" }, { attributeValueId: 1002, attributeValueName: "Mavi" }]
-      : [{ attributeValueId: 5, attributeValueName: "Deri" }] }),
+      { attribute: { id: 47, name: "Color" }, required: true, varianter: true }, { attribute: { id: 48, name: "Material" }, required: true },
+      { attribute: { id: 49, name: "Menşei" }, required: true }, { attribute: { id: 60, name: "Season" } }, { attribute: { id: 61, name: "Importer name" } }] }),
+    getCategoryAttributeValues: (c) => result("getCategoryAttributeValues", { content: (c.path?.attributeId === 47
+      ? [[1001, "Pembe"], [1002, "Mavi"]] : c.path?.attributeId === 49 ? [[7, "DE"], [8, "TR"]] : [[5, "Deri"]]).map(([id, name]) => ({ attributeValueId: id, [valueKey]: name })) }),
     createProducts: () => result("createProducts", { batchRequestId: "b-11" }),
     getBatchRequestResult: () => result("getBatchRequestResult", { items: [] }),
   }, "mock", {
@@ -453,15 +453,30 @@ describe("product wizard body", () => {
     const body = JSON.parse((await screen.findByLabelText(/Request body/) as HTMLTextAreaElement).value);
     const byId = (x: any, y: any) => x.attributeId - y.attributeId;
     expect(body.items.map((i: any) => [i.brandId, i.categoryId, i.dimensionalWeight, [...i.attributes].sort(byId)])).toEqual([
-      [9002, 411, 2, [{ attributeId: 47, attributeValueId: 1001 }, { attributeId: 48, attributeValueId: 5 }]],
-      [9002, 411, 2, [{ attributeId: 47, attributeValueId: 1002 }, { attributeId: 48, attributeValueId: 5 }]]]);
+      [9002, 411, 2, [{ attributeId: 47, attributeValueId: 1001 }, { attributeId: 48, attributeValueId: 5 }, { attributeId: 49, attributeValueId: 8 }]],   // 49 = Menşei: TR, filled from the origin
+      [9002, 411, 2, [{ attributeId: 47, attributeValueId: 1002 }, { attributeId: 48, attributeValueId: 5 }, { attributeId: 49, attributeValueId: 8 }]]]);
     expect(screen.getByText(/No problems/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Send to Trendyol" }));
     await waitFor(() => expect(find(calls, "createProducts")).toHaveLength(1));
     // remembered for the local category; the colour is per variant, so it is NOT remembered
     await waitFor(() => expect(put).toHaveBeenCalledWith("/api/admin/trendyol/defaults", expect.objectContaining({
       localCategoryId: "c1", trendyolCategoryId: 411, categoryPath: "Aksesuar › Çanta Süsü", brandId: 9002, brandName: "OpenShelf", cargo: "YKMP",
-      attrs: { 48: { ids: [5], custom: "" } } })));
+      attrs: { 48: { ids: [5], custom: "" }, 49: { ids: [8], custom: "" } } })));
+  });
+  it("attribute values show their names whichever field Trendyol uses (the select options were blank with 'attributeValue'); Menşei follows the origin; optional attributes are folded", async () => {
+    autoSetup(null, undefined, "attributeValue");                                  // the real answers: { attributeValueId, attributeValue }
+    renderRoutes({ "/*": <Products /> }, "/?create=p9");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    const material = await screen.findByLabelText(/^Material/) as HTMLSelectElement;
+    await waitFor(() => expect([...material.options].map((o) => o.textContent)).toEqual(["Choose…", "Deri"]));
+    const pembe = await screen.findByLabelText("Color: Pembe") as HTMLSelectElement;
+    await waitFor(() => expect([...pembe.options].map((o) => o.textContent)).toEqual(["Choose…", "Pembe", "Mavi"]));
+    expect(pembe.value).toBe("1001");                                                // matched by name: it only works when the names are read
+    await waitFor(() => expect((screen.getByLabelText(/^Menşei/) as HTMLSelectElement).value).toBe("8")); // TR, from the product's origin field
+    const folded = screen.getByTestId("tdyv-optional-attrs") as HTMLDetailsElement;
+    expect(folded.open).toBe(false); expect(folded.textContent).toContain("Season"); expect(folded.textContent).toContain("Importer name");
+    expect(screen.getByTestId("tdyv-attr-48").closest("details")).toBeNull();      // required ones are not folded away
   });
   it("wizard with remembered choices for the category: brand, category, material and cargo come back without any matching", async () => {
     autoSetup({ trendyolCategoryId: 412, categoryPath: "Aksesuar › Anahtarlık", brandId: 9055, brandName: "Eski Marka", attrs: { "48": { ids: [5], custom: "" } }, cargo: "YKMP", vatRate: "10", dimensionalWeight: "3", deliveryDuration: "2", origin: "TR" }, []);

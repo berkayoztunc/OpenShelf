@@ -537,6 +537,7 @@ export const trendyolviews = {
   "trendyolviews.wizard.auto.category.imported": "Category: {path} (from the category imported from Trendyol)",
   "trendyolviews.wizard.auto.category.name": "Category: {path} (from the store category's name)",
   "trendyolviews.wizard.auto.remembered": "Cargo, delivery time and origin were taken from what you last used in “{category}”.",
+  "trendyolviews.wizard.attrs.optional": "Optional attributes ({n}): importer, manufacturer, package size and more. Not required; open them to enrich your product.",
   "trendyolviews.wizard.done": "Done",
   "trendyolviews.map.title": "Link to a local variant",
   "trendyolviews.map.cta": "Link to a local variant",
