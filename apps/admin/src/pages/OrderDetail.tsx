@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { FileText, Mail } from "lucide-react";
 import { PrintMenu } from "../components/PrintMenu";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ORDER_TRANSITIONS } from "@openshelf/shared";
-import { api } from "../lib/api";
+import { api, errMsg } from "../lib/api";
 import { describeOrderError } from "../lib/orderErrors";
 import { useT } from "../i18n";
 import { Term } from "../components/help/Term";
@@ -13,7 +13,7 @@ import { typeLabel } from "./Invoices";
 import { dateTime, enumLabel, label, money, toMajor, toMinor } from "../lib/format";
 import { orderDetailFromApi } from "../lib/adapt";
 import { NotificationHistory } from "../components/NotificationHistory";
-import { Badge, Button, Card, ConfirmDialog, EmptyState, ErrorState, Loading, Modal, PageHeader, statusTone, Table, Td, TextField, useToast } from "../components/ui";
+import { Badge, Button, Card, ConfirmDialog, EmptyState, ErrorState, Loading, Modal, PageHeader, SelectField, Skeleton, statusTone, Table, Td, TextField, useToast } from "../components/ui";
 
 export default function OrderDetail() {
   const { id } = useParams();
@@ -31,6 +31,13 @@ export default function OrderDetail() {
   const status = useMutation({ mutationFn: (s: string) => api.post(`/api/admin/orders/${id}/status`, { status: s }), onSuccess: () => { setTransition(null); done(t("orders.toast.statusUpdated"))(); }, onError: fail });
   const doRefund = useMutation({ mutationFn: () => api.post(`/api/admin/orders/${id}/refund`, { amount: toMinor(refund!.amount), reason: refund!.reason }), onSuccess: () => { setRefund(null); done(t("orders.toast.refundRequested"))(); }, onError: fail });
   const doShip = useMutation({ mutationFn: () => api.post(`/api/admin/orders/${id}/shipment`, { serviceId: ship }), onSuccess: () => { setShip(null); done(t("orders.toast.shipmentCreated"))(); }, onError: fail });
+  // carrier offers for the "create shipment" dialog, loaded when it opens; the cheapest is preselected
+  const quotes = useQuery({
+    queryKey: ["order", id, "shipment-quotes"], enabled: ship !== null, retry: false, staleTime: 60_000,
+    queryFn: () => api.get<{ provider: string; weightKg: number; items: { carrier: string; serviceId: string; price: number; currency: string; etaDays?: number }[] }>(`/api/admin/orders/${id}/shipment/quotes`),
+  });
+  const firstQuote = quotes.data?.items[0]?.serviceId;
+  useEffect(() => { if (firstQuote) setShip((cur) => (cur === "" ? firstQuote : cur)); }, [firstQuote, ship]);
   const recheck = useMutation({
     mutationFn: () => api.post<{ result: "paid" | "already_paid" | "not_paid" | "pending" | "no_payment" | "out_of_stock" | "amount_mismatch" }>(`/api/admin/orders/${id}/payment/recheck`),
     onSuccess: (r) => {
@@ -134,7 +141,16 @@ export default function OrderDetail() {
       <Modal open={ship !== null} onClose={() => setShip(null)} title={t("orders.ship.title")}
         footer={<><Button variant="ghost" onClick={() => setShip(null)}>{t("common.cancel")}</Button><Button loading={doShip.isPending} disabled={!ship} onClick={() => doShip.mutate()}>{t("orders.ship.action")}</Button></>}>
         <div className="space-y-3">
-          <TextField label={t("orders.ship.serviceId")} help="orders.shipService" hint={t("orders.ship.serviceId.hint")} value={ship ?? ""} onChange={(e) => setShip(e.target.value)} />
+          {quotes.isPending ? <Skeleton className="h-16" />
+            : quotes.data?.items.length ? (
+              <SelectField label={t("orders.ship.service")} help="orders.shipService" hint={t("orders.ship.service.hint", { weight: quotes.data.weightKg })} value={ship ?? ""} onChange={(e) => setShip(e.target.value)}>
+                {quotes.data.items.map((q) => <option key={q.serviceId} value={q.serviceId}>{`${q.carrier} · ${q.serviceId} · ${money(q.price, q.currency)}${q.etaDays ? ` · ${t("orders.ship.eta", { days: q.etaDays })}` : ""}`}</option>)}
+              </SelectField>
+            ) : (<>
+              <p role="alert" className="rounded-lg border border-warn-line bg-warn-soft px-3 py-2 text-sm text-warn">{quotes.error ? t("orders.ship.quotesFailed", { reason: errMsg(quotes.error) }) : t("orders.ship.noQuotes")}</p>
+              <Button size="sm" variant="secondary" loading={quotes.isFetching} onClick={() => void quotes.refetch()}>{t("orders.ship.retry")}</Button>
+              <TextField label={t("orders.ship.serviceId")} help="orders.shipService" hint={t("orders.ship.serviceId.hint")} value={ship ?? ""} onChange={(e) => setShip(e.target.value)} />
+            </>)}
           <p className="text-sm text-muted">{t("orders.ship.consequences")}</p>
         </div>
       </Modal>

@@ -191,7 +191,7 @@ After you pack the order, you create a shipment from the order page. For this, t
 ### Creating a shipment (step by step) {#kargo-olusturma-adim-adim}
 
 1. On the order page, click **Create shipment**.
-2. In the **Carrier service ID** field, enter the service ID from the quote Geliver gave you (hint: "the service/quote ID from your shipping integration (Geliver)"). In this version the quote list is not shown in this window; you need to get the code from your Geliver panel or from the price list in Geliver's documentation.
+2. Pick an offer from the **Shipping service** list. The list is fetched from Geliver at that moment for this order's parcel; each row shows the carrier, the service code and the price. The cheapest offer is preselected. If the offers cannot be loaded the window shows why; use **Load offers again** to retry, or type the service code by hand in the **Carrier service ID** field.
 3. Press **Create**.
 4. The system gets the shipment and label from Geliver; the carrier, tracking number and label link appear on the **Shipments** card. If the order is **Paid**, it moves to **Fulfilling** automatically.
 5. Print the label and hand the parcel to the carrier (see [Printing](/help/orders#yazdirma)).

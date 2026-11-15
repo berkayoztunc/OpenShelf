@@ -16,7 +16,12 @@ async function place(stock = 5, qty = 2) {
   return { s, variantId, order };
 }
 const recheck = async (s: any, id: string) => { const r = await admin(s, `/orders/${id}/payment/recheck`, "POST", {}); return { status: r.status, body: await j<any>(r) }; };
-afterAll(() => { fakePay.retrieve = null; });
+// the DB is shared with other suites (dashboard totals): remove the orders this file created
+afterAll(async () => {
+  fakePay.retrieve = null;
+  const W = "(SELECT id FROM orders WHERE email LIKE 'recheck-%')";
+  await env.DB.exec(`DELETE FROM order_items WHERE order_id IN ${W}; DELETE FROM payment_events WHERE payment_id IN (SELECT id FROM payments WHERE order_id IN ${W}); DELETE FROM payments WHERE order_id IN ${W}; DELETE FROM outbox_jobs; DELETE FROM orders WHERE email LIKE 'recheck-%';`);
+});
 
 describe("POST /orders/:id/payment/recheck", () => {
   it("unpaid at the provider: nothing changes", async () => {
@@ -65,5 +70,25 @@ describe("POST /orders/:id/payment/recheck", () => {
     const r = await recheck(s, order.id);
     expect(r.status).toBe(502); expect(r.body.error.message).toContain("provider timeout");
     expect((await recheck(s, "nope")).status).toBe(404);
+  });
+});
+
+describe("GET /orders/:id/shipment/quotes", () => {
+  const setMock = (on: boolean) => env.DB.prepare(`INSERT INTO store_settings ("group", value, updated_at) VALUES ('system', ?1, unixepoch()) ON CONFLICT("group") DO UPDATE SET value = ?1`).bind(JSON.stringify({ mockMode: on })).run();
+  it("needs a paid website order, then lists carrier offers cheapest first", async () => {
+    const { s, order } = await place();
+    expect((await admin(s, `/orders/${order.id}/shipment/quotes`)).status).toBe(409); // unpaid
+    fakePay.retrieve = () => ev(order);
+    await recheck(s, order.id);
+    const { clearSettingsCache } = await import("../src/lib/settings");
+    await setMock(true); clearSettingsCache();
+    try {
+      const r = await admin(s, `/orders/${order.id}/shipment/quotes`);
+      expect(r.status).toBe(200);
+      const b = await j<any>(r);
+      expect(b.items.map((q: any) => [q.serviceId, q.price])).toEqual([["mock-standard", 4990], ["mock-express", 8990]]);
+      expect(b.weightKg).toBe(1);
+    } finally { await setMock(false); clearSettingsCache(); }
+    expect((await admin(s, "/orders/nope/shipment/quotes")).status).toBe(404);
   });
 });

@@ -177,8 +177,14 @@ export const orders = {
   // ---- Kargo
   "orders.ship.title": "Kargo oluştur",
   "orders.ship.action": "Oluştur",
+  "orders.ship.service": "Kargo hizmeti",
+  "orders.ship.service.hint": "Teklifler kargo entegrasyonunuzdan (Geliver) bu siparişin paketi ({weight} kg) için alındı. En ucuz olan seçili gelir.",
+  "orders.ship.eta": "{days} gün",
+  "orders.ship.quotesFailed": "Kargo teklifleri alınamadı: {reason}",
+  "orders.ship.noQuotes": "Bu paket için kargo teklifi dönmedi.",
+  "orders.ship.retry": "Teklifleri yeniden al",
   "orders.ship.serviceId": "Kargo hizmet kimliği",
-  "orders.ship.serviceId.hint": "Kargo entegrasyonunuzdan (Geliver) gelen hizmet/teklif kimliği.",
+  "orders.ship.serviceId.hint": "Teklif listesi alınamadıysa kargo entegrasyonunuzdaki (Geliver) hizmet kodunu elle yazabilirsiniz.",
   "orders.ship.consequences": "Sipariş ödenmiş ya da hazırlanıyor durumunda olmalıdır. Kargo firmasında bir gönderi ve etiket oluşturulur; sipariş “Hazırlanıyor” durumuna geçer. Etiketi Yazdır menüsünden ya da kargo tablosundan alabilirsiniz.",
   "orders.toast.shipmentCreated": "Kargo oluşturuldu",
 

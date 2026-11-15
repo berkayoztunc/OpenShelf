@@ -177,8 +177,14 @@ export const orders = {
   // ---- Shipment
   "orders.ship.title": "Create shipment",
   "orders.ship.action": "Create",
+  "orders.ship.service": "Shipping service",
+  "orders.ship.service.hint": "Offers come from your shipping integration (Geliver) for this order's parcel ({weight} kg). The cheapest is preselected.",
+  "orders.ship.eta": "{days} day(s)",
+  "orders.ship.quotesFailed": "Could not load shipping offers: {reason}",
+  "orders.ship.noQuotes": "No shipping offers were returned for this parcel.",
+  "orders.ship.retry": "Load offers again",
   "orders.ship.serviceId": "Carrier service ID",
-  "orders.ship.serviceId.hint": "Service/offer ID from your carrier integration (Geliver).",
+  "orders.ship.serviceId.hint": "If the offer list could not be loaded you can type the service code from your carrier integration (Geliver) by hand.",
   "orders.ship.consequences": "The order must be paid or being prepared. A shipment and label are created with the carrier and the order moves to \"Fulfilling\". You can get the label from the Print menu or the shipments table.",
   "orders.toast.shipmentCreated": "Shipment created",
 

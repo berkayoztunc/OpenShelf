@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Orders from "../pages/Orders";
 import OrderDetail from "../pages/OrderDetail";
@@ -96,6 +96,36 @@ describe("orders in Turkish", () => {
     expect(await screen.findByText(/1 sipariş güncellendi, 1 sipariş başarısız oldu/)).toBeInTheDocument();
     expect(calls).toEqual(['/api/admin/orders/a/shipment {"serviceId":"svc-1"}']);
     expect(within(screen.getByRole("dialog")).getByText("#B-2")).toBeInTheDocument();
+  });
+  it("detail: create shipment offers Geliver quotes as a select (cheapest preselected); manual field only when quotes fail", async () => {
+    const posted: unknown[] = [];
+    mockApi({
+      "GET /api/admin/orders/o1/notifications": () => ({ items: [] }), "GET /api/admin/orders/o1$": () => DETAIL,
+      "GET /api/admin/orders/o1/shipment/quotes": () => ({ provider: "geliver", weightKg: 0.5, items: [{ carrier: "SURAT", serviceId: "SURAT_STANDART", price: 6990, currency: "TRY" }, { carrier: "MNG", serviceId: "MNG_STANDART", price: 8250, currency: "TRY" }] }),
+      "POST /api/admin/orders/o1/shipment": (_p, b) => { posted.push(b); return {}; },
+    });
+    const u = userEvent.setup(); renderRoutes({ "/orders/:id": <OrderDetail /> }, "/orders/o1");
+    await u.click(await screen.findByRole("button", { name: "Kargo oluştur" }));
+    const dlg = await screen.findByRole("dialog");
+    const sel = await within(dlg).findByLabelText("Kargo hizmeti") as HTMLSelectElement;
+    expect(within(dlg).queryByLabelText("Kargo hizmet kimliği")).not.toBeInTheDocument();
+    expect([...sel.options].map((o) => o.value)).toEqual(["SURAT_STANDART", "MNG_STANDART"]);
+    await waitFor(() => expect(sel.value).toBe("SURAT_STANDART"));
+    await u.selectOptions(sel, "MNG_STANDART");
+    await u.click(within(dlg).getByRole("button", { name: "Oluştur" }));
+    await waitFor(() => expect(posted).toEqual([{ serviceId: "MNG_STANDART" }]));
+  });
+  it("detail: when quotes cannot be loaded the reason is shown and the code can be typed", async () => {
+    mockApi({
+      "GET /api/admin/orders/o1/notifications": () => ({ items: [] }), "GET /api/admin/orders/o1$": () => DETAIL,
+      "GET /api/admin/orders/o1/shipment/quotes": () => new Error("geliver HTTP 401"),
+    });
+    const u = userEvent.setup(); renderRoutes({ "/orders/:id": <OrderDetail /> }, "/orders/o1");
+    await u.click(await screen.findByRole("button", { name: "Kargo oluştur" }));
+    const dlg = await screen.findByRole("dialog");
+    expect(await within(dlg).findByText(/Kargo teklifleri alınamadı: geliver HTTP 401/)).toBeInTheDocument();
+    expect(within(dlg).getByLabelText("Kargo hizmet kimliği")).toBeInTheDocument();
+    expect(within(dlg).getByRole("button", { name: "Teklifleri yeniden al" })).toBeInTheDocument();
   });
   it("detail: Turkish buttons, human statuses, cancel confirmation explains consequences", async () => {
     mockApi({ "GET /api/admin/orders/o1/notifications": () => ({ items: [] }), "GET /api/admin/orders/o1": () => DETAIL });

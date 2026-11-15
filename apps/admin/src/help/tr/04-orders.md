@@ -191,7 +191,7 @@ Siparişi paketledikten sonra sipariş sayfasından kargo gönderisi oluştururs
 ### Kargo oluşturma (adım adım)
 
 1. Sipariş sayfasında **Kargo oluştur**'a tıklayın.
-2. **Kargo hizmet kimliği** alanına, Geliver'ın size sunduğu teklifteki hizmet kimliğini yazın (ipucu: "Kargo entegrasyonunuzdan (Geliver) gelen hizmet/teklif kimliği"). Bu sürümde teklif listesi bu pencerede gösterilmez; kodu Geliver panelinizden veya Geliver dokümanındaki fiyat listesinden almanız gerekir.
+2. **Kargo hizmeti** listesinden bir teklif seçin. Liste, bu siparişin paketi için Geliver'dan o anda alınır; her satırda kargo firması, hizmet kodu ve fiyat yazar. En ucuz teklif seçili gelir. Teklifler alınamazsa pencere nedenini gösterir; **Teklifleri yeniden al** ile tekrar deneyebilir ya da hizmet kodunu **Kargo hizmet kimliği** alanına elle yazabilirsiniz.
 3. **Oluştur**'a basın.
 4. Sistem Geliver'dan gönderiyi ve etiketi alır; **Kargolar** kartında kargo firması, takip numarası ve etiket bağlantısı belirir. Sipariş **Ödendi** ise otomatik **Hazırlanıyor**'a geçer.
 5. Etiketi yazdırıp paketi kargo firmasına teslim edin (bkz. [Yazdırma](/help/orders#yazdirma)).

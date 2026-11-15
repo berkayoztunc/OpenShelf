@@ -1,8 +1,9 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { addresses, auditLogs, customerConsents, customers, integrationConfigs, inventory, invoices, orderItems, orders, paymentEvents, payments, productVariants, products, refunds, shipments, utmAttributions } from "@openshelf/db";
 import { InvalidTransitionError, enqueueJob, transitionOrder } from "@openshelf/core";
-import type { PaymentProvider, ShippingProvider } from "@openshelf/integration-sdk";
+import type { PaymentProvider, ShipmentInput, ShippingProvider } from "@openshelf/integration-sdk";
 import { ORDER_STATUSES, OrderStatusBody, RefundBody, ShipmentBody, type OrderStatus } from "@openshelf/shared";
 import type { AppEnv } from "../env";
 import { ApiError, body, likeEscape, notFound, paged, paging } from "../lib/http";
@@ -201,8 +202,9 @@ adminOrders.post("/orders/:id/refund", requireRole("admin"), async (c) => {
   return c.json({ id: refundId, ok: true, full });
 });
 
-adminOrders.post("/orders/:id/shipment", requireRole("staff"), async (c) => {
-  const id = c.req.param("id"); const b = await body(c, ShipmentBody); const db = c.get("db");
+/** Order + enabled shipping provider + the parcel/recipient data both the quote list and the shipment creation use. */
+async function shipmentContext(c: Context<AppEnv>, id: string) {
+  const db = c.get("db");
   const [o] = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
   if (!o) throw notFound("Order");
   if (o.source !== "website") throw new ApiError(409, "channel_managed", `Shipping for ${o.source} orders is managed by the marketplace`);
@@ -213,7 +215,29 @@ adminOrders.post("/orders/:id/shipment", requireRole("staff"), async (c) => {
   const addr = o.shippingAddress as { name: string; surname?: string; phone: string; line1: string; line2?: string; city: string; district?: string; zip?: string };
   const items = await db.select({ q: orderItems.quantity, w: productVariants.weightGrams }).from(orderItems).leftJoin(productVariants, eq(productVariants.id, orderItems.variantId)).where(eq(orderItems.orderId, id));
   const grams = items.reduce((s, i) => s + (i.w ?? 500) * i.q, 0);
-  const res = await a.adapter.createShipment({ orderId: id, recipient: { name: [addr.name, addr.surname].filter(Boolean).join(" "), phone: addr.phone, email: o.email, address: [addr.line1, addr.line2].filter(Boolean).join(" "), city: addr.city, district: addr.district, zip: addr.zip }, parcels: [{ weightKg: Math.max(0.1, grams / 1000) }] }, b.serviceId);
+  const input: ShipmentInput = { orderId: id, recipient: { name: [addr.name, addr.surname].filter(Boolean).join(" "), phone: addr.phone, email: o.email, address: [addr.line1, addr.line2].filter(Boolean).join(" "), city: addr.city, district: addr.district, zip: addr.zip }, parcels: [{ weightKg: Math.max(0.1, grams / 1000) }] };
+  return { db, o, adapter: a.adapter, pid, input };
+}
+
+/** Carrier offers for this order's parcel, cheapest first: the choices of the "create shipment" dialog. */
+adminOrders.get("/orders/:id/shipment/quotes", requireRole("staff"), async (c) => {
+  const { adapter, pid, input } = await shipmentContext(c, c.req.param("id"));
+  let quotes;
+  try { quotes = await adapter.quote(input); }
+  catch (e) {
+    const reason = e instanceof Error ? e.message : String(e);
+    await logIntegrationEvent(c.get("db"), pid, "warn", `Shipping quotes failed: ${reason}`.slice(0, 500)).catch(() => {});
+    throw new ApiError(502, "shipping_provider_error", `Could not load shipping offers: ${reason}`.slice(0, 300));
+  }
+  const seen = new Set<string>();
+  const items = quotes.filter((q) => q.serviceId && !seen.has(q.serviceId) && seen.add(q.serviceId)).sort((x, y) => x.price - y.price);
+  return c.json({ provider: pid, weightKg: input.parcels[0]!.weightKg, items });
+});
+
+adminOrders.post("/orders/:id/shipment", requireRole("staff"), async (c) => {
+  const id = c.req.param("id"); const b = await body(c, ShipmentBody);
+  const { db, o, adapter, pid, input } = await shipmentContext(c, id);
+  const res = await adapter.createShipment(input, b.serviceId);
   const sid = crypto.randomUUID();
   await db.insert(shipments).values({ id: sid, orderId: id, provider: pid, providerShipmentId: res.providerShipmentId, carrier: res.carrier ?? null, trackingNumber: res.trackingNumber ?? null, labelUrl: res.labelUrl ?? null, status: "created" });
   if (o.status === "paid") await transitionOrder(db, id, "fulfilling").catch(() => {});
