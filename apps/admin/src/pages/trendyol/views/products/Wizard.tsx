@@ -137,9 +137,11 @@ export function Wizard({ w, ops, onClose, productId }: { w: W; ops: Ops; onClose
     };
     // remembered and imported categories carry their Trendyol id: no lookup needed
     if (remembered?.trendyolCategoryId) { pick({ id: remembered.trendyolCategoryId, path: remembered.categoryPath }, "remembered", remembered.attrs); return; }
-    const imp = importedCategoryId(product.categoryId);
-    if (imp != null) { pick({ id: imp, path: [...catNames].reverse().join(" › ") }, "imported"); return; }
     if (!allLeaves.length) return;
+    // a category imported from Trendyol is only taken when Trendyol lists it as a LEAF (an imported parent such as "Aksesuar" cannot hold products)
+    const imp = importedCategoryId(product.categoryId);
+    const il = imp != null ? allLeaves.find((l) => l.id === imp) : undefined;
+    if (il) { pick(il, "imported"); return; }
     const r = rankCategories(allLeaves, catNames.length ? catNames : [product.nameTr]);
     if (r.exact) pick(r.exact, "name");
     else setCatSugg(r.ranked);

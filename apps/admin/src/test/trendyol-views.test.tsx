@@ -473,6 +473,20 @@ describe("product wizard body", () => {
     expect(banner).toHaveTextContent("Category: Aksesuar › Anahtarlık (what you chose last time in this category)");
     await waitFor(() => expect((screen.getByLabelText(/^Material/) as HTMLSelectElement).value).toBe("5"));
   });
+  it("an imported local category that is not a leaf on Trendyol is not applied (it used to pick the parent 'Aksesuar')", async () => {
+    autoSetup(null);
+    // the product's local category is an import of Trendyol category 400 = "Aksesuar", which has sub-categories
+    const api = (await import("../lib/api")).api;
+    const get = vi.mocked(api.get); const orig = get.getMockImplementation()!;
+    get.mockImplementation(((path: string, ...rest: unknown[]) => path.startsWith("/api/admin/products/p9") ? Promise.resolve({ id: "p9", nameTr: "Charm", slug: "charm", categoryId: "ty-cat-400", descriptionTr: "x", images: [], variants: [{ id: "va", sku: "S-1", barcode: "B1", title: "Tek", prices: { website: 1000, trendyol: null }, stock: { total: 1, reserved: 0, safetyStock: 0 } }] })
+      : path.startsWith("/api/admin/categories") ? Promise.resolve({ items: [{ id: "ty-cat-400", slug: "aksesuar", nameTr: "Aksesuar", parentId: null, position: 0 }] }) : orig(path, ...(rest as []))) as never);
+    renderRoutes({ "/*": <Products /> }, "/?create=p9");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    await screen.findByLabelText(/^Category/);
+    await waitFor(() => expect(screen.getByTestId("tdyv-category-suggest")).toBeTruthy());           // suggestions, nothing chosen
+    expect(screen.queryByTestId("tdyv-autofill")?.textContent ?? "").not.toContain("Category:");
+  });
   it("wizard that cannot decide only suggests: ambiguous category and a brand with no equal name stay open", async () => {
     autoSetup(null, [{ id: 9001, name: "OpenShelf Home" }]);
     renderRoutes({ "/*": <Products /> }, "/?create=p9");
