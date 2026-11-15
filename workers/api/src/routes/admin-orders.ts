@@ -4,7 +4,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { addresses, auditLogs, customerConsents, customers, integrationConfigs, inventory, invoices, orderItems, orders, paymentEvents, payments, productVariants, products, refunds, shipments, utmAttributions } from "@openshelf/db";
 import { InvalidTransitionError, enqueueJob, transitionOrder } from "@openshelf/core";
 import type { PaymentProvider, ShipmentInput, ShippingProvider } from "@openshelf/integration-sdk";
-import { ORDER_STATUSES, OrderAddressBody, OrderStatusBody, RefundBody, ShipmentBody, type OrderStatus } from "@openshelf/shared";
+import { ORDER_STATUSES, OrderAddressBody, orderPricesIncludeTax, OrderStatusBody, RefundBody, ShipmentBody, type OrderStatus } from "@openshelf/shared";
 import type { AppEnv } from "../env";
 import { ApiError, body, likeEscape, notFound, paged, paging } from "../lib/http";
 import { audit } from "../lib/audit";
@@ -14,6 +14,7 @@ import { recheckPayment } from "../lib/payments";
 import { getSettings } from "../lib/settings";
 import { INVOICING_PROVIDER_IDS, SHIPPING_PROVIDER_IDS } from "../integrations/registry";
 import { availableOf } from "../lib/catalog";
+import { buildAmounts, drizzleInvoiceRepo } from "@openshelf/integration-efaturam";
 
 export const adminOrders = new Hono<AppEnv>();
 
@@ -271,6 +272,25 @@ adminOrders.post("/orders/:id/shipment", requireRole("staff"), async (c) => {
   if (o.status === "paid") await transitionOrder(db, id, "fulfilling").catch(() => {});
   await audit(c, "order.shipment", "order", id, { shipmentId: sid, serviceId: b.serviceId });
   return c.json({ id: sid, ...res }, 201);
+});
+
+/** What the automatic invoice for this order will contain: KDV-inclusive basis, lines, KDV per rate and the total (must equal what was paid). */
+adminOrders.get("/orders/:id/invoice/preview", requireRole("staff"), async (c) => {
+  const id = c.req.param("id"); const db = c.get("db");
+  const [o] = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
+  if (!o) throw notFound("Order");
+  if (o.source !== "website") throw new ApiError(409, "channel_managed", `Invoicing for ${o.source} orders is managed by the marketplace`);
+  const input = await drizzleInvoiceRepo(db).loadOrder(id);
+  if (!input) throw notFound("Order");
+  let amounts;
+  try { amounts = buildAmounts(input.lines); } catch (e) { throw new ApiError(409, "invoice_not_possible", e instanceof Error ? e.message : "Invoice cannot be built"); }
+  const total = amounts.invoiceTotal.payableAmount;
+  return c.json({
+    pricesIncludeTax: orderPricesIncludeTax(o), currency: o.currency, orderTotal: o.total,
+    lines: amounts.invoiceLines.map((l) => ({ name: l.itemName, quantity: l.quantity, net: l.taxableAmount, tax: l.taxAmount, rate: l.taxPercent, total: l.taxableAmount + l.taxAmount })),
+    byRate: amounts.totalTax.subTotalTaxes.map((s) => ({ rate: s.percent, net: s.taxableAmount, tax: s.taxAmount })),
+    net: amounts.invoiceTotal.taxExclusiveAmount, tax: amounts.totalTax.totalTaxAmount, total, matchesOrder: total === o.total,
+  });
 });
 
 adminOrders.post("/orders/:id/invoice", requireRole("staff"), async (c) => {

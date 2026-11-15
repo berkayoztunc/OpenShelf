@@ -108,6 +108,7 @@ export const TOOLS: ToolDef[] = [
   t({ name: "preview_manual_invoice", title: "Preview manual invoice", level: "read", method: "POST", path: "/manual-invoices/preview", shape: { body: ManualInvoiceBody }, description: "Compute totals/HTML for an invoice that is not saved yet." }),
   t({ name: "preview_saved_manual_invoice", title: "Preview saved manual invoice", level: "read", method: "POST", path: "/manual-invoices/:id/preview", shape: { id: id("manual invoice") }, description: "Rendered HTML/totals of a saved manual invoice." }),
   /* Trendyol / Geliver (read) */
+  t({ name: "order_invoice_preview", title: "Preview an order's invoice", level: "read", method: "GET", path: "/orders/:id/invoice/preview", shape: { id: id("order") }, description: "What the automatic invoice for a WEBSITE order will contain: lines with net/KDV/rate, KDV per rate, net and total (KDV-inclusive total equals the amount paid; matchesOrder=false means a mismatch to look at). Amounts in minor units." }),
   t({ name: "shipment_quotes", title: "Shipping offers for an order", level: "read", method: "GET", path: "/orders/:id/shipment/quotes", shape: { id: id("order") }, description: "Carrier offers (carrier, serviceId, price in minor units) for a paid WEBSITE order, cheapest first. Pass the chosen serviceId to create_shipment." }),
   t({ name: "trendyol_health", title: "Trendyol sync health", level: "read", method: "GET", path: "/trendyol/health", shape: {}, description: "Trendyol: orders mirrored, orders awaiting cargo info, stock drift, last syncs, recent errors." }),
   t({ name: "trendyol_list_operations", title: "Trendyol API operations", level: "read", method: "GET", path: "/trendyol/catalog", shape: {}, description: "Catalog of Trendyol API operations the console can call (ids, parameters, risk) + mode (mock/live/disabled). Use with trendyol_call." }),
@@ -261,7 +262,7 @@ export const EXCLUDED_ROUTES = [
   "GET /tokens", "POST /tokens", "DELETE /tokens/:id", "GET /mcp/tools", "PUT /mcp/tools",
   "GET /oauth/authorize-info", "POST /oauth/authorize", "GET /oauth/grants", "DELETE /oauth/grants/:id", "GET /oauth/clients", "POST /oauth/clients", "DELETE /oauth/clients/:id",
   "PUT /settings/system", "DELETE /mock/messages", "GET /mock/messages", "PUT /integrations/:provider",
-  "POST /system/reset", "DELETE /trendyol/history", "POST /trendyol/mock/reset", "GET /media/:id",
+  "POST /system/reset", "GET /trendyol/defaults", "PUT /trendyol/defaults", "DELETE /trendyol/history", "POST /trendyol/mock/reset", "GET /media/:id",
 ] as const;
 
 /** JSON-Schema-friendly top-level object for a tool. */

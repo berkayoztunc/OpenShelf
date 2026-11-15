@@ -49,6 +49,22 @@ describe("manual invoice editor totals", () => {
     expect(screen.getByTestId("sum-kdv-10")).toHaveTextContent(money(expected(9999, 2, 1000, 10).tax));
   });
 
+  it("the KDV choice sits on the lines card: inclusive = the price typed is the total, exclusive = KDV is added on top; the price column says which", async () => {
+    mockApi({ "POST /api/admin/manual-invoices/preview": () => PREVIEW });
+    const u = userEvent.setup(); renderRoutes(routes, "/invoices/new");
+    await addLine(u, "Widget", "100");
+    const basis = screen.getByTestId("prices-basis") as HTMLSelectElement;
+    expect(basis.value).toBe("incl");                                           // the store's setting (prices include KDV) is the default
+    expect(screen.getByRole("columnheader", { name: /unit price.*incl\. KDV/i })).toBeTruthy();
+    expect(screen.getByTestId("sum-total")).toHaveTextContent(money(10000));    // 100 TL typed -> 100 TL charged
+    await u.selectOptions(basis, "excl");
+    expect(screen.getByRole("columnheader", { name: /unit price.*excl\. KDV/i })).toBeTruthy();
+    expect(screen.getByTestId("sum-total")).toHaveTextContent(money(12000));    // 100 TL + 20% KDV
+    expect(screen.getByTestId("sum-net")).toHaveTextContent(money(10000));
+    await u.selectOptions(basis, "incl");
+    expect(screen.getByTestId("sum-total")).toHaveTextContent(money(10000));
+    expect(screen.getByTestId("sum-net")).toHaveTextContent(money(8333));       // KDV is taken out of the 100 TL
+  });
   it("totalsOf groups KDV per rate and matches the shared function", () => {
     const f = emptyForm(); f.lines = [emptyLine({ name: "a", price: "10.00", taxRate: "20" }), emptyLine({ name: "b", price: "5.50", quantity: "2", taxRate: "10" })];
     const t = totalsOf(f);

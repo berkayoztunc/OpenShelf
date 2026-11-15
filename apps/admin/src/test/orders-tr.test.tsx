@@ -116,6 +116,40 @@ describe("orders in Turkish", () => {
     await u.click(within(dlg).getByRole("button", { name: "Oluştur" }));
     await waitFor(() => expect(posted).toEqual([{ serviceId: "MNG_STANDART" }]));
   });
+  it("detail: create invoice shows what will be issued (KDV-inclusive basis, per-line KDV, total = amount paid) and refuses a mismatch", async () => {
+    const posted: string[] = [];
+    let preview: Record<string, unknown> = {
+      pricesIncludeTax: true, currency: "TRY", orderTotal: 34900, net: 29083, tax: 5817, total: 34900, matchesOrder: true,
+      lines: [{ name: "Vazo", quantity: 1, net: 16583, tax: 3317, rate: 20, total: 19900 }, { name: "Kargo", quantity: 1, net: 12500, tax: 2500, rate: 20, total: 15000 }], byRate: [{ rate: 20, net: 29083, tax: 5817 }],
+    };
+    mockApi({
+      "GET /api/admin/orders/o1/notifications": () => ({ items: [] }), "GET /api/admin/orders/o1/invoice/preview": () => preview,
+      "GET /api/admin/orders/o1$": () => DETAIL, "POST /api/admin/orders/o1/invoice": (p) => { posted.push(p); return { queued: true }; },
+    });
+    const u = userEvent.setup(); renderRoutes({ "/orders/:id": <OrderDetail /> }, "/orders/o1");
+    await u.click(await screen.findByRole("button", { name: "Fatura kes" }));
+    const box = await screen.findByTestId("invoice-preview");
+    expect(await within(box).findByText(/ürün fiyatları KDV dahil/)).toBeInTheDocument();
+    expect(within(box).getByText("Kargo")).toBeInTheDocument();
+    expect(within(box).getByTestId("invoice-preview-total").textContent).toContain("349");
+    expect(within(box).getByText(/Sipariş tutarıyla aynı/)).toBeInTheDocument();
+    const dlg = screen.getByRole("dialog");
+    expect(within(dlg).getByRole("button", { name: "Fatura kes" })).toBeEnabled();
+    await u.click(within(dlg).getByRole("button", { name: "Fatura kes" }));
+    await waitFor(() => expect(posted).toEqual(["/api/admin/orders/o1/invoice"]));
+  });
+  it("detail: an invoice that would not equal the order total cannot be issued", async () => {
+    mockApi({
+      "GET /api/admin/orders/o1/notifications": () => ({ items: [] }), "GET /api/admin/orders/o1/invoice/preview": () => ({ pricesIncludeTax: false, currency: "TRY", orderTotal: 41000, net: 34000, tax: 6800, total: 40800, matchesOrder: false, lines: [], byRate: [{ rate: 20, net: 34000, tax: 6800 }] }),
+      "GET /api/admin/orders/o1$": () => DETAIL,
+    });
+    const u = userEvent.setup(); renderRoutes({ "/orders/:id": <OrderDetail /> }, "/orders/o1");
+    await u.click(await screen.findByRole("button", { name: "Fatura kes" }));
+    const dlg = await screen.findByRole("dialog");
+    expect(await within(dlg).findByRole("alert")).toHaveTextContent(/farklı/);
+    expect(within(dlg).getByText(/KDV hariç girilmişti/)).toBeInTheDocument();
+    expect(within(dlg).getByRole("button", { name: "Fatura kes" })).toBeDisabled();
+  });
   it("detail: an address the carrier would reject is flagged, blocks the shipment, and can be corrected with province/district lists", async () => {
     const saved: unknown[] = [];
     let addr: Record<string, string> = { ...GOOD_ADDR, district: "Yeni" };

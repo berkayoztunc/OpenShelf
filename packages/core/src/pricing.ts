@@ -70,9 +70,13 @@ export async function priceItems(db: Db, items: { variantId: string; quantity: n
     catch (e) { if (e instanceof CouponError) couponError = e.code; else throw e; }
   }
   const after = subtotal - discount;
-  const tax = subtotal > 0 ? Math.round(rawTax * (after / subtotal)) : 0;
+  const itemTax = subtotal > 0 ? Math.round(rawTax * (after / subtotal)) : 0;
   const { freeShippingThreshold, flatShippingFee } = opts.settings;
   const shipping = subtotal === 0 ? 0 : freeShippingThreshold != null && after >= freeShippingThreshold ? 0 : flatShippingFee;
-  const total = after + shipping + (opts.pricesIncludeTax ? 0 : tax);
-  return { currency: opts.currency, lines, invalid, subtotal, discount, shipping, tax, total, couponCode, couponError };
+  // Shipping is charged as a final amount (nothing is added on top), but its KDV is part of what the customer pays and of the invoice:
+  // count it in the order's KDV at the items' rate, like the invoice does.
+  const shipRate = lines[0]?.taxRate ?? 0;
+  const shipTax = shipping > 0 ? Math.round((shipping * shipRate) / (100 + shipRate)) : 0;
+  const total = after + shipping + (opts.pricesIncludeTax ? 0 : itemTax);
+  return { currency: opts.currency, lines, invalid, subtotal, discount, shipping, tax: itemTax + shipTax, total, couponCode, couponError };
 }

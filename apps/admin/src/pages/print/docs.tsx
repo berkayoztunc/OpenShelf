@@ -2,6 +2,7 @@ import { computeInvoiceTotals } from "@openshelf/shared";
 import { dateOnly, enumLabel, money } from "../../lib/format";
 import { translate, useT } from "../../i18n";
 import type { Locale } from "../../i18n";
+import { orderPricesIncludeTax } from "@openshelf/shared";
 import { fullName, orderInvoiceLines, streetOf } from "../../lib/rawOrder";
 import type { RawAddress, RawOrder } from "../../lib/rawOrder";
 import type { InvoiceFull } from "../../lib/invoices";
@@ -99,7 +100,7 @@ export function orderInvoiceData(o: RawOrder, seller: Seller, defaultRate: numbe
   const inv = o.invoices.find((i) => i.number && i.status !== "failed" && i.status !== "cancelled") ?? o.invoices.find((i) => i.status === "issued");
   const b = o.billingAddress ?? o.shippingAddress;
   return {
-    number: inv?.number ?? null, type: inv?.type ?? null, date: day(inv?.createdAt ?? o.createdAt), currency: o.currency, pricesIncludeTax: true, orderNumber: o.number,
+    number: inv?.number ?? null, type: inv?.type ?? null, date: day(inv?.createdAt ?? o.createdAt), currency: o.currency, pricesIncludeTax: orderPricesIncludeTax(o), orderNumber: o.number,
     seller, buyer: { name: fullName(b) || o.email || "", email: o.email, taxId: b?.taxId, taxOffice: b?.taxOffice, isCompany: !!b?.isCompany, address: [streetOf(b), cityLine(b)].filter(Boolean) as string[] },
     lines: orderInvoiceLines(o, defaultRate), notes: o.notes, pdfUrl: inv?.pdfUrl ?? null, issued: !!inv,
   };

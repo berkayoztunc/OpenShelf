@@ -207,6 +207,16 @@ export const orders = {
   "orders.toast.shipmentCreated": "Kargo oluşturuldu",
 
   // ---- Fatura kesme onayı (sipariş sayfası)
+  "orders.invoice.basis.incl": "Bu siparişin ürün fiyatları KDV dahil. Fatura da KDV dahil kesilir: müşterinin ödediği tutar aynen fatura toplamıdır, KDV bu tutarın içinden ayrılır.",
+  "orders.invoice.basis.excl": "Bu siparişin ürün fiyatları KDV hariç girilmişti; KDV üstüne eklenerek ödeme alındı. Fatura toplamı ödenen tutara eşitlenir.",
+  "orders.invoice.col.item": "Kalem",
+  "orders.invoice.col.net": "KDV hariç",
+  "orders.invoice.col.kdv": "KDV",
+  "orders.invoice.col.total": "KDV dahil",
+  "orders.invoice.net": "KDV hariç toplam",
+  "orders.invoice.total": "Fatura toplamı (KDV dahil)",
+  "orders.invoice.matches": "Sipariş tutarıyla aynı: {total}",
+  "orders.invoice.mismatch": "Fatura toplamı ({invoice}) sipariş tutarından ({order}) farklı. Fatura kesilemez; sipariş verisini kontrol edin.",
   "orders.invoice.confirmTitle": "Bu sipariş için fatura kesilsin mi?",
   "orders.invoice.confirmMessage": "e-Faturam üzerinden bu sipariş için hukuken bağlayıcı bir fatura oluşturulur. Fatura kesildikten sonra düzenlenemez, yalnızca iptal edilebilir. Müşterinin bilgileri (VKN/TCKN, adres) siparişteki fatura adresinden alınır. İşlem sıraya alınır ve birkaç dakika içinde tamamlanır; sonucu “Faturalar” kartında görürsünüz.",
   "orders.invoice.confirmAction": "Fatura kes",

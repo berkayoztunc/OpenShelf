@@ -49,6 +49,11 @@ export default function OrderDetail() {
     },
     onError: fail,
   });
+  const invoicePreview = useQuery({
+    queryKey: ["order", id, "invoice-preview"], enabled: invoiceOpen, retry: false, staleTime: 0,
+    queryFn: () => api.get<{ pricesIncludeTax: boolean; currency: string; orderTotal: number; net: number; tax: number; total: number; matchesOrder: boolean;
+      lines: { name: string; quantity: number; net: number; tax: number; rate: number; total: number }[]; byRate: { rate: number; net: number; tax: number }[] }>(`/api/admin/orders/${id}/invoice/preview`),
+  });
   const invoice = useMutation({ mutationFn: () => api.post(`/api/admin/orders/${id}/invoice`), onSuccess: () => { setInvoiceOpen(false); done(t("orders.toast.invoiceQueued"))(); }, onError: (e) => { setInvoiceOpen(false); fail(e); } });
 
   if (q.isPending) return <Loading />;
@@ -134,8 +139,31 @@ export default function OrderDetail() {
         message={transition ? `${t("orders.transition.confirm", { status: enumLabel("status", transition) })} ${td(`orders.transition.effect.${transition}`) === `orders.transition.effect.${transition}` ? t("orders.transition.effect.default") : td(`orders.transition.effect.${transition}`)}` : ""}
         danger={transition === "cancelled"} loading={status.isPending}
         onConfirm={() => transition && status.mutate(transition)} onClose={() => setTransition(null)} />
-      <ConfirmDialog open={invoiceOpen} title={t("orders.invoice.confirmTitle")} message={t("orders.invoice.confirmMessage")} confirmLabel={t("orders.invoice.confirmAction")} loading={invoice.isPending}
-        onConfirm={() => invoice.mutate()} onClose={() => setInvoiceOpen(false)} />
+      <Modal open={invoiceOpen} onClose={() => setInvoiceOpen(false)} title={t("orders.invoice.confirmTitle")} wide
+        footer={<><Button variant="ghost" onClick={() => setInvoiceOpen(false)}>{t("common.cancel")}</Button><Button loading={invoice.isPending} disabled={invoicePreview.isPending || !!invoicePreview.error || invoicePreview.data?.matchesOrder === false} onClick={() => invoice.mutate()}>{t("orders.invoice.confirmAction")}</Button></>}>
+        <div className="space-y-4" data-testid="invoice-preview">
+          <p className="text-sm text-muted">{t("orders.invoice.confirmMessage")}</p>
+          {invoicePreview.isPending ? <Skeleton className="h-32" /> : invoicePreview.error ? <p role="alert" className="rounded-lg border border-danger bg-danger-soft px-3 py-2 text-sm text-danger">{errMsg(invoicePreview.error)}</p> : invoicePreview.data && (() => {
+            const p = invoicePreview.data;
+            return (
+              <>
+                <p className="rounded-lg border border-line bg-canvas px-3 py-2 text-sm">{t(p.pricesIncludeTax ? "orders.invoice.basis.incl" : "orders.invoice.basis.excl")}</p>
+                <div className="overflow-x-auto"><table className="w-full min-w-[30rem] text-sm">
+                  <thead className="text-left text-[11px] uppercase tracking-wider text-muted"><tr><th className="pb-2 pr-2 font-semibold">{t("orders.invoice.col.item")}</th><th className="pb-2 pr-2 text-right font-semibold">{t("orders.invoice.col.net")}</th><th className="pb-2 pr-2 text-right font-semibold">{t("orders.invoice.col.kdv")}</th><th className="pb-2 text-right font-semibold">{t("orders.invoice.col.total")}</th></tr></thead>
+                  <tbody className="divide-y divide-line">{p.lines.map((l, i) => <tr key={i}><td className="py-1.5 pr-2">{l.name}{l.quantity > 1 && <span className="text-muted"> × {l.quantity}</span>}</td><td className="pr-2 text-right tabular-nums">{money(l.net, p.currency)}</td><td className="pr-2 text-right tabular-nums">{money(l.tax, p.currency)} <span className="text-xs text-muted">%{l.rate}</span></td><td className="text-right font-medium tabular-nums">{money(l.total, p.currency)}</td></tr>)}</tbody>
+                </table></div>
+                <dl className="space-y-1 border-t border-line pt-3 text-sm">
+                  <div className="flex justify-between"><dt className="text-muted">{t("orders.invoice.net")}</dt><dd className="tabular-nums">{money(p.net, p.currency)}</dd></div>
+                  {p.byRate.map((r) => <div key={r.rate} className="flex justify-between"><dt className="text-muted">KDV %{r.rate}</dt><dd className="tabular-nums">{money(r.tax, p.currency)}</dd></div>)}
+                  <div className="flex justify-between text-base font-semibold"><dt>{t("orders.invoice.total")}</dt><dd data-testid="invoice-preview-total" className="tabular-nums">{money(p.total, p.currency)}</dd></div>
+                </dl>
+                {p.matchesOrder ? <p className="text-xs text-success">{t("orders.invoice.matches", { total: money(p.orderTotal, p.currency) })}</p>
+                  : <p role="alert" className="rounded-lg border border-warn-line bg-warn-soft px-3 py-2 text-sm text-warn">{t("orders.invoice.mismatch", { invoice: money(p.total, p.currency), order: money(p.orderTotal, p.currency) })}</p>}
+              </>
+            );
+          })()}
+        </div>
+      </Modal>
       <Modal open={!!refund} onClose={() => setRefund(null)} title={t("orders.refund.title")}
         footer={<><Button variant="ghost" onClick={() => setRefund(null)}>{t("common.cancel")}</Button><Button variant="danger" loading={doRefund.isPending} disabled={!refund?.amount || !refund?.reason} onClick={() => doRefund.mutate()}>{t("orders.refund.action")}</Button></>}>
         {refund && <div className="space-y-3">

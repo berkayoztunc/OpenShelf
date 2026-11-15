@@ -189,6 +189,10 @@ Bkz. sözlükte [VKN](term:vkn) ve [TCKN](term:tckn), ayrıca [vergi dairesi](te
 
 Sistem para tutarlarını kuruş (tam sayı) olarak saklar ve her satırı ayrı yuvarlar (0,5 ve üstü yukarı). Ekrandaki hesap, sunucunun hesabıyla birebir aynıdır.
 
+**KDV dahil / KDV hariç seçimi.** Fatura satırları kartında **Fiyatlar** listesinden seçersiniz; birim fiyat sütununun başlığı da seçimi gösterir. *KDV dahil*: yazdığınız fiyat müşterinin ödediği tutardır, KDV bu tutarın içinden ayrılır (mağazanız KDV dahil fiyat kullanıyorsa doğru seçim budur). *KDV hariç*: KDV fiyatın üstüne eklenir ve toplam artar. Yeni faturada varsayılan, mağaza ayarındaki **Fiyatlara KDV dahil** seçimidir.
+
+**Siparişten kesilen fatura.** Siparişin **Fatura kes** düğmesi, kesilecek faturayı önce gösterir: kalemler, her kalemin KDV'si, KDV oranına göre toplamlar ve fatura toplamı. Fatura, siparişin **kendi fiyatlandırmasını** izler (bugünkü ayarı değil): KDV dahil sipariş KDV dahil kesilir ve fatura toplamı müşterinin ödediği tutara kuruşu kuruşuna eşittir. Kargo ayrı bir satırdır ve ürünlerle aynı KDV oranıyla faturalanır; kupon indirimi toplamı ödenen tutara eşitler. Fatura toplamı sipariş tutarına eşit çıkmazsa fatura kesilmez, ekranda uyarı görürsünüz.
+
 **Fiyatlara KDV dahil** anahtarı iki farklı mantık kurar:
 
 ### Açık: fiyatlar KDV dahildir (brüt)

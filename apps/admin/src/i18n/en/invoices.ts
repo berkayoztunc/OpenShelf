@@ -87,6 +87,13 @@ export const invoices = {
   "invoices.lines.remove": "Remove line {n}",
 
   "invoices.options.title": "Options",
+  "invoices.lines.basis": "Prices",
+  "invoices.lines.basis.incl": "Incl. KDV",
+  "invoices.lines.basis.excl": "Excl. KDV",
+  "invoices.lines.col.inclShort": "incl. KDV",
+  "invoices.lines.col.exclShort": "excl. KDV",
+  "invoices.options.pricesIncludeTax.hintOn": "Unit prices include KDV: the customer pays exactly the amount you type, KDV is separated out of it.",
+  "invoices.options.pricesIncludeTax.hintOff": "Unit prices exclude KDV: KDV is added on top and the total goes up by that amount.",
   "invoices.options.pricesIncludeTax": "Prices include KDV",
   "invoices.options.pricesIncludeTax.hint": "On: unit prices are gross (KDV inside). Off: KDV is added on top.",
   "invoices.options.currency": "Currency",

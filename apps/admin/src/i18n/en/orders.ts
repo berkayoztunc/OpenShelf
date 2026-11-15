@@ -207,6 +207,16 @@ export const orders = {
   "orders.toast.shipmentCreated": "Shipment created",
 
   // ---- Issue invoice confirmation (order page)
+  "orders.invoice.basis.incl": "This order's prices include KDV. The invoice is issued KDV-inclusive too: the amount the customer paid is exactly the invoice total, with KDV separated out of it.",
+  "orders.invoice.basis.excl": "This order's prices were entered KDV-exclusive and KDV was added on top at payment. The invoice total is made equal to the amount paid.",
+  "orders.invoice.col.item": "Item",
+  "orders.invoice.col.net": "Excl. KDV",
+  "orders.invoice.col.kdv": "KDV",
+  "orders.invoice.col.total": "Incl. KDV",
+  "orders.invoice.net": "Total excl. KDV",
+  "orders.invoice.total": "Invoice total (incl. KDV)",
+  "orders.invoice.matches": "Equals the order total: {total}",
+  "orders.invoice.mismatch": "The invoice total ({invoice}) differs from the order total ({order}). The invoice cannot be issued; check the order data.",
   "orders.invoice.confirmTitle": "Issue an invoice for this order?",
   "orders.invoice.confirmMessage": "A legally binding invoice for this order is created through e-Faturam. Once issued it cannot be edited, only cancelled. The customer details (VKN/TCKN, address) are taken from the billing address on the order. The job is queued and finishes within a few minutes; you will see the result in the Invoices card.",
   "orders.invoice.confirmAction": "Issue invoice",

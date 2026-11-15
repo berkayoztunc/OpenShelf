@@ -185,7 +185,12 @@ export default function InvoiceEditor() {
             </div>
           </Card>
 
-          <Card title={t("invoices.lines.title")} actions={!readOnly && <Button size="sm" variant="secondary" onClick={addCustom}><Plus size={14} />{t("invoices.lines.addCustom")}</Button>}>
+          <Card title={t("invoices.lines.title")} actions={<>
+            <label className="flex items-center gap-2 text-xs text-muted">{t("invoices.lines.basis")}
+              <select data-testid="prices-basis" disabled={readOnly} aria-label={t("invoices.lines.basis")} className={cx(inputClass, "!h-8 !w-auto !py-0 !text-[13px]")} value={form.pricesIncludeTax ? "incl" : "excl"} onChange={(e) => patch({ pricesIncludeTax: e.target.value === "incl" })}>
+                <option value="incl">{t("invoices.lines.basis.incl")}</option><option value="excl">{t("invoices.lines.basis.excl")}</option>
+              </select></label>
+            {!readOnly && <Button size="sm" variant="secondary" onClick={addCustom}><Plus size={14} />{t("invoices.lines.addCustom")}</Button>}</>}>
             {!readOnly && (
               <div className="mb-4 space-y-1.5">
                 <LabelRow label={t("invoices.lines.productSearch")} help="invoices.productSearch" />
@@ -203,7 +208,7 @@ export default function InvoiceEditor() {
                   <thead className="text-left text-[11px] uppercase tracking-wider text-muted"><tr>
                     <th scope="col" className="min-w-44 pb-2 pr-2 font-semibold">{t("invoices.lines.col.item")}</th>
                     <th scope="col" className="w-20 pb-2 pr-2 text-right font-semibold"><span className="inline-flex items-center justify-end gap-0.5 whitespace-nowrap">{t("invoices.lines.col.qty")}<HelpTip id="invoices.qty" /></span></th>
-                    <th scope="col" className="w-28 pb-2 pr-2 text-right font-semibold"><span className="inline-flex items-center justify-end gap-0.5 whitespace-nowrap">{t("invoices.lines.col.unitPrice")}<HelpTip id="invoices.unitPrice" /></span></th>
+                    <th scope="col" className="w-28 pb-2 pr-2 text-right font-semibold"><span className="inline-flex items-center justify-end gap-0.5 whitespace-nowrap">{t("invoices.lines.col.unitPrice")} <span className="font-normal normal-case">({t(form.pricesIncludeTax ? "invoices.lines.col.inclShort" : "invoices.lines.col.exclShort")})</span><HelpTip id="invoices.unitPrice" /></span></th>
                     <th scope="col" className="w-24 pb-2 pr-2 text-right font-semibold"><span className="inline-flex items-center justify-end gap-0.5 whitespace-nowrap"><Term id="kdv">{t("invoices.lines.col.kdv")}</Term><HelpTip id="invoices.kdv" /></span></th>
                     <th scope="col" className="w-24 pb-2 pr-2 text-right font-semibold"><span className="inline-flex items-center justify-end gap-0.5 whitespace-nowrap">{t("invoices.lines.col.discount")}<HelpTip id="invoices.discount" /></span></th>
                     <th scope="col" className="w-24 pb-2 pr-2 text-right font-semibold">{t("invoices.lines.col.total")}</th><th scope="col" className="w-[5.5rem] pb-2"><span className="sr-only">{t("invoices.lines.col.actions")}</span></th>
@@ -238,7 +243,7 @@ export default function InvoiceEditor() {
 
           <Card title={t("invoices.options.title")}>
             <div className="grid gap-4 sm:grid-cols-3">
-              <div className="sm:col-span-3"><Toggle label={t("invoices.options.pricesIncludeTax")} hint={t("invoices.options.pricesIncludeTax.hint")} help="invoices.pricesIncludeTax" checked={form.pricesIncludeTax} onChange={(v) => patch({ pricesIncludeTax: v })} /></div>
+              <div className="sm:col-span-3"><Toggle label={t("invoices.options.pricesIncludeTax")} hint={t(form.pricesIncludeTax ? "invoices.options.pricesIncludeTax.hintOn" : "invoices.options.pricesIncludeTax.hintOff")} help="invoices.pricesIncludeTax" checked={form.pricesIncludeTax} onChange={(v) => patch({ pricesIncludeTax: v })} /></div>
               <TextField label={t("invoices.options.currency")} hint={t("invoices.options.currency.hint")} help="invoices.currency" maxLength={3} value={form.currency} error={err("currency")} onChange={(e) => patch({ currency: e.target.value.toUpperCase() })} />
               <TextField label={t("invoices.options.issueDate")} type="date" help="invoices.issueDate" value={form.issueDate} hint={t("invoices.options.issueDate.hint")} onChange={(e) => patch({ issueDate: e.target.value })} />
               <div className="sm:col-span-3"><TextArea label={t("invoices.options.notes")} help="invoices.notes" maxLength={1000} value={form.notes} hint={t("invoices.options.notes.hint")} onChange={(e) => patch({ notes: e.target.value })} /></div>

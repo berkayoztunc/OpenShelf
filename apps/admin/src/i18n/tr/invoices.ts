@@ -87,6 +87,13 @@ export const invoices = {
   "invoices.lines.remove": "{n}. satırı kaldır",
 
   "invoices.options.title": "Seçenekler",
+  "invoices.lines.basis": "Fiyatlar",
+  "invoices.lines.basis.incl": "KDV dahil",
+  "invoices.lines.basis.excl": "KDV hariç",
+  "invoices.lines.col.inclShort": "KDV dahil",
+  "invoices.lines.col.exclShort": "KDV hariç",
+  "invoices.options.pricesIncludeTax.hintOn": "Birim fiyatlar KDV dahildir: müşteri tam yazdığınız tutarı öder, KDV bu tutarın içinden ayrılır.",
+  "invoices.options.pricesIncludeTax.hintOff": "Birim fiyatlar KDV hariçtir: KDV fiyatın üstüne eklenir ve toplam bu kadar artar.",
   "invoices.options.pricesIncludeTax": "Fiyatlara KDV dahil",
   "invoices.options.pricesIncludeTax.hint": "Açık: birim fiyatlar KDV dahildir (KDV içinden ayrılır). Kapalı: KDV fiyatın üstüne eklenir.",
   "invoices.options.currency": "Para birimi",
