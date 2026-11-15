@@ -237,7 +237,14 @@ adminOrders.get("/orders/:id/shipment/quotes", requireRole("staff"), async (c) =
 adminOrders.post("/orders/:id/shipment", requireRole("staff"), async (c) => {
   const id = c.req.param("id"); const b = await body(c, ShipmentBody);
   const { db, o, adapter, pid, input } = await shipmentContext(c, id);
-  const res = await adapter.createShipment(input, b.serviceId);
+  let res;
+  try { res = await adapter.createShipment(input, b.serviceId); }
+  catch (e) {
+    // show the carrier's own reason (bad address, phone, service code, balance...) instead of a blank server error
+    const reason = e instanceof Error ? e.message : String(e);
+    await logIntegrationEvent(db, pid, "error", `Shipment for order ${o.number} failed: ${reason}`.slice(0, 500), { serviceId: b.serviceId }).catch(() => {});
+    throw new ApiError(502, "shipping_provider_error", `Could not create the shipment: ${reason}`.slice(0, 300));
+  }
   const sid = crypto.randomUUID();
   await db.insert(shipments).values({ id: sid, orderId: id, provider: pid, providerShipmentId: res.providerShipmentId, carrier: res.carrier ?? null, trackingNumber: res.trackingNumber ?? null, labelUrl: res.labelUrl ?? null, status: "created" });
   if (o.status === "paid") await transitionOrder(db, id, "fulfilling").catch(() => {});

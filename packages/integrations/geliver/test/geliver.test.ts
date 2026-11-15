@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { factory, createShipmentHandler, GeliverAdapter } from "../src/index";
+import { factory, createShipmentHandler, GeliverAdapter, trCityCode, trPhone } from "../src/index";
 import type { ShipmentRepo } from "../src/index";
 
 const cfg = { test: true, senderAddressId: "S1" };
@@ -20,6 +20,18 @@ describe("geliver", () => {
     expect(q).toEqual([{ carrier: "SURAT", serviceId: "SURAT_STANDART", price: 11576, currency: "TRY" }]);
     const c = calls.at(-1)!; expect(c.url.startsWith("https://api.geliver.io/api/v1/priceList?")).toBe(true);
     expect(c.init.headers.Authorization).toBe("Bearer tok-12345678");
+  });
+  it("recipient is normalised for Geliver: +90 phone, city code from the typed city name", async () => {
+    const a = mk(() => ({ result: true, data: { shipment: { id: "sh1" } } }));
+    await a.createShipment({ ...input, recipient: { ...input.recipient, phone: "0541 123 45 67", city: " mersin " } }, "X");
+    const r = JSON.parse(calls.at(-1)!.init.body).shipment.recipientAddress;
+    expect(r).toMatchObject({ phone: "+905411234567", cityCode: "33", cityName: "mersin" });
+    expect([trPhone("5411234567"), trPhone("+90 541 123 45 67"), trPhone("905411234567"), trPhone("+49 30 1234")]).toEqual(["+905411234567", "+905411234567", "+905411234567", "+49 30 1234"]);
+    expect(["İstanbul", "ISTANBUL", "içel", "Şanlıurfa", "K.Maraş", "6", "34", "Atlantis", "99"].map(trCityCode)).toEqual(["34", "34", "33", "63", undefined, "06", "34", undefined, undefined]);
+  });
+  it("errors carry Geliver's own message", async () => {
+    const a = mk(() => ({ result: false, code: "E1", message: "Validation failed", additionalMessage: "district not found" }));
+    await expect(a.createShipment(input, "X")).rejects.toThrow("geliver error: Validation failed - district not found");
   });
   it("createShipment posts one-step transaction", async () => {
     const a = mk(() => ({ result: true, data: { shipment: { id: "sh1", labelURL: "https://l/x.pdf", providerCode: "SURAT" } } }));

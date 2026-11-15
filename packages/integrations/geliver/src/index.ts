@@ -14,6 +14,32 @@ export { BASE_URL as GELIVER_BASE_URL } from "./endpoints";
 export { jobHandlers, createShipmentHandler, drizzleShipmentRepo } from "./jobs";
 export type { JobHandler, ShipmentRepo } from "./jobs";
 
+/** Turkish provinces in plate-code order (index + 1 = plate code = Geliver cityCode). */
+const TR_PROVINCES = "Adana,Adıyaman,Afyonkarahisar,Ağrı,Amasya,Ankara,Antalya,Artvin,Aydın,Balıkesir,Bilecik,Bingöl,Bitlis,Bolu,Burdur,Bursa,Çanakkale,Çankırı,Çorum,Denizli,Diyarbakır,Edirne,Elazığ,Erzincan,Erzurum,Eskişehir,Gaziantep,Giresun,Gümüşhane,Hakkari,Hatay,Isparta,Mersin,İstanbul,İzmir,Kars,Kastamonu,Kayseri,Kırklareli,Kırşehir,Kocaeli,Konya,Kütahya,Malatya,Manisa,Kahramanmaraş,Mardin,Muğla,Muş,Nevşehir,Niğde,Ordu,Rize,Sakarya,Samsun,Siirt,Sinop,Sivas,Tekirdağ,Tokat,Trabzon,Tunceli,Şanlıurfa,Uşak,Van,Yozgat,Zonguldak,Aksaray,Bayburt,Karaman,Kırıkkale,Batman,Şırnak,Bartın,Ardahan,Iğdır,Yalova,Karabük,Kilis,Osmaniye,Düzce".split(",");
+const fold = (x: string) => x.trim().toLocaleLowerCase("tr-TR").replace(/ı/g, "i").replace(/ğ/g, "g").replace(/ü/g, "u").replace(/ş/g, "s").replace(/ö/g, "o").replace(/ç/g, "c").replace(/[^a-z]/g, "");
+const CITY_CODES = new Map<string, string>([
+  ...TR_PROVINCES.map((n, i): [string, string] => [fold(n), String(i + 1).padStart(2, "0")]),
+  ["icel", "33"], ["afyon", "03"], ["antep", "27"], ["maras", "46"], ["urfa", "63"], ["izmit", "41"], ["adapazari", "54"], ["antakya", "31"],
+]);
+/** Geliver cityCode for a city the customer typed ("Mersin", "İçel", "33", "istanbul"); undefined when it is not a Turkish province. */
+export function trCityCode(city: string): string | undefined {
+  const c = city.trim();
+  if (/^\d{1,2}$/.test(c)) { const n = Number(c); return n >= 1 && n <= 81 ? String(n).padStart(2, "0") : undefined; }
+  return CITY_CODES.get(fold(c));
+}
+
+/**
+ * Geliver wants Turkish numbers as +905XXXXXXXXX. Customers type them as 05XX…, 5XX… or 90 5XX… with spaces or dashes; anything
+ * that is not recognisably a Turkish mobile/landline is passed through untouched.
+ */
+export function trPhone(raw: string): string {
+  const d = raw.replace(/\D/g, "");
+  if (d.length === 10 && /^[2-5]/.test(d)) return `+90${d}`;
+  if (d.length === 11 && d.startsWith("0")) return `+90${d.slice(1)}`;
+  if (d.length === 12 && d.startsWith("90")) return `+${d}`;
+  return raw.trim();
+}
+
 export const configSchema = z.object({
   config: z.object({
     test: z.boolean().default(true), // Geliver test mode: free test shipments
@@ -61,7 +87,7 @@ export class GeliverAdapter implements ShippingProvider {
     });
     let j: any;
     try { j = await res.json(); } catch { throw new GeliverError(`geliver HTTP ${res.status}: non-JSON`); }
-    if (!res.ok || j?.result === false) throw new GeliverError(`geliver error: ${j?.additionalMessage ?? j?.message ?? res.status}`, j?.code);
+    if (!res.ok || j?.result === false) throw new GeliverError(`geliver error: ${[j?.message, j?.additionalMessage].filter(Boolean).join(" - ") || res.status}`, j?.code);
     return j;
   }
 
@@ -99,6 +125,7 @@ export class GeliverAdapter implements ShippingProvider {
 
   async createShipment(input: ShipmentInput, serviceId: string): Promise<ShipmentResult> {
     const d = this.dims(input), r = input.recipient;
+    const code = trCityCode(r.city);
     const cod = (input.codAmount ?? 0) > 0;
     const j = await this.call("POST", paths.transactions, {
       providerServiceCode: serviceId,
@@ -107,8 +134,8 @@ export class GeliverAdapter implements ShippingProvider {
         senderAddressID: this.p.config.senderAddressId,
         ...(this.p.config.returnAddressId ? { returnAddressID: this.p.config.returnAddressId } : {}),
         recipientAddress: {
-          name: r.name, ...(r.email ? { email: r.email } : {}), phone: r.phone, address1: r.address, countryCode: "TR",
-          ...(/^\d+$/.test(r.city) ? { cityCode: r.city } : { cityName: r.city }),
+          name: r.name, ...(r.email ? { email: r.email } : {}), phone: trPhone(r.phone), address1: r.address, countryCode: "TR",
+          ...(code ? { cityCode: code, cityName: /^\d+$/.test(r.city.trim()) ? TR_PROVINCES[Number(code) - 1]! : r.city.trim() } : { cityName: r.city }),
           ...(r.district ? { districtName: r.district } : {}), ...(r.zip ? { zip: r.zip } : {}),
         },
         length: String(d.length), width: String(d.width), height: String(d.height), distanceUnit: "cm", weight: String(d.weight), massUnit: "kg",
