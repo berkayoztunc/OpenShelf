@@ -3,7 +3,7 @@ import type {
   AdapterDeps, AdapterFactory, HealthResult, IntegrationCredentials, IntegrationManifest, InvoiceInput, InvoiceResult, InvoicingProvider,
 } from "@openshelf/integration-sdk";
 import {
-  ALLOWED_HOSTS, ANONYMOUS_TCKN, DEFAULT_BASE_URL, FAILED_STATUSES, KDV, PROD_BASE_URL, STAGE_BASE_URL, TOKEN_HEADER, UNIT_PIECE, paths,
+  ALLOWED_HOSTS, ANONYMOUS_TCKN, DEFAULT_BASE_URL, FAILED_STATUSES, KDV, PROD_BASE_URL, STAGE_BASE_URL, TOKEN_HEADER, UNIT_PIECE, bearer, paths,
   type CreateInvoiceRequest, type CreateInvoiceResponse, type TaxPayer, type TaxSubtotal,
 } from "./endpoints";
 
@@ -44,7 +44,7 @@ export const manifest: IntegrationManifest = {
     { key: "seriesPrefixEArsiv", label: "e-Arşiv seri (3 harf)", type: "text" },
     { key: "companyId", label: "Firma ID (companyId)", type: "text", help: "Boş bırakın; bağlantı testi bulunamadığını söylerse e-Faturam'dan aldığınız değeri girin." },
     { key: "userId", label: "Kullanıcı ID (userId)", type: "text", help: "Boş bırakın; bağlantı testi bulunamadığını söylerse e-Faturam'dan aldığınız değeri girin." },
-    { key: "relayUrl", label: "Relay adresi (sabit IP)", type: "text", help: "Boş = doğrudan bağlan. Sabit IP'li VPS relay'i kullanacaksanız https://efatura.alanadiniz.com girin ve aşağıya relay secret'ını yazın." },
+    { key: "relayUrl", label: "Relay adresi (sabit IP)", type: "text", help: "Boş = doğrudan bağlan. Sabit IP'li VPS relay'i kullanacaksanız https://relay.example.com biçiminde kendi relay adresinizi girin ve aşağıya relay secret'ını yazın." },
   ],
   secretFields: [
     { key: "username", label: "E-posta", secret: true, required: true, type: "password" },
@@ -163,7 +163,7 @@ export class EfaturamAdapter implements InvoicingProvider {
     const session = await this.signIn();
     const res = await this.deps.fetch(this.url(path), {
       method,
-      headers: { [TOKEN_HEADER]: session.token, Accept: "application/json, text/plain", ...(body ? { "Content-Type": "application/json" } : {}) },
+      headers: { ...bearer(session.token), Accept: "application/json, text/plain", ...(body ? { "Content-Type": "application/json" } : {}) },
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
     if (res.status === 401 && retry) { this.session = undefined; return this.call(method, path, body, false); }
@@ -236,7 +236,7 @@ export class EfaturamAdapter implements InvoicingProvider {
 
     try {
       // An arbitrary 10-digit number: 200 (e-Fatura user) and 404 (not a user) both mean the token was accepted.
-      const res = await this.deps.fetch(this.url(paths.taxpayer("1111111111")), { method: "GET", headers: { [TOKEN_HEADER]: token, Accept: "application/json" } });
+      const res = await this.deps.fetch(this.url(paths.taxpayer("1111111111")), { method: "GET", headers: { ...bearer(token), Accept: "application/json" } });
       if (res.ok || res.status === 404) { await res.text(); steps.push({ id: "apiCall", ok: true, status: res.status }); }
       else {
         const pr = await problem(res);

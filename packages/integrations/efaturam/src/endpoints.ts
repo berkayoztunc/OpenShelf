@@ -3,7 +3,7 @@
  *  - production gateway apigateway.trendyolecozum.com, test gateway stage-apigateway.trendyolefaturam.com
  *    (the test gateway needs IP whitelisting, production does not)
  *  - POST /api/auth/signin { email, password } answers with the JWT in the `x-access-token` response header;
- *    every other request sends it back in the `x-access-token` request header
+ *    every other request sends it back as `Authorization: Bearer <jwt>` (verified live 2026-11: the `x-access-token` request header is rejected with 401)
  *  - all amounts are integers in kuruş
  * Not exercised against a live account yet: anything marked UNVERIFIED below is an assumption.
  */
@@ -13,7 +13,10 @@ export const DEFAULT_BASE_URL = PROD_BASE_URL;
 /** SSRF allowlist: exact gateway hosts only. */
 export const ALLOWED_HOSTS: readonly string[] = ["apigateway.trendyolecozum.com", "stage-apigateway.trendyolefaturam.com"];
 
+/** Sign-in response header that carries the JWT. */
 export const TOKEN_HEADER = "x-access-token";
+/** Request auth header for everything after sign-in. */
+export const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
 export const paths = {
   signIn: "/api/auth/signin",

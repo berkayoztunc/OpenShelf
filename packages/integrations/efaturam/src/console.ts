@@ -1,5 +1,5 @@
 import type { EfaturamCallBody, EfaturamCallResult, EfaturamOperation } from "@openshelf/shared";
-import { ALLOWED_HOSTS, TOKEN_HEADER } from "./endpoints";
+import { ALLOWED_HOSTS, bearer } from "./endpoints";
 
 export const MAX_BODY_BYTES = 1024 * 1024;
 export const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
@@ -66,7 +66,7 @@ export async function runEfaturamCall(deps: { fetch: FetchLike }, token: string,
   try {
     const res = await deps.fetch(req.url, {
       method: req.method, signal: ctl.signal,
-      headers: { [TOKEN_HEADER]: token, Accept: "application/json, text/plain", ...(req.body !== undefined ? { "Content-Type": "application/json" } : {}) },
+      headers: { ...bearer(token), Accept: "application/json, text/plain", ...(req.body !== undefined ? { "Content-Type": "application/json" } : {}) },
       ...(req.body !== undefined ? { body: req.body } : {}),
     });
     let text = await res.text(); let truncated = false;

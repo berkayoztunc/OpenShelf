@@ -68,7 +68,7 @@ describe("efaturam adapter consoleCall", () => {
     const { adapter, seen } = mk(() => new Response(JSON.stringify([{ alias: "urn:mail:pk@x", aliasType: "INVOICE" }]), { status: 200 }));
     const r = await adapter.consoleCall(op("getTaxPayersByTaxId"), { path: { taxId: "1234567890" }, query: {} });
     expect(r).toMatchObject({ ok: true, status: 200, mock: false, operationId: "getTaxPayersByTaxId", risk: "read" });
-    expect(seen[0]!.headers["x-access-token"]).toBe(TOKEN);
+    expect(seen[0]!.headers["Authorization"]).toBe(`Bearer ${TOKEN}`);
     expect(JSON.stringify(r)).not.toContain(TOKEN); expect(JSON.stringify(r)).not.toContain("SECRET-PW");
   });
   it("keeps a plain-text answer (download link) and maps gateway problems", async () => {
@@ -99,7 +99,7 @@ describe("efaturam adapter diagnose", () => {
       const d = await adapter.diagnose();
       expect(d).toMatchObject({ ok: true, mock: false, environment: "live", companyId: 77, userId: 5, claims: ["companyId", "exp", "userId"], expiresAt: "2100-01-01T00:00:00.000Z" });
       expect(steps(d)).toEqual(["signIn:ok", "token:ok", "account:ok", "apiCall:ok"]);
-      expect(seen[0]!.url).toContain("/api/invoice/taxpayers/"); expect(seen[0]!.headers["x-access-token"]).toBe(TOKEN);
+      expect(seen[0]!.url).toContain("/api/invoice/taxpayers/"); expect(seen[0]!.headers["Authorization"]).toBe(`Bearer ${TOKEN}`);
       expect(JSON.stringify(d)).not.toContain(TOKEN); expect(JSON.stringify(d)).not.toContain("SECRET-PW");
     }
   });
@@ -122,8 +122,8 @@ describe("efaturam adapter diagnose", () => {
     const { adapter, seen } = mk(() => new Response("[]"), () => new Response("5", { status: 200, headers: { "x-access-token": `${TOKEN}, ${TOKEN}` } }));
     const d = await adapter.diagnose();
     expect(d.ok).toBe(true); expect(d.steps[1]!.detail).toContain("header repeated");
-    expect(seen[0]!.headers["x-access-token"]).toBe(TOKEN);
+    expect(seen[0]!.headers["Authorization"]).toBe(`Bearer ${TOKEN}`);
     await adapter.consoleCall(op("getTaxPayersByTaxId"), { path: { taxId: "1" }, query: {} });
-    expect(seen[1]!.headers["x-access-token"]).toBe(TOKEN);
+    expect(seen[1]!.headers["Authorization"]).toBe(`Bearer ${TOKEN}`);
   });
 });

@@ -46,7 +46,7 @@ describe("efaturam", () => {
     await adapter.resolveInvoiceType({ ...base, customer: company });
     expect(calls.filter((c) => c.path === "/api/auth/signin")).toHaveLength(1);
     expect(calls[0]!.body).toEqual({ email: "shop@example.com", password: "p" });
-    expect(calls[1]!.headers["x-access-token"]).toBe(jwt());
+    expect(calls[1]!.headers["Authorization"]).toBe(`Bearer ${jwt()}`);
   });
   it("health check reports missing ids; config ids fill the gap", async () => {
     const bare = jwt({ exp: 4102444800 });
