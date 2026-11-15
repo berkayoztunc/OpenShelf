@@ -410,6 +410,80 @@ describe("product wizard body", () => {
     expect(absoluteImage("/media/x", undefined, "https://shop.example.com")).toBe("https://shop.example.com/media/x");
     expect(absoluteImage(undefined, "m1", "https://shop.example.com/")).toBe("https://shop.example.com/media/m1");
   });
+  const autoSetup = (defaults: unknown, brandHits = [{ id: 9001, name: "OpenShelf Home" }, { id: 9002, name: "OpenShelf" }]) => setup({
+    filterApprovedProducts: () => result("filterApprovedProducts", { content: [], page: 0, size: 50, totalElements: 0, totalPages: 1 }),
+    getCargoProviders: () => result("getCargoProviders", [{ code: "YKMP", name: "Yurtiçi" }]),
+    getBrandsByName: () => result("getBrandsByName", brandHits),
+    getCategoryTree: () => result("getCategoryTree", [{ id: 400, name: "Aksesuar", subCategories: [{ id: 411, name: "Çanta Süsü", subCategories: [] }, { id: 412, name: "Anahtarlık", subCategories: [] }] }]),
+    getCategoryAttributes: () => result("getCategoryAttributes", { categoryAttributes: [
+      { attribute: { id: 47, name: "Color" }, required: true, varianter: true }, { attribute: { id: 48, name: "Material" }, required: true }] }),
+    getCategoryAttributeValues: (c) => result("getCategoryAttributeValues", { content: c.path?.attributeId === 47
+      ? [{ attributeValueId: 1001, attributeValueName: "Pembe" }, { attributeValueId: 1002, attributeValueName: "Mavi" }]
+      : [{ attributeValueId: 5, attributeValueName: "Deri" }] }),
+    createProducts: () => result("createProducts", { batchRequestId: "b-11" }),
+    getBatchRequestResult: () => result("getBatchRequestResult", { items: [] }),
+  }, "mock", {
+    "GET /api/admin/products/p9": () => ({ id: "p9", nameTr: "don't touch my bag charm", slug: "bag-charm", brand: "OpenShelf", categoryId: "c1", descriptionTr: "Çanta süsü", images: [{ url: "https://cdn.example.com/c.jpg" }], variants: [
+      { id: "va", sku: "S-1", barcode: "2411198546", title: "Pembe", options: { Renk: "Pembe" }, weightGrams: 1500, prices: { website: 69000, trendyol: null }, stock: { total: 20, reserved: 0, safetyStock: 0 } },
+      { id: "vb", sku: "S-2", barcode: "2411198547", title: "Mavi", options: { Renk: "Mavi" }, prices: { website: 69000, trendyol: null }, stock: { total: 20, reserved: 0, safetyStock: 0 } }] }),
+    "GET /api/admin/categories": () => ({ items: [{ id: "c1", slug: "canta-susu", nameTr: "Çanta Süsü", parentId: "c0", position: 0 }, { id: "c0", slug: "aksesuar", nameTr: "Aksesuar", parentId: null, position: 0 }] }),
+    "GET /api/admin/settings": () => ({ general: { storeName: "Nuad Atelier" } }),
+    "GET /api/admin/trendyol/defaults": () => ({ defaults }),
+    "PUT /api/admin/trendyol/defaults": () => null,
+    "POST /api/admin/trendyol/mappings": () => ({ ok: true }),
+    "POST /api/admin/trendyol/sync/verify": () => ({ approved: 0, pending: 2, notListed: 0 }),
+  });
+  it("wizard fills brand, category and colours by itself from the product, then remembers the choice for the category", async () => {
+    const calls = autoSetup(null);
+    const put = vi.mocked((await import("../lib/api")).api.put);
+    renderRoutes({ "/*": <Products /> }, "/?create=p9");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    const banner = await screen.findByTestId("tdyv-autofill");
+    // brand: the product says "OpenShelf"; Trendyol returns "OpenShelf Home" and "OpenShelf": only the equal name is taken
+    await waitFor(() => expect(banner).toHaveTextContent("Brand: OpenShelf (from the product's brand)"));
+    // category: no equal name ambiguity -> "Çanta Süsü" is the one leaf with that name
+    await waitFor(() => expect(banner).toHaveTextContent("Category: Aksesuar › Çanta Süsü (from the store category's name)"));
+    // colours came from the variant names, nobody touched a select
+    await waitFor(() => expect((screen.getByLabelText("Color: Pembe") as HTMLSelectElement).value).toBe("1001"));
+    expect((screen.getByLabelText("Color: Mavi") as HTMLSelectElement).value).toBe("1002");
+    // desi from the 1.5 kg variant
+    await userEvent.selectOptions(await screen.findByLabelText(/^Material/), "5");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    const body = JSON.parse((await screen.findByLabelText(/Request body/) as HTMLTextAreaElement).value);
+    const byId = (x: any, y: any) => x.attributeId - y.attributeId;
+    expect(body.items.map((i: any) => [i.brandId, i.categoryId, i.dimensionalWeight, [...i.attributes].sort(byId)])).toEqual([
+      [9002, 411, 2, [{ attributeId: 47, attributeValueId: 1001 }, { attributeId: 48, attributeValueId: 5 }]],
+      [9002, 411, 2, [{ attributeId: 47, attributeValueId: 1002 }, { attributeId: 48, attributeValueId: 5 }]]]);
+    expect(screen.getByText(/No problems/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Send to Trendyol" }));
+    await waitFor(() => expect(find(calls, "createProducts")).toHaveLength(1));
+    // remembered for the local category; the colour is per variant, so it is NOT remembered
+    await waitFor(() => expect(put).toHaveBeenCalledWith("/api/admin/trendyol/defaults", expect.objectContaining({
+      localCategoryId: "c1", trendyolCategoryId: 411, categoryPath: "Aksesuar › Çanta Süsü", brandId: 9002, brandName: "OpenShelf", cargo: "YKMP",
+      attrs: { 48: { ids: [5], custom: "" } } })));
+  });
+  it("wizard with remembered choices for the category: brand, category, material and cargo come back without any matching", async () => {
+    autoSetup({ trendyolCategoryId: 412, categoryPath: "Aksesuar › Anahtarlık", brandId: 9055, brandName: "Eski Marka", attrs: { "48": { ids: [5], custom: "" } }, cargo: "YKMP", vatRate: "10", dimensionalWeight: "3", deliveryDuration: "2", origin: "TR" }, []);
+    renderRoutes({ "/*": <Products /> }, "/?create=p9");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    const banner = await screen.findByTestId("tdyv-autofill");
+    await waitFor(() => expect(banner).toHaveTextContent("Brand: Eski Marka (what you chose last time in this category)"));
+    expect(banner).toHaveTextContent("Category: Aksesuar › Anahtarlık (what you chose last time in this category)");
+    await waitFor(() => expect((screen.getByLabelText(/^Material/) as HTMLSelectElement).value).toBe("5"));
+  });
+  it("wizard that cannot decide only suggests: ambiguous category and a brand with no equal name stay open", async () => {
+    autoSetup(null, [{ id: 9001, name: "OpenShelf Home" }]);
+    renderRoutes({ "/*": <Products /> }, "/?create=p9");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    const brandBox = await screen.findByTestId("tdyv-brand-suggest");
+    expect(within(brandBox).getByRole("button", { name: "OpenShelf Home" })).toBeTruthy();
+    expect(screen.queryByTestId("tdyv-autofill")?.textContent ?? "").not.toContain("Brand:");
+    await userEvent.click(within(brandBox).getByRole("button", { name: "OpenShelf Home" }));
+    expect(await screen.findByText("OpenShelf Home", { selector: "span" })).toBeTruthy();
+  });
   it("buildBody with variant rows: one item per ticked variant, shared content, own barcode/stock/price and varianter attribute", () => {
     const row = (id: string, o: object) => ({ variantId: id, label: id, include: true, barcode: `BC-${id}`, stockCode: `SK-${id}`, quantity: "5", listPrice: "690", salePrice: "690", attrs: {}, ...o });
     const body = buildBody(form(), [row("a", { attrs: { 47: { ids: [2001], custom: "" } } }), row("b", { quantity: "8", attrs: { 47: { ids: [2002], custom: "" } } }), row("c", { include: false })]);

@@ -131,6 +131,22 @@ describe("Trendyol sync control", () => {
     expect(await one<{ e: string }>("SELECT external_id AS e FROM product_mappings WHERE variant_id = 'sync-v3'")).toEqual({ e: "900001" });
   });
 
+  it("remembers the Trendyol choices per local category (admin only, validated)", async () => {
+    const d = { localCategoryId: "cat-remember", trendyolCategoryId: 411, categoryPath: "Aksesuar › Çanta Süsü", brandId: 9001, brandName: "Nuad", attrs: { "47": { ids: [1002], custom: "" } }, cargo: "YKMP", vatRate: "20", dimensionalWeight: "1", deliveryDuration: "2", origin: "TR" };
+    expect(await j<any>(await admin(owner, "/trendyol/defaults?category=cat-remember"))).toEqual({ defaults: null });
+    expect((await admin(owner, "/trendyol/defaults", "PUT", d)).status).toBe(204);
+    const { localCategoryId, ...saved } = d;
+    expect(await j<any>(await admin(owner, `/trendyol/defaults?category=${localCategoryId}`))).toEqual({ defaults: saved });
+    expect((await admin(owner, "/trendyol/defaults", "PUT", { ...d, brandName: "Yeni" })).status).toBe(204);   // overwrite, not duplicate
+    expect((await j<any>(await admin(owner, "/trendyol/defaults?category=cat-remember"))).defaults.brandName).toBe("Yeni");
+    expect((await admin(owner, "/trendyol/defaults", "PUT", { ...d, trendyolCategoryId: -1 })).status).toBe(400);
+    expect((await admin(owner, "/trendyol/defaults", "PUT", { ...d, attrs: { abc: { ids: [], custom: "" } } })).status).toBe(400);
+    expect((await admin(owner, "/trendyol/defaults")).status).toBe(400);
+    expect((await admin(staff, "/trendyol/defaults?category=cat-remember")).status).toBe(403);
+    expect((await admin(staff, "/trendyol/defaults", "PUT", d)).status).toBe(403);
+    await env.DB.exec("DELETE FROM sync_cursors WHERE key LIKE 'trendyol:defaults:%'");
+  });
+
   it("validates input", async () => {
     expect((await admin(owner, "/trendyol/sync", "PUT", { productIds: [P] })).status).toBe(400);
     expect((await admin(owner, "/trendyol/sync", "PUT", { productIds: ["nope"], enabled: true })).status).toBe(404);

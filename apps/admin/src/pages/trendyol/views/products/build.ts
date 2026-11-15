@@ -36,6 +36,8 @@ export function buildItem(f: WizardForm): Record<string, unknown> {
 export interface VariantRow {
   variantId: string; label: string; include: boolean;
   barcode: string; stockCode: string; quantity: string; listPrice: string; salePrice: string;
+  /** what the variant is called (title, option values): used to pick its attribute values (colour, size...) automatically */
+  hints?: string[];
   /** values of the category's "varianter" attributes (colour, size...) for this variant; override the shared ones */
   attrs: Record<number, AttrChoice>;
 }

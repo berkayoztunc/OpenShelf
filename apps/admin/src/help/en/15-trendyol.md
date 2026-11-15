@@ -105,6 +105,16 @@ The **Mappings** sub-tab (**Local variant mappings**) links a Trendyol barcode t
 > [!NOTE]
 > If you open the wizard from the Trendyol card on the product page (**Create on Trendyol**) the product is already chosen. For a product with several variants, all variants are sent in one request: each variant's barcode, stock and price is shown in a table, and the attribute that tells the variants apart (colour, size...) is picked per variant. After sending, the variants are linked to their Trendyol barcodes automatically.
 
+> [!TIP]
+> **The system fills the fields by itself.** Once a product is chosen the wizard finds these on its own and lists them in the "The system filled these in by itself" box; you can change all of them:
+>
+> * **Brand:** the product's brand (or the store name) is looked up on Trendyol; the brand with exactly the same name is chosen, otherwise suggestions are shown.
+> * **Category:** the store category's name is matched against Trendyol's leaf categories (categories imported from Trendyol are found directly). The one category with the same name is chosen; if it cannot be sure it shows the five closest as suggestions.
+> * **Attributes:** attributes that tell variants apart, such as colour or size, are picked automatically from the variant's name ("Pink") and options. A required attribute with only one possible value is taken. Desi is computed from the variant weight.
+> * **Memory:** when you send the product your choices (Trendyol category, brand, shared attributes such as material, cargo, delivery time, origin) are stored for the store category. The next products in that category come with everything ready.
+>
+> The system never chooses by guessing: with several matches it leaves the field empty and offers suggestions.
+
 The **Add a product to Trendyol** button opens a four-step wizard:
 
 1. **Local product:** pick a variant from your store (search by name, SKU or barcode). Its name, description, images, price and stock become the defaults.

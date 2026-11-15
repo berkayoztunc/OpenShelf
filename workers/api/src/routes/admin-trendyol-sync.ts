@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { channelListings, channelProductSettings, productMappings, productVariants, products } from "@openshelf/db";
+import { channelListings, channelProductSettings, productMappings, productVariants, products, syncCursors } from "@openshelf/db";
 import { enqueueJob } from "@openshelf/core";
 import { z } from "zod";
 import type { AppEnv } from "../env";
@@ -194,6 +194,38 @@ adminTrendyolSync.put("/trendyol/sync", async (c) => {
   }
   await audit(c, "trendyol.sync.update", "product", found.length === 1 ? found[0] : "bulk", { count: found.length, enabled: b.enabled, contentSource: b.contentSource, priceSource: b.priceSource, ...out });
   return c.json(out);
+});
+
+// ---------- remembered Trendyol choices per local category ----------
+// The create-product wizard remembers, per LOCAL category, what was chosen last time (Trendyol category, brand, shared attributes,
+// cargo...), so the next product of that category is filled without matching anything by hand. Stored in sync_cursors under
+// `trendyol:defaults:<local category id>` (small JSON, wiped by the factory reset like the other sync state).
+const DEFAULTS_PREFIX = "trendyol:defaults:";
+const AttrChoice = z.object({ ids: z.array(z.number().int()).max(50), custom: z.string().max(300) });
+const RememberedBody = z.object({
+  localCategoryId: z.string().min(1).max(64),
+  trendyolCategoryId: z.number().int().positive(), categoryPath: z.string().max(400),
+  brandId: z.number().int().positive().nullable(), brandName: z.string().max(200),
+  attrs: z.record(z.string().regex(/^\d{1,10}$/), AttrChoice).refine((a) => Object.keys(a).length <= 60, "too many attributes"),
+  cargo: z.string().max(60), vatRate: z.string().max(4), dimensionalWeight: z.string().max(10), deliveryDuration: z.string().max(4), origin: z.string().max(3),
+});
+
+adminTrendyolSync.get("/trendyol/defaults", async (c) => {
+  const cat = (c.req.query("category") ?? "").slice(0, 64);
+  if (!cat) throw new ApiError(400, "validation_error", "category is required");
+  const [row] = await c.get("db").select().from(syncCursors).where(eq(syncCursors.key, `${DEFAULTS_PREFIX}${cat}`)).limit(1);
+  let defaults: unknown = null;
+  try { defaults = row ? JSON.parse(row.value) : null; } catch { defaults = null; }
+  return c.json({ defaults });
+});
+
+adminTrendyolSync.put("/trendyol/defaults", async (c) => {
+  const b = await body(c, RememberedBody); const db = c.get("db");
+  const { localCategoryId, ...rest } = b;
+  const value = JSON.stringify(rest);
+  await db.insert(syncCursors).values({ key: `${DEFAULTS_PREFIX}${localCategoryId}`, value })
+    .onConflictDoUpdate({ target: syncCursors.key, set: { value, updatedAt: new Date() } });
+  return c.body(null, 204);
 });
 
 const IdsBody = z.object({ productIds: z.array(z.string().min(1).max(64)).min(1).max(100) });

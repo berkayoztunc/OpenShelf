@@ -105,6 +105,16 @@ Her satırın sağında küçük işlem simgeleri vardır (üzerine gelince adı
 > [!NOTE]
 > Sihirbazı ürün sayfasındaki Trendyol kartından (**Trendyol'da oluştur**) açarsanız ürün seçili gelir. Birden çok varyantı olan üründe tüm varyantlar tek istekte gönderilir: her varyantın barkodu, stoku ve fiyatı tabloda ayrı ayrı görünür, varyantları ayıran özelliği (renk, beden gibi) her varyant için ayrı seçersiniz. Gönderimden sonra varyantlar Trendyol barkodlarına kendiliğinden bağlanır.
 
+> [!TIP]
+> **Sistem alanları kendisi doldurur.** Ürün seçilince sihirbaz şunları kendi bulur ve üstte "Sistem şunları kendi doldurdu" kutusunda gösterir; hepsini değiştirebilirsiniz:
+>
+> * **Marka:** ürünün markası (yoksa mağaza adı) Trendyol'da aranır; adı birebir aynı olan marka seçilir, aynı olan yoksa öneri olarak sunulur.
+> * **Kategori:** mağaza kategorisinin adı Trendyol'un kategori ağacındaki yaprak kategorilerle eşleştirilir (Trendyol'dan içe aktarılan kategoriler doğrudan bulunur). Adı aynı olan tek kategori seçilir; emin olamazsa en yakın beş kategoriyi öneri olarak gösterir.
+> * **Özellikler:** renk, beden gibi varyantı ayıran özellikler, varyant adından ("Pembe") ve seçeneklerinden otomatik seçilir. Tek seçeneği olan zorunlu özellik kendiliğinden seçilir. Varyant ağırlığından desi hesaplanır.
+> * **Hatırlama:** ürünü gönderdiğinizde seçimleriniz (Trendyol kategorisi, marka, malzeme gibi ortak özellikler, kargo, teslim süresi, menşei) mağaza kategorisi için saklanır. Aynı kategorideki sonraki ürünlerde hepsi hazır gelir.
+>
+> Sistem hiçbir zaman tahminle seçim yapmaz: birden çok eşleşme varsa boş bırakır ve öneri sunar.
+
 **Trendyol'a ürün ekle** düğmesi dört adımlı bir sihirbaz açar:
 
 1. **Yerel ürün:** Mağazanızdan bir varyant seçin (ad, stok kodu veya barkodla arayın). Adı, açıklaması, görselleri, fiyatı ve stoku varsayılan değer olur.

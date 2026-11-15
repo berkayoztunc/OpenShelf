@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Check, X } from "lucide-react";
 import { Badge, Button, Card, ConfirmDialog, SelectField, TextArea, TextField, cx, useDebounced } from "../../../../components/ui";
@@ -11,14 +11,17 @@ import { checkJson, prettyJson } from "../../../../lib/trendyol";
 import { useT } from "../../../../i18n";
 import { BatchPanel } from "./BatchPanel";
 import { absoluteImage, buildBody, emptyForm, isPublicHttps, leaves, validateBody } from "./build";
+import { desiFromGrams, importedCategoryId, matchAttrValue, matchBrand, rankCategories, type BrandHit, type CategoryLeaf, type RememberedDefaults } from "./autofill";
+import { useCategories } from "../../../Categories";
+import { useSettings } from "../../../../lib/settings";
 import type { AttrChoice, VariantRow, WizardForm } from "./build";
 import { LookupRow, lookupLabel, useMapVariant } from "./Mappings";
 import type { LookupItem } from "./Mappings";
 
 type Ops = ReturnType<typeof useOps>["ops"];
 type W = ReturnType<typeof useTyWrite>;
-interface LocalVariant { id: string; sku: string; barcode: string | null; title: string | null; prices: { website: number | null; trendyol?: number | null }; stock?: { total: number; reserved: number; safetyStock: number } }
-interface LocalProduct { id: string; nameTr: string; slug: string; descriptionTr?: string | null; variants: LocalVariant[]; images: { url?: string | null; mediaId?: string | null }[] }
+interface LocalVariant { id: string; sku: string; barcode: string | null; title: string | null; options?: Record<string, string> | null; weightGrams?: number | null; prices: { website: number | null; trendyol?: number | null }; stock?: { total: number; reserved: number; safetyStock: number } }
+interface LocalProduct { id: string; nameTr: string; slug: string; brand?: string | null; categoryId?: string | null; descriptionTr?: string | null; variants: LocalVariant[]; images: { url?: string | null; mediaId?: string | null }[] }
 const STEPS = ["local", "fields", "preview", "submit"] as const;
 const VAT = ["0", "1", "10", "20"];
 const major = (minor: number) => (minor / 100).toFixed(2);
@@ -41,7 +44,14 @@ export function Wizard({ w, ops, onClose, productId }: { w: W; ops: Ops; onClose
   const [batch, setBatch] = useState<{ id: string; barcode: string } | null>(null);
   const [mapping, setMapping] = useState(false);
   const [required, setRequired] = useState<number[]>([]);
+  const [varianters, setVarianters] = useState<number[]>([]);
   const set = (p: Partial<WizardForm>) => setForm((f) => ({ ...f, ...p }));
+  // what the system filled in by itself (shown to the user), the suggestions for what it could not decide, and what the user took over
+  const [notes, setNotes] = useState<{ key: "brand" | "category" | "remembered"; text: string }[]>([]);
+  const [brandSugg, setBrandSugg] = useState<BrandHit[]>([]);
+  const [catSugg, setCatSugg] = useState<CategoryLeaf[]>([]);
+  const manual = useRef({ brand: false, category: false });
+  const addNote = (key: "brand" | "category" | "remembered", text: string) => setNotes((n) => [...n.filter((x) => x.key !== key), { key, text }]);
 
   /* local product (images/description): list by SKU to find the product id, then GET /:id */
   const listQ = useQuery({ queryKey: ["trendyol", "local-list", picked?.sku], enabled: !!picked, queryFn: () => api.get<{ items: LocalProduct[] }>(`/api/admin/products${qs({ q: picked!.sku })}`) });
@@ -59,7 +69,7 @@ export function Wizard({ w, ops, onClose, productId }: { w: W; ops: Ops; onClose
     const many = product.variants.length > 1;
     // the picked variant first, then the rest: all of them are sent unless unticked
     const ordered = first ? [first, ...product.variants.filter((v) => v.id !== first.id)] : [];
-    setRows(ordered.map((v) => ({ variantId: v.id, label: v.title || v.sku, include: true, barcode: v.barcode || v.sku, stockCode: v.sku, quantity: stockOf(v), listPrice: priceOf(v), salePrice: priceOf(v), attrs: {} })));
+    setRows(ordered.map((v) => ({ variantId: v.id, label: v.title || v.sku, hints: [v.title ?? "", ...Object.values(v.options ?? {})].filter(Boolean), include: true, barcode: v.barcode || v.sku, stockCode: v.sku, quantity: stockOf(v), listPrice: priceOf(v), salePrice: priceOf(v), attrs: {} })));
     const tax = picked?.taxRate ?? (product as { taxRate?: number | null }).taxRate;
     setForm((f) => ({
       ...f,
@@ -72,6 +82,65 @@ export function Wizard({ w, ops, onClose, productId }: { w: W; ops: Ops; onClose
       images: product.images.map((i) => absoluteImage(i.url ?? undefined, i.mediaId ?? undefined, origin)).filter(Boolean).slice(0, 8),
     }));
   }, [picked, product, productId]);
+
+  /* ---- automatic brand / category / settings: from the local product, the store, what was chosen last time ---- */
+  const localCats = useCategories();
+  const storeSettings = useSettings();
+  const remQ = useQuery({
+    queryKey: ["trendyol", "defaults", product?.categoryId], enabled: !!product?.categoryId, staleTime: 60_000,
+    queryFn: () => api.get<{ defaults: RememberedDefaults | null }>(`/api/admin/trendyol/defaults${qs({ category: product!.categoryId! })}`),
+  });
+  const remembered = remQ.data?.defaults ?? null;
+  const remReady = !product?.categoryId || remQ.isFetched || remQ.isError;
+  const localCat = localCats.data?.find((c) => c.id === product?.categoryId);
+  const catNames = useMemo(() => {   // the product's category first, then its parents: "Çanta Süsü", "Aksesuar"
+    const out: string[] = []; let cur = localCat;
+    for (let n = 0; cur && n < 5; n++) { out.push(cur.name); cur = localCats.data?.find((c) => c.id === cur?.parentId); }
+    return out;
+  }, [localCat, localCats.data]);
+  const tree = useTyQuery(w.call.run, ops.getCategoryTree, {});
+  const allLeaves = useMemo(() => leaves(tree.data?.response.body), [tree.data]);
+  const brandWanted = (remembered?.brandName || product?.brand || storeSettings.data?.general?.storeName || "").trim();
+  const brandQ = useTyQuery(w.call.run, ops.getBrandsByName, { query: { name: brandWanted } }, { enabled: !!product && remReady && brandWanted.length >= 2 && form.brandId == null && !manual.current.brand });
+  const settings0 = useRef(false);
+
+  // cargo, delivery time, origin, KDV: what was used for this category last time (once)
+  useEffect(() => {
+    if (!product || !remReady || settings0.current || !form.title) return;
+    settings0.current = true;
+    const first = product.variants.find((x) => x.id === picked?.variantId) ?? product.variants[0];
+    const kg = first?.weightGrams ? { dimensionalWeight: String(desiFromGrams(first.weightGrams)) } : {};
+    if (remembered) { set({ ...kg, cargo: remembered.cargo, deliveryDuration: remembered.deliveryDuration, origin: remembered.origin, dimensionalWeight: first?.weightGrams ? String(desiFromGrams(first.weightGrams)) : remembered.dimensionalWeight }); addNote("remembered", t("trendyolviews.wizard.auto.remembered", { category: localCat?.name ?? "" })); }
+    else if (first?.weightGrams) set(kg);
+  }, [product, remReady, form.title]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // brand: remembered id, else the local brand / store name looked up on Trendyol (an equal name is taken, otherwise suggested)
+  useEffect(() => {
+    if (!product || !remReady || form.brandId != null || manual.current.brand) return;
+    if (remembered?.brandId) { set({ brandId: remembered.brandId }); setBrandName(remembered.brandName); addNote("brand", t("trendyolviews.wizard.auto.brand.remembered", { name: remembered.brandName })); return; }
+    const list = (arr(brandQ.data?.response.body) as Record<string, unknown>[]).map((b) => ({ id: num(b.id), name: str(b.name) })).filter((b) => b.id > 0);
+    if (!list.length) { setBrandSugg([]); return; }
+    const m = matchBrand(list, brandWanted);
+    if (m.exact) { set({ brandId: m.exact.id }); setBrandName(m.exact.name); addNote("brand", product.brand ? t("trendyolviews.wizard.auto.brand.product", { name: m.exact.name }) : t("trendyolviews.wizard.auto.brand.store", { name: m.exact.name })); setBrandSugg([]); }
+    else setBrandSugg(m.ranked);
+  }, [product, remReady, brandQ.data, remembered]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // category: remembered > the store imported it from Trendyol (id inside the local id) > an equal leaf name > suggestions
+  useEffect(() => {
+    if (!product || !remReady || form.categoryId != null || manual.current.category || !allLeaves.length) return;
+    const pick = (leaf: { id: number; path: string }, why: "remembered" | "imported" | "name", attrs?: RememberedDefaults["attrs"]) => {
+      set({ categoryId: leaf.id, attrs: Object.fromEntries(Object.entries(attrs ?? {}).map(([k, v]) => [Number(k), v])) }); setCatPath(leaf.path); setCatSugg([]);
+      addNote("category", why === "remembered" ? t("trendyolviews.wizard.auto.category.remembered", { path: leaf.path }) : why === "imported" ? t("trendyolviews.wizard.auto.category.imported", { path: leaf.path }) : t("trendyolviews.wizard.auto.category.name", { path: leaf.path }));
+    };
+    const known = (id: number) => allLeaves.find((l) => l.id === id);
+    const rl = remembered && known(remembered.trendyolCategoryId);
+    if (remembered && rl) { pick(rl, "remembered", remembered.attrs); return; }
+    const imp = importedCategoryId(product.categoryId); const il = imp != null ? known(imp) : undefined;
+    if (il) { pick(il, "imported"); return; }
+    const r = rankCategories(allLeaves, catNames.length ? catNames : [product.nameTr]);
+    if (r.exact) pick(r.exact, "name");
+    else setCatSugg(r.ranked);
+  }, [product, remReady, allLeaves, remembered, catNames]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const problems = useMemo(() => { const c = checkJson(jsonText); return c.ok ? validateBody(c.value, required) : null; }, [jsonText, required]);
   const jsonCheck = jsonText ? checkJson(jsonText) : null;
@@ -86,7 +155,20 @@ export function Wizard({ w, ops, onClose, productId }: { w: W; ops: Ops; onClose
     if (r?.ok && id) {
       setBatch({ id, barcode: str(rec(arr(rec(jsonCheck.value).items)[0]).barcode) }); setStep(3);
       void linkVariants(arr(rec(jsonCheck.value).items).map((it) => str(it.barcode)));
+      void remember();
     }
+  };
+  /** Remember this product's Trendyol choices for its local category: the next product of that category is filled automatically. */
+  const remember = async () => {
+    if (!product?.categoryId || !form.categoryId) return;
+    const shared = Object.fromEntries(Object.entries(form.attrs).filter(([id, c]) => !varianters.includes(Number(id)) && (c.ids.length || c.custom.trim())));
+    try {
+      await api.put("/api/admin/trendyol/defaults", {
+        localCategoryId: product.categoryId, trendyolCategoryId: form.categoryId, categoryPath: catPath, brandId: form.brandId, brandName,
+        attrs: shared, cargo: form.cargo, vatRate: form.vatRate, dimensionalWeight: form.dimensionalWeight, deliveryDuration: form.deliveryDuration, origin: form.origin,
+      });
+      void qc.invalidateQueries({ queryKey: ["trendyol", "defaults"] });
+    } catch { /* a convenience: never blocks the submission */ }
   };
   /** Link every sent variant to its Trendyol barcode and mark the product "waiting for approval": sync starts when Trendyol approves it. */
   const linkVariants = async (sent: string[]) => {
@@ -128,7 +210,7 @@ export function Wizard({ w, ops, onClose, productId }: { w: W; ops: Ops; onClose
         </div>
       )}
 
-      {step === 1 && <FieldsStep rows={rows} setRows={setRows} form={form} set={set} w={w} ops={ops} brandName={brandName} setBrandName={setBrandName} catPath={catPath} setCatPath={setCatPath} setRequired={setRequired} issues={formIssues.length} />}
+      {step === 1 && <FieldsStep notes={notes} brandSugg={brandSugg} catSugg={catSugg} onManual={(k) => { manual.current[k] = true; setNotes((n) => n.filter((x) => x.key !== k)); }} setVarianters={setVarianters} rows={rows} setRows={setRows} form={form} set={set} w={w} ops={ops} brandName={brandName} setBrandName={setBrandName} catPath={catPath} setCatPath={setCatPath} setRequired={setRequired} issues={formIssues.length} />}
 
       {step === 2 && (
         <div className="space-y-3">
@@ -173,7 +255,8 @@ function MapPrefilled({ picked, barcode, onClose }: { picked: LookupItem; barcod
 
 /* ------------------------------------------------------------------ step 2 */
 
-function FieldsStep({ rows, setRows, form, set, w, ops, brandName, setBrandName, catPath, setCatPath, setRequired, issues }: {
+function FieldsStep({ notes, brandSugg, catSugg, onManual, setVarianters, rows, setRows, form, set, w, ops, brandName, setBrandName, catPath, setCatPath, setRequired, issues }: {
+  notes: { key: string; text: string }[]; brandSugg: BrandHit[]; catSugg: CategoryLeaf[]; onManual: (k: "brand" | "category") => void; setVarianters: (ids: number[]) => void;
   rows: VariantRow[]; setRows: (f: (r: VariantRow[]) => VariantRow[]) => void; form: WizardForm; set: (p: Partial<WizardForm>) => void; w: W; ops: Ops; brandName: string; setBrandName: (s: string) => void; catPath: string; setCatPath: (s: string) => void; setRequired: (ids: number[]) => void; issues: number;
 }) {
   const { t } = useT();
@@ -185,12 +268,19 @@ function FieldsStep({ rows, setRows, form, set, w, ops, brandName, setBrandName,
   const setRow = (id: string, p: Partial<VariantRow>) => setRows((rs) => rs.map((r) => (r.variantId === id ? { ...r, ...p } : r)));
   return (
     <div className="space-y-6">
+      {notes.length > 0 && (
+        <div role="status" data-testid="tdyv-autofill" className="space-y-1 rounded-xl border border-success-line bg-success-soft px-4 py-3 text-sm text-success">
+          <p className="font-medium">{t("trendyolviews.wizard.auto.title")}</p>
+          <ul className="list-inside list-disc text-xs">{notes.map((n) => <li key={n.key}>{n.text}</li>)}</ul>
+          <p className="text-xs opacity-80">{t("trendyolviews.wizard.auto.hint")}</p>
+        </div>
+      )}
       <p className="text-sm text-muted">{t("trendyolviews.wizard.fields.body")} {issues > 0 && <Badge tone="warning">{t("trendyolviews.wizard.fields.issues", { n: issues })}</Badge>}</p>
       <div className="grid gap-4 lg:grid-cols-2">
-        <BrandPicker w={w} ops={ops} value={form.brandId} name={brandName} onPick={(id, n) => { set({ brandId: id }); setBrandName(n); }} />
-        <CategoryPicker w={w} ops={ops} value={form.categoryId} path={catPath} onPick={(id, p) => { set({ categoryId: id, attrs: {} }); setCatPath(p); }} />
+        <BrandPicker w={w} ops={ops} value={form.brandId} name={brandName} suggestions={brandSugg} onPick={(id, n) => { onManual("brand"); set({ brandId: id }); setBrandName(n); }} />
+        <CategoryPicker w={w} ops={ops} value={form.categoryId} path={catPath} suggestions={catSugg} onPick={(id, p) => { onManual("category"); set({ categoryId: id, attrs: {} }); setCatPath(p); }} />
       </div>
-      {form.categoryId && <Attributes w={w} ops={ops} categoryId={form.categoryId} attrs={form.attrs} onChange={(attrs) => set({ attrs })} setRequired={setRequired} rows={many ? rows.filter((r) => r.include) : []} setRow={setRow} />}
+      {form.categoryId && <Attributes w={w} ops={ops} categoryId={form.categoryId} attrs={form.attrs} onChange={(attrs) => set({ attrs })} setRequired={setRequired} setVarianters={setVarianters} rows={many ? rows.filter((r) => r.include) : []} setRow={setRow} sharedHints={many ? [] : rows[0]?.hints ?? []} />}
       {many && (
         <fieldset className="space-y-2" data-testid="tdyv-wizard-variants">
           <legend className="text-[13px] font-medium">{t("trendyolviews.wizard.variants.title")}</legend>
@@ -247,7 +337,7 @@ function FieldsStep({ rows, setRows, form, set, w, ops, brandName, setBrandName,
   );
 }
 
-function BrandPicker({ w, ops, value, name, onPick }: { w: W; ops: Ops; value: number | null; name: string; onPick: (id: number, name: string) => void }) {
+function BrandPicker({ w, ops, value, name, onPick, suggestions }: { w: W; ops: Ops; value: number | null; name: string; onPick: (id: number, name: string) => void; suggestions: BrandHit[] }) {
   const { t } = useT();
   const [text, setText] = useState(""); const dq = useDebounced(text.trim(), 300);
   const q = useTyQuery(w.call.run, ops.getBrandsByName, { query: { name: dq } }, { enabled: dq.length >= 2 });
@@ -256,13 +346,17 @@ function BrandPicker({ w, ops, value, name, onPick }: { w: W; ops: Ops; value: n
     <div className="space-y-1.5">
       <TextField label={t("trendyolviews.wizard.f.brand")} hint={t("trendyolviews.wizard.f.brand.hint")} help="trendyolviews.brand" value={text} onChange={(e) => setText(e.target.value)} placeholder={t("trendyolviews.wizard.f.brand.placeholder")} autoComplete="off" />
       {value ? <p className="text-xs"><Badge tone="success">{name || `#${value}`}</Badge></p> : null}
+      {!value && suggestions.length > 0 && dq.length < 2 && (
+        <div className="flex flex-wrap items-center gap-1.5 text-xs" data-testid="tdyv-brand-suggest"><span className="text-muted">{t("trendyolviews.wizard.auto.suggested")}</span>
+          {suggestions.map((b) => <button key={b.id} type="button" onClick={() => onPick(b.id, b.name)} className="rounded-full border border-brand-600/50 bg-brand-50 px-3 py-1 text-brand-ink hover:border-brand-600">{b.name}</button>)}</div>
+      )}
       {dq.length >= 2 && (q.isFetching ? <p className="text-xs text-muted">{t("ui.typeahead.searching")}</p> : q.error ? <TyErrorBox error={q.error} /> : list.length === 0 ? <p className="text-xs text-muted">{t("ui.typeahead.none")}</p>
         : <ul className="flex flex-wrap gap-1.5" aria-label={t("trendyolviews.wizard.f.brand")}>{list.map((b) => <li key={num(b.id)}><button type="button" onClick={() => { onPick(num(b.id), str(b.name)); setText(str(b.name)); }} className={cx("rounded-full border px-3 py-1 text-xs hover:border-brand-600", value === num(b.id) ? "border-brand-600 bg-brand-50 text-brand-ink" : "border-line")}>{str(b.name)}</button></li>)}</ul>)}
     </div>
   );
 }
 
-function CategoryPicker({ w, ops, value, path, onPick }: { w: W; ops: Ops; value: number | null; path: string; onPick: (id: number, path: string) => void }) {
+function CategoryPicker({ w, ops, value, path, onPick, suggestions }: { w: W; ops: Ops; value: number | null; path: string; onPick: (id: number, path: string) => void; suggestions: CategoryLeaf[] }) {
   const { t } = useT();
   const tree = useTyQuery(w.call.run, ops.getCategoryTree, {});
   const all = useMemo(() => leaves(tree.data?.response.body), [tree.data]);
@@ -273,17 +367,21 @@ function CategoryPicker({ w, ops, value, path, onPick }: { w: W; ops: Ops; value
     <div className="space-y-1.5">
       <TextField label={t("trendyolviews.wizard.f.category")} hint={t("trendyolviews.wizard.f.category.hint")} help="trendyolviews.category" value={text} onChange={(e) => setText(e.target.value)} placeholder={t("trendyolviews.wizard.f.category.placeholder")} autoComplete="off" />
       {value ? <p className="text-xs"><Badge tone="success">{path || `#${value}`}</Badge></p> : null}
+      {!value && suggestions.length > 0 && !text.trim() && (
+        <div className="space-y-1 text-xs" data-testid="tdyv-category-suggest"><span className="text-muted">{t("trendyolviews.wizard.auto.suggested")}</span>
+          <div className="flex flex-wrap gap-1.5">{suggestions.map((l) => <button key={l.id} type="button" onClick={() => onPick(l.id, l.path)} className="rounded-full border border-brand-600/50 bg-brand-50 px-3 py-1 text-left text-brand-ink hover:border-brand-600">{l.path}</button>)}</div></div>
+      )}
       {tree.isPending ? <TableSkeleton rows={2} /> : tree.error ? <TyErrorBox error={tree.error} retry={() => void tree.refetch()} />
         : <ul className="max-h-44 overflow-auto rounded-lg border border-line" aria-label={t("trendyolviews.wizard.f.category")}>{list.map((l) => <li key={l.id}><button type="button" onClick={() => onPick(l.id, l.path)} aria-pressed={value === l.id} className={cx("block w-full px-3 py-1.5 text-left text-xs hover:bg-hover", value === l.id && "bg-brand-50 text-brand-ink")}>{l.path}</button></li>)}{list.length === 0 && <li className="px-3 py-2 text-xs text-muted">{t("ui.typeahead.none")}</li>}</ul>}
     </div>
   );
 }
 
-function Attributes({ w, ops, categoryId, attrs, onChange, setRequired, rows, setRow }: { w: W; ops: Ops; categoryId: number; attrs: Record<number, AttrChoice>; onChange: (a: Record<number, AttrChoice>) => void; setRequired: (ids: number[]) => void; rows: VariantRow[]; setRow: (id: string, p: Partial<VariantRow>) => void }) {
+function Attributes({ w, ops, categoryId, attrs, onChange, setRequired, setVarianters, rows, setRow, sharedHints }: { w: W; ops: Ops; categoryId: number; attrs: Record<number, AttrChoice>; onChange: (a: Record<number, AttrChoice>) => void; setRequired: (ids: number[]) => void; setVarianters: (ids: number[]) => void; rows: VariantRow[]; setRow: (id: string, p: Partial<VariantRow>) => void; sharedHints: string[] }) {
   const { t } = useT();
   const q = useTyQuery(w.call.run, ops.getCategoryAttributes, { path: { categoryId } });
   const list = arr(rec(q.data?.response.body).categoryAttributes);
-  useEffect(() => { setRequired(list.filter((a) => a.required === true).map((a) => num(rec(a.attribute).id))); }, [q.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setRequired(list.filter((a) => a.required === true).map((a) => num(rec(a.attribute).id))); setVarianters(list.filter((a) => a.varianter === true).map((a) => num(rec(a.attribute).id))); }, [q.data]); // eslint-disable-line react-hooks/exhaustive-deps
   if (q.isPending) return <TableSkeleton rows={2} />;
   if (q.error) return <TyErrorBox error={q.error} retry={() => void q.refetch()} />;
   const sorted = [...list].sort((a, b) => Number(b.required === true) - Number(a.required === true));
@@ -292,18 +390,29 @@ function Attributes({ w, ops, categoryId, attrs, onChange, setRequired, rows, se
       <legend className="text-[13px] font-medium">{t("trendyolviews.wizard.attrs")}</legend>
       <p className="text-xs text-muted">{t("trendyolviews.wizard.attrs.hint")}</p>
       <div className="grid gap-4 lg:grid-cols-2">
-        {sorted.map((a) => <AttrField key={num(rec(a.attribute).id)} a={a} w={w} ops={ops} categoryId={categoryId} choice={attrs[num(rec(a.attribute).id)] ?? { ids: [], custom: "" }} onChange={(c) => onChange({ ...attrs, [num(rec(a.attribute).id)]: c })} rows={rows} setRow={setRow} />)}
+        {sorted.map((a) => <AttrField key={num(rec(a.attribute).id)} a={a} w={w} ops={ops} categoryId={categoryId} choice={attrs[num(rec(a.attribute).id)] ?? { ids: [], custom: "" }} onChange={(c) => onChange({ ...attrs, [num(rec(a.attribute).id)]: c })} rows={rows} setRow={setRow} sharedHints={sharedHints} />)}
       </div>
     </fieldset>
   );
 }
 
-function AttrField({ a, w, ops, categoryId, choice, onChange, rows, setRow }: { a: Record<string, unknown>; w: W; ops: Ops; categoryId: number; choice: AttrChoice; onChange: (c: AttrChoice) => void; rows: VariantRow[]; setRow: (id: string, p: Partial<VariantRow>) => void }) {
+function AttrField({ a, w, ops, categoryId, choice, onChange, rows, setRow, sharedHints }: { a: Record<string, unknown>; w: W; ops: Ops; categoryId: number; choice: AttrChoice; onChange: (c: AttrChoice) => void; rows: VariantRow[]; setRow: (id: string, p: Partial<VariantRow>) => void; sharedHints: string[] }) {
   const { t } = useT();
   const attr = rec(a.attribute); const id = num(attr.id);
   const vals = useTyQuery(w.call.run, ops.getCategoryAttributeValues, { path: { categoryId, attributeId: id }, query: { size: 1000 } });
   const options = arr(rec(vals.data?.response.body).content);
   const multi = a.allowMultipleAttributeValues === true;
+  const optList = useMemo(() => options.map((o) => ({ id: num(o.attributeValueId), name: str(o.attributeValueName) })), [vals.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Automatic value: for a one-variant product from what the variant is called; a required attribute with a single possible value is simply taken.
+  // Only fills an EMPTY field, and only when the options arrive: whatever the user (or last time's memory) set is never touched.
+  const hintKey = sharedHints.join("|");
+  useEffect(() => {
+    if (rows.length > 1 || choice.ids.length || choice.custom.trim() || !optList.length) return;
+    const hit = a.varianter === true || sharedHints.length ? matchAttrValue(optList, sharedHints) : null;
+    const only = a.required === true && optList.length === 1 ? optList[0]! : null;
+    const pick = hit ?? only;
+    if (pick) onChange({ ids: [pick.id], custom: "" });
+  }, [optList, hintKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const tags = [a.required === true && t("trendyolviews.wizard.attr.required"), a.varianter === true && t("trendyolviews.wizard.attr.varianter"), a.slicer === true && t("trendyolviews.wizard.attr.slicer")].filter(Boolean) as string[];
   const hint = tags.join(" · ") || t("trendyolviews.wizard.attr.optional");
   // A "varianter" attribute (colour, size...) is what tells the variants apart: one value per variant instead of one for all.
@@ -313,19 +422,7 @@ function AttrField({ a, w, ops, categoryId, choice, onChange, rows, setRow }: { 
       <div className="space-y-2 rounded-xl border border-brand-600/40 bg-brand-50/40 p-3 lg:col-span-2" data-testid={`tdyv-attr-${id}`}>
         <p className="text-[13px] font-medium">{str(attr.name)}{a.required === true ? " *" : ""} <span className="font-normal text-muted">· {t("trendyolviews.wizard.attr.perVariant")}</span></p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {rows.map((r) => {
-            const c = r.attrs[id] ?? EMPTY;
-            const put = (next: AttrChoice) => setRow(r.variantId, { attrs: { ...r.attrs, [id]: next } });
-            return (
-              <div key={r.variantId} className="space-y-1.5">
-                <SelectField label={`${str(attr.name)}: ${r.label}`} value={String(c.ids[0] ?? "")} onChange={(e) => put({ ...c, ids: e.target.value ? [Number(e.target.value)] : [] })}>
-                  <option value="">{vals.isPending ? t("ui.loading") : t("trendyolviews.wizard.attr.pick")}</option>
-                  {options.map((o) => <option key={num(o.attributeValueId)} value={num(o.attributeValueId)}>{str(o.attributeValueName)}</option>)}
-                </SelectField>
-                {a.allowCustom === true && <TextField label={`${t("trendyolviews.wizard.attr.custom")}: ${r.label}`} value={c.custom} onChange={(e) => put({ ...c, custom: e.target.value })} />}
-              </div>
-            );
-          })}
+          {rows.map((r) => <VariantAttrCell key={r.variantId} r={r} id={id} attrName={str(attr.name)} allowCustom={a.allowCustom === true} loading={vals.isPending} options={optList} setRow={setRow} empty={EMPTY} />)}
         </div>
       </div>
     );
@@ -342,3 +439,25 @@ function AttrField({ a, w, ops, categoryId, choice, onChange, rows, setRow }: { 
   );
 }
 
+
+/** One variant's value of a variant-defining attribute (colour, size...). Starts filled when the variant's name or options match a Trendyol value. */
+function VariantAttrCell({ r, id, attrName, allowCustom, loading, options, setRow, empty }: { r: VariantRow; id: number; attrName: string; allowCustom: boolean; loading: boolean; options: { id: number; name: string }[]; setRow: (id: string, p: Partial<VariantRow>) => void; empty: AttrChoice }) {
+  const { t } = useT();
+  const c = r.attrs[id] ?? empty;
+  const put = (next: AttrChoice) => setRow(r.variantId, { attrs: { ...r.attrs, [id]: next } });
+  const hintKey = (r.hints ?? []).join("|");
+  useEffect(() => {
+    if (c.ids.length || c.custom.trim() || !options.length) return;
+    const hit = matchAttrValue(options, r.hints ?? [r.label]);
+    if (hit) put({ ids: [hit.id], custom: "" });
+  }, [options, hintKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <div className="space-y-1.5">
+      <SelectField label={`${attrName}: ${r.label}`} value={String(c.ids[0] ?? "")} onChange={(e) => put({ ...c, ids: e.target.value ? [Number(e.target.value)] : [] })}>
+        <option value="">{loading ? t("ui.loading") : t("trendyolviews.wizard.attr.pick")}</option>
+        {options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+      </SelectField>
+      {allowCustom && <TextField label={`${t("trendyolviews.wizard.attr.custom")}: ${r.label}`} value={c.custom} onChange={(e) => put({ ...c, custom: e.target.value })} />}
+    </div>
+  );
+}
