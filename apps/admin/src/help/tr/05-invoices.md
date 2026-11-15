@@ -9,7 +9,7 @@ Faturalar iki şekilde oluşur:
 
 | Yol | Ne zaman | Nerede görürsünüz |
 |---|---|---|
-| **Otomatik fatura** | Müşteri ödeme yapınca, e-Faturam entegrasyonu açıksa sistem kendiliğinden keser. | Sipariş sayfası → **Faturalar** kartı |
+| **Otomatik fatura** (şu an KAPALI) | Ödeme sonrası kendiliğinden fatura kesilmez; siparişte **Fatura kes** düğmesine basın. | Sipariş sayfası → **Faturalar** kartı |
 | **Manuel fatura** | Siz **Faturalar** sayfasından (veya siparişten **Bu siparişten fatura oluştur** ile) hazırlar ve kesersiniz. | **Faturalar** sayfası |
 
 Deneme modunda fatura kesmek yalnızca bir taklit üretir; e-Faturam'a veya vergi idaresine hiçbir şey gitmez.

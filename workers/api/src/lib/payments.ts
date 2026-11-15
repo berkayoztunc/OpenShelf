@@ -38,7 +38,8 @@ export async function handlePaymentEvent(env: Env, db: Db, providerId: ProviderI
       const on = (p: ProviderId) => isIntegrationEnabled(env, db, p); // mockMode => all on, no secrets needed
       const jobs: JobSpec[] = [];
       for (const sink of ["meta", "ga4"] as const) if (await on(sink)) jobs.push({ kind: `marketing.purchase.${sink}`, payload: { orderId: pay.orderId }, dedupeKey: `marketing.purchase.${sink}:${pay.orderId}` });
-      if (await on("efaturam")) jobs.push({ kind: "invoice.issue", payload: { orderId: pay.orderId }, dedupeKey: `invoice.issue:${pay.orderId}` });
+      // Invoices are NOT cut automatically (e-Faturam connection is IP-restricted); staff issue them with the "Issue invoice" button
+      // (POST /orders/:id/invoice, which enqueues the same `invoice.issue` job).
       if (await on("geliver")) {
         const mock = await isMockMode(db);
         const g = mock ? undefined : (await db.select({ c: integrationConfigs.configPublic }).from(integrationConfigs).where(eq(integrationConfigs.provider, "geliver")))[0];

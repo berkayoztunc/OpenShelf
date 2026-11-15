@@ -4,7 +4,7 @@
 
 ## What it does
 
-Issues e-Fatura or e-Arşiv invoices for orders (automatically via the `invoice.issue` outbox job or from the order page), stores number and PDF/URL. Idempotent per `(order_id, type)` so retries cannot create duplicates.
+Issues e-Fatura or e-Arşiv invoices for orders (only on demand: the **Issue invoice** button on the order page queues the `invoice.issue` outbox job; there is NO automatic invoice after payment), stores number and PDF/URL. Idempotent per `(order_id, type)` so retries cannot create duplicates.
 
 ## Keys needed
 

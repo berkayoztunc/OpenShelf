@@ -10,7 +10,7 @@ import { HelpTip } from "../components/help/HelpTip";
 import { useAdmin } from "../lib/auth";
 import { useSettings } from "../lib/settings";
 import { openPrint } from "../lib/print";
-import { describeInvoiceError, emptyForm, emptyLine, formToBody, invoiceToForm, totalsOf, validateForm, warningText } from "../lib/invoices";
+import { describeInvoiceError, emptyForm, emptyLine, finalUnit, formToBody, fromFinalUnit, fromNetUnit, invoiceToForm, netUnit, totalsOf, validateForm, warningText } from "../lib/invoices";
 import type { CustomerForm, Described, InvoiceForm, InvoiceFull, InvoicePreview, LineForm } from "../lib/invoices";
 import { orderToForm } from "../lib/rawOrder";
 import type { RawOrder } from "../lib/rawOrder";
@@ -35,6 +35,17 @@ export function IssueErrorNotice({ err }: { err: Described }) {
 /** Visible label with a "?" for controls (Typeahead) that render their own sr-only label. */
 function LabelRow({ label, help }: { label: string; help: string }) {
   return <div className="flex items-center gap-1"><span aria-hidden className="text-[13px] font-medium">{label}</span><HelpTip id={help} /></div>;
+}
+
+/** Price input that converts to/from the stored line price while typing (keeps the raw text while focused so decimals can be typed). */
+function ConvertedPrice({ label, shown, onValue, testId }: { label: string; shown: string; onValue: (v: number) => void; testId?: string }) {
+  const [text, setText] = useState<string | null>(null);
+  return (
+    <input aria-label={label} data-testid={testId} inputMode="decimal" className={cx(inputClass, cell)} value={text ?? shown}
+      onFocus={(e) => setText(e.target.value)}
+      onChange={(e) => { setText(e.target.value); const v = Number(e.target.value.replace(",", ".")); if (e.target.value.trim() !== "" && Number.isFinite(v)) onValue(v); }}
+      onBlur={() => setText(null)} />
+  );
 }
 
 export default function InvoiceEditor() {
@@ -203,12 +214,13 @@ export default function InvoiceEditor() {
               <p className={cx("rounded-lg border border-dashed px-4 py-8 text-center text-sm", err("lines") ? "border-danger text-danger" : "border-line text-muted")}>{err("lines") ?? t("invoices.lines.empty")}</p>
             ) : (
               <div className="-mx-5 overflow-x-auto px-5">
-                <table className="w-full min-w-[40rem] text-sm">
+                <table className="w-full min-w-[46rem] text-sm">
                   <caption className="sr-only">{t("invoices.lines.caption")}</caption>
                   <thead className="text-left text-[11px] uppercase tracking-wider text-muted"><tr>
                     <th scope="col" className="min-w-44 pb-2 pr-2 font-semibold">{t("invoices.lines.col.item")}</th>
                     <th scope="col" className="w-20 pb-2 pr-2 text-right font-semibold"><span className="inline-flex items-center justify-end gap-0.5 whitespace-nowrap">{t("invoices.lines.col.qty")}<HelpTip id="invoices.qty" /></span></th>
-                    <th scope="col" className="w-28 pb-2 pr-2 text-right font-semibold"><span className="inline-flex items-center justify-end gap-0.5 whitespace-nowrap">{t("invoices.lines.col.unitPrice")} <span className="font-normal normal-case">({t(form.pricesIncludeTax ? "invoices.lines.col.inclShort" : "invoices.lines.col.exclShort")})</span><HelpTip id="invoices.unitPrice" /></span></th>
+                    <th scope="col" className="w-28 pb-2 pr-2 text-right font-semibold"><span className="inline-flex items-center justify-end gap-0.5 whitespace-nowrap">{t("invoices.lines.col.unitPrice")} <span className="font-normal normal-case">({t("invoices.lines.col.exclShort")})</span><HelpTip id="invoices.unitPrice" /></span></th>
+                    <th scope="col" className="w-28 pb-2 pr-2 text-right font-semibold"><span className="inline-flex items-center justify-end gap-0.5 whitespace-nowrap">{t("invoices.lines.col.finalPrice")} <span className="font-normal normal-case">({t("invoices.lines.col.inclShort")})</span></span></th>
                     <th scope="col" className="w-24 pb-2 pr-2 text-right font-semibold"><span className="inline-flex items-center justify-end gap-0.5 whitespace-nowrap"><Term id="kdv">{t("invoices.lines.col.kdv")}</Term><HelpTip id="invoices.kdv" /></span></th>
                     <th scope="col" className="w-24 pb-2 pr-2 text-right font-semibold"><span className="inline-flex items-center justify-end gap-0.5 whitespace-nowrap">{t("invoices.lines.col.discount")}<HelpTip id="invoices.discount" /></span></th>
                     <th scope="col" className="w-24 pb-2 pr-2 text-right font-semibold">{t("invoices.lines.col.total")}</th><th scope="col" className="w-[5.5rem] pb-2"><span className="sr-only">{t("invoices.lines.col.actions")}</span></th>
@@ -221,7 +233,8 @@ export default function InvoiceEditor() {
                           {l.sku && <span className="mt-0.5 block text-xs text-muted">{t("invoices.lines.skuLine", { sku: l.sku })}</span>}
                         </td>
                         <td className="py-2 pr-2"><input aria-label={t("invoices.lines.qtyAria", { n: i + 1 })} aria-invalid={!!err(`line.${i}.quantity`) || undefined} inputMode="decimal" className={cx(inputClass, cell)} value={l.quantity} onChange={(e) => patchLine(l.key, { quantity: e.target.value })} /></td>
-                        <td className="py-2 pr-2"><input aria-label={t("invoices.lines.priceAria", { n: i + 1 })} inputMode="decimal" className={cx(inputClass, cell)} value={l.price} onChange={(e) => patchLine(l.key, { price: e.target.value })} onBlur={(e) => { const v = Number(e.target.value.replace(",", ".")); if (Number.isFinite(v)) patchLine(l.key, { price: v.toFixed(2) }); }} /></td>
+                        <td className="py-2 pr-2"><ConvertedPrice testId={`line-net-${i}`} label={t("invoices.lines.priceAria", { n: i + 1 })} shown={netUnit(l, form.pricesIncludeTax)} onValue={(v) => patchLine(l.key, { price: fromNetUnit(v, l, form.pricesIncludeTax) })} /></td>
+                        <td className="py-2 pr-2"><ConvertedPrice testId={`line-final-${i}`} label={t("invoices.lines.finalAria", { n: i + 1 })} shown={finalUnit(l, form.pricesIncludeTax)} onValue={(v) => patchLine(l.key, { price: fromFinalUnit(v, l, form.pricesIncludeTax) })} /></td>
                         <td className="py-2 pr-2"><input aria-label={t("invoices.lines.kdvAria", { n: i + 1 })} aria-invalid={!!err(`line.${i}.taxRate`) || undefined} inputMode="decimal" className={cx(inputClass, cell)} value={l.taxRate} onChange={(e) => patchLine(l.key, { taxRate: e.target.value })} /></td>
                         <td className="py-2 pr-2"><input aria-label={t("invoices.lines.discountAria", { n: i + 1 })} inputMode="decimal" className={cx(inputClass, cell)} value={l.discount} onChange={(e) => patchLine(l.key, { discount: e.target.value })} onBlur={(e) => { const v = Number(e.target.value.replace(",", ".")); if (Number.isFinite(v)) patchLine(l.key, { discount: v.toFixed(2) }); }} /></td>
                         <td className="py-2 pr-2 pt-[.9rem] text-right font-medium tabular-nums" data-testid={`line-total-${i}`}>{money(totals.lines[i]?.total ?? 0, cur)}</td>

@@ -27,7 +27,7 @@ async function addLine(u: ReturnType<typeof userEvent.setup>, name: string, pric
   await u.click(screen.getByRole("button", { name: "Add custom line" }));
   const n = screen.getAllByLabelText(/^Line \d+ name$/).length;
   await u.type(screen.getByLabelText(`Line ${n} name`), name);
-  await u.clear(screen.getByLabelText(`Line ${n} unit price`)); await u.type(screen.getByLabelText(`Line ${n} unit price`), price);
+  await u.clear(screen.getByLabelText(`Line ${n} final sale price (incl. KDV)`)); await u.type(screen.getByLabelText(`Line ${n} final sale price (incl. KDV)`), price);
   await u.clear(screen.getByLabelText(`Line ${n} quantity`)); await u.type(screen.getByLabelText(`Line ${n} quantity`), qty);
 }
 
@@ -40,7 +40,7 @@ describe("manual invoice editor totals", () => {
     expect(screen.getByTestId("sum-total")).toHaveTextContent(money(expected(10000, 3).total));
     expect(screen.getByTestId("sum-net")).toHaveTextContent(money(expected(10000, 3).net));
     expect(screen.getByTestId("sum-kdv-20")).toHaveTextContent(money(expected(10000, 3).tax));
-    await u.clear(screen.getByLabelText("Line 1 unit price")); await u.type(screen.getByLabelText("Line 1 unit price"), "99,99");
+    await u.clear(screen.getByLabelText("Line 1 final sale price (incl. KDV)")); await u.type(screen.getByLabelText("Line 1 final sale price (incl. KDV)"), "99,99");
     expect(screen.getByTestId("sum-total")).toHaveTextContent(money(expected(9999, 3).total));
     await u.clear(screen.getByLabelText("Line 1 quantity")); await u.type(screen.getByLabelText("Line 1 quantity"), "2");
     await u.clear(screen.getByLabelText("Line 1 discount")); await u.type(screen.getByLabelText("Line 1 discount"), "10");
@@ -49,14 +49,23 @@ describe("manual invoice editor totals", () => {
     expect(screen.getByTestId("sum-kdv-10")).toHaveTextContent(money(expected(9999, 2, 1000, 10).tax));
   });
 
+  it("editing the unit price (excl. KDV) back-computes the final sale price (default incl. basis)", async () => {
+    mockApi({ "POST /api/admin/manual-invoices/preview": () => PREVIEW });
+    const u = userEvent.setup(); renderRoutes(routes, "/invoices/new");
+    await addLine(u, "Widget", "100");
+    await u.clear(screen.getByTestId("line-net-0")); await u.type(screen.getByTestId("line-net-0"), "50");
+    expect(screen.getByTestId("line-final-0")).toHaveValue("60.00");
+    expect(screen.getByTestId("sum-total")).toHaveTextContent(money(6000));
+  });
   it("the KDV choice sits on the lines card: inclusive = the price typed is the total, exclusive = KDV is added on top; the price column says which", async () => {
     mockApi({ "POST /api/admin/manual-invoices/preview": () => PREVIEW });
     const u = userEvent.setup(); renderRoutes(routes, "/invoices/new");
     await addLine(u, "Widget", "100");
     const basis = screen.getByTestId("prices-basis") as HTMLSelectElement;
     expect(basis.value).toBe("incl");                                           // the store's setting (prices include KDV) is the default
-    expect(screen.getByRole("columnheader", { name: /unit price.*incl\. KDV/i })).toBeTruthy();
+    expect(screen.getByRole("columnheader", { name: /final price.*incl\. KDV/i })).toBeTruthy();
     expect(screen.getByTestId("sum-total")).toHaveTextContent(money(10000));    // 100 TL typed -> 100 TL charged
+    expect(screen.getByTestId("line-net-0")).toHaveValue("83.33");              // reverse: unit price = final / 1.20
     await u.selectOptions(basis, "excl");
     expect(screen.getByRole("columnheader", { name: /unit price.*excl\. KDV/i })).toBeTruthy();
     expect(screen.getByTestId("sum-total")).toHaveTextContent(money(12000));    // 100 TL + 20% KDV
@@ -94,7 +103,7 @@ describe("manual invoice editor totals", () => {
     await u.type(screen.getByLabelText("Add product from catalog"), "lam");
     await u.click(await screen.findByRole("option", { name: /Lamp/ }));
     expect(screen.getByLabelText("Line 1 name")).toHaveValue("Lamp");
-    expect(screen.getByLabelText("Line 1 unit price")).toHaveValue("123.45");
+    expect(screen.getByLabelText("Line 1 final sale price (incl. KDV)")).toHaveValue("123.45");
     expect(screen.getByLabelText("Line 1 KDV percent")).toHaveValue("10");
     expect(screen.getByText("SKU SKU-1")).toBeInTheDocument();
   });

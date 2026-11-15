@@ -4,7 +4,7 @@
 
 ## Ne yapar
 
-Siparişler için e-Fatura veya e-Arşiv faturası keser (`invoice.issue` outbox işiyle otomatik veya sipariş sayfasından), numara ve PDF/URL'yi saklar. `(order_id, type)` bazında idempotent'tir; yeniden denemeler mükerrer fatura üretmez.
+Siparişler için e-Fatura veya e-Arşiv faturası keser (yalnızca elle: sipariş sayfasındaki **Fatura kes** düğmesi `invoice.issue` outbox işini kuyruğa atar; ödeme sonrası OTOMATİK fatura YOKTUR), numara ve PDF/URL'yi saklar. `(order_id, type)` bazında idempotent'tir; yeniden denemeler mükerrer fatura üretmez.
 
 ## Gerekli anahtarlar
 

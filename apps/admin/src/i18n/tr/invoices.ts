@@ -71,6 +71,8 @@ export const invoices = {
   "invoices.lines.col.item": "Kalem",
   "invoices.lines.col.qty": "Adet",
   "invoices.lines.col.unitPrice": "Birim fiyat",
+  "invoices.lines.col.finalPrice": "Son satış fiyatı",
+  "invoices.lines.finalAria": "{n}. satır son satış fiyatı (KDV dahil)",
   "invoices.lines.col.kdv": "KDV %",
   "invoices.lines.col.discount": "İndirim",
   "invoices.lines.col.total": "Toplam",

@@ -71,6 +71,8 @@ export const invoices = {
   "invoices.lines.col.item": "Item",
   "invoices.lines.col.qty": "Qty",
   "invoices.lines.col.unitPrice": "Unit price",
+  "invoices.lines.col.finalPrice": "Final price",
+  "invoices.lines.finalAria": "Line {n} final sale price (incl. KDV)",
   "invoices.lines.col.kdv": "KDV %",
   "invoices.lines.col.discount": "Discount",
   "invoices.lines.col.total": "Total",

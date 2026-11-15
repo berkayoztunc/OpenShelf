@@ -9,7 +9,7 @@ Invoices are created in two ways:
 
 | Route | When | Where you see it |
 |---|---|---|
-| **Automatic invoice** | When a customer pays and the e-Faturam integration is on, the system issues it by itself. | Order page → **Invoices** card |
+| **Automatic invoice** (currently OFF) | No invoice is issued by itself after payment; press **Issue invoice** on the order. | Order page → **Invoices** card |
 | **Manual invoice** | You prepare and issue it from the **Invoices** page (or from an order with **Create invoice from this order**). | **Invoices** page |
 
 In mock mode, issuing an invoice produces only an imitation; nothing goes to e-Faturam or the tax authority.
