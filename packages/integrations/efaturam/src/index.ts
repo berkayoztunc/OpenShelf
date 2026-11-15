@@ -27,8 +27,10 @@ export const configSchema = z.object({
     seriesPrefixEArsiv: z.string().max(3).optional(),
     companyId: numericId, // only needed when the sign-in token does not carry them
     userId: numericId,
+    // Fixed-IP relay (VPS): the gateway only accepts a whitelisted IP, which Workers do not have.
+    relayUrl: z.string().url().refine((u) => u.startsWith("https://"), "relayUrl must be https").optional().or(z.literal("").transform(() => undefined)),
   }),
-  secrets: z.object({ username: z.string().min(1), password: z.string().min(1) }),
+  secrets: z.object({ username: z.string().min(1), password: z.string().min(1), relaySecret: z.string().optional() }),
 });
 type Parsed = z.infer<typeof configSchema>;
 
@@ -42,10 +44,12 @@ export const manifest: IntegrationManifest = {
     { key: "seriesPrefixEArsiv", label: "e-Arşiv seri (3 harf)", type: "text" },
     { key: "companyId", label: "Firma ID (companyId)", type: "text", help: "Boş bırakın; bağlantı testi bulunamadığını söylerse e-Faturam'dan aldığınız değeri girin." },
     { key: "userId", label: "Kullanıcı ID (userId)", type: "text", help: "Boş bırakın; bağlantı testi bulunamadığını söylerse e-Faturam'dan aldığınız değeri girin." },
+    { key: "relayUrl", label: "Relay adresi (sabit IP)", type: "text", help: "Boş = doğrudan bağlan. Sabit IP'li VPS relay'i kullanacaksanız https://efatura.alanadiniz.com girin ve aşağıya relay secret'ını yazın." },
   ],
   secretFields: [
     { key: "username", label: "E-posta", secret: true, required: true, type: "password" },
     { key: "password", label: "Şifre", secret: true, required: true, type: "password" },
+    { key: "relaySecret", label: "Relay secret", secret: true, type: "password", help: "Relay adresi doluysa gerekli (X-Relay-Secret)." },
   ],
   schema: configSchema,
 };
@@ -100,11 +104,28 @@ export function buildAmounts(lines: InvoiceInput["lines"]) {
   };
 }
 
+/** Gateway host -> path prefix on the relay. Only these hosts are ever relayed. */
+const RELAY_PREFIX: Record<string, string> = { "apigateway.trendyolecozum.com": "prod", "stage-apigateway.trendyolefaturam.com": "stage" };
+/** With a relay configured, gateway requests go to `<relay>/<prod|stage><path>` with X-Relay-Secret; without one, straight through. */
+export function relayFetch(relayUrl: string | undefined, secret: string | undefined, inner: AdapterDeps["fetch"]): AdapterDeps["fetch"] {
+  const base = relayUrl?.trim().replace(/\/+$/, "");
+  if (!base) return inner;
+  return (input, init) => {
+    const u = new URL(input);
+    const prefix = RELAY_PREFIX[u.hostname];
+    if (!prefix) return inner(input, init);
+    const headers = new Headers(init?.headers);
+    if (secret) headers.set("X-Relay-Secret", secret);
+    return inner(`${base}/${prefix}${u.pathname}${u.search}`, { ...init, headers });
+  };
+}
+
 export class EfaturamAdapter implements InvoicingProvider {
   readonly id = "efaturam" as const;
   private session?: { token: string; exp: number; companyId: number; userId: number };
   constructor(private p: Parsed, private deps: AdapterDeps) {
     if (!hostOk(p.config.baseUrl)) throw new EfaturamError("host not allowlisted");
+    this.deps = { ...deps, fetch: relayFetch(p.config.relayUrl, p.secrets.relaySecret, deps.fetch) };
   }
   async validateConfig() { configSchema.parse({ config: this.p.config, secrets: this.p.secrets }); }
 
