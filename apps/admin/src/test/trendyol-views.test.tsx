@@ -15,7 +15,7 @@ import Questions, { answerProblem } from "../pages/trendyol/views/Questions";
 import Finance from "../pages/trendyol/views/Finance";
 import Products, { normalizeRows } from "../pages/trendyol/views/Products";
 import { toCsv, presetRange, tryMoney } from "../components/trendyol/views/shared";
-import { buildBody, emptyForm, validateBody, batchFinished, leaves, absoluteImage } from "../pages/trendyol/views/products/build";
+import { buildBody, emptyForm, validateBody, batchFinished, leaves, filterLeaves, absoluteImage } from "../pages/trendyol/views/products/build";
 
 const OPS = [...orderOps, ...claimOps, ...productOps, ...catalogOps] as TrendyolOperation[];
 const cat = (mode: TrendyolCatalogResponse["mode"] = "mock", extra: Partial<TrendyolCatalogResponse> = {}): TrendyolCatalogResponse =>
@@ -484,6 +484,53 @@ describe("product wizard body", () => {
     await userEvent.click(within(brandBox).getByRole("button", { name: "OpenShelf Home" }));
     expect(await screen.findByText("OpenShelf Home", { selector: "span" })).toBeTruthy();
   });
+  it("category search uses Trendyol's real answer shape ({categories:[...]}), searches by name and only offers leaves", () => {
+    const real = { categories: [{ id: 1, name: "Kadın", parentId: null, subCategories: [
+      { id: 2, name: "Aksesuar", parentId: 1, subCategories: [{ id: 3, name: "Diğer Aksesuarlar", parentId: 2, subCategories: null }, { id: 4, name: "Saç Aksesuarları", parentId: 2, subCategories: [] }, { id: 5, name: "Şapka", parentId: 2, subCategories: [{ id: 6, name: "Bere", parentId: 5, subCategories: [] }] }] }] }] };
+    expect(leaves(real).map((l) => [l.id, l.path])).toEqual([[3, "Kadın › Aksesuar › Diğer Aksesuarlar"], [4, "Kadın › Aksesuar › Saç Aksesuarları"], [6, "Kadın › Aksesuar › Şapka › Bere"]]); // 2 and 5 are not leaves
+    expect(leaves({ categories: [{ id: "7", name: "Eski", subCategories: [] }] }).map((l) => l.id)).toEqual([7]);                       // numeric string ids
+    expect(leaves(null)).toEqual([]); expect(leaves("<html>")).toEqual([]); expect(leaves({ categories: null })).toEqual([]);
+    const all = leaves(real);
+    expect(filterLeaves(all, "diğer aksesuarlar").map((l) => l.id)).toEqual([3]);
+    expect(filterLeaves(all, "DIGER aksesuar").map((l) => l.id)).toEqual([3]);                                                          // letters folded
+    expect(filterLeaves(all, "aksesuar şapka").map((l) => l.id)).toEqual([6]);                                                           // any order, all words
+    expect(filterLeaves(all, "yok böyle")).toEqual([]);
+  });
+  const searchSetup = (categoriesBody: (c: { query?: Record<string, unknown> }) => unknown) => setup({
+    filterApprovedProducts: () => result("filterApprovedProducts", { content: [], page: 0, size: 50, totalElements: 0, totalPages: 1 }),
+    getCargoProviders: () => result("getCargoProviders", [{ code: "YKMP", name: "Yurtiçi" }]),
+    getBrandsByName: () => result("getBrandsByName", []),
+    getCategoryTree: (c) => { const r = result("getCategoryTree", categoriesBody(c)); return categoriesBody(c) === "__truncated__" ? { ...r, response: { ...r.response, body: "<partial", truncated: true } } : r; },
+    getCategoryAttributes: () => result("getCategoryAttributes", { categoryAttributes: [] }),
+  }, "mock", {
+    "GET /api/admin/products/p9": () => ({ id: "p9", nameTr: "Charm", slug: "charm", descriptionTr: "x", images: [], variants: [{ id: "va", sku: "S-1", barcode: "B1", title: "Tek", prices: { website: 1000, trendyol: null }, stock: { total: 1, reserved: 0, safetyStock: 0 } }] }),
+  });
+  const openFields = async () => {
+    renderRoutes({ "/*": <Products /> }, "/?create=p9");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    return screen.findByLabelText(/^Category/);
+  };
+  it("typing 'Diğer Aksesuarlar' queries Trendyol by that name and lists the leaf (the real {categories} answer used to show 'no match')", async () => {
+    const calls = searchSetup(() => ({ categories: [{ id: 1, name: "Kadın", subCategories: [{ id: 2, name: "Aksesuar", subCategories: [{ id: 3, name: "Diğer Aksesuarlar", subCategories: [] }] }] }] }));
+    const input = await openFields();
+    expect(screen.getByText(/The list comes from Trendyol/)).toBeTruthy();
+    await userEvent.type(input, "Diğer Aksesuarlar");
+    const hit = await screen.findByRole("button", { name: "Kadın › Aksesuar › Diğer Aksesuarlar" });
+    expect(find(calls, "getCategoryTree").some((c) => (c.query as { name?: string })?.name === "Diğer Aksesuarlar")).toBe(true);   // server-side filter, no full-tree download
+    expect(find(calls, "getCategoryTree").every((c) => !!(c.query as { name?: string })?.name)).toBe(true);
+    await userEvent.click(hit);
+    expect(await screen.findByText("Kadın › Aksesuar › Diğer Aksesuarlar", { selector: "span" })).toBeTruthy();
+  });
+  it("category search says what to do when nothing fits or the answer was too big", async () => {
+    let mode: "none" | "big" = "none";
+    searchSetup(() => (mode === "none" ? { categories: [] } : "__truncated__"));
+    const input = await openFields();
+    await userEvent.type(input, "zzzz");
+    expect(await screen.findByText(/No leaf category found for “zzzz”/)).toBeTruthy();
+    mode = "big"; await userEvent.clear(input); await userEvent.type(input, "ev");
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Too many results/);
+  });
   it("buildBody with variant rows: one item per ticked variant, shared content, own barcode/stock/price and varianter attribute", () => {
     const row = (id: string, o: object) => ({ variantId: id, label: id, include: true, barcode: `BC-${id}`, stockCode: `SK-${id}`, quantity: "5", listPrice: "690", salePrice: "690", attrs: {}, ...o });
     const body = buildBody(form(), [row("a", { attrs: { 47: { ids: [2001], custom: "" } } }), row("b", { quantity: "8", attrs: { 47: { ids: [2002], custom: "" } } }), row("c", { include: false })]);
@@ -527,6 +574,7 @@ describe("product wizard body", () => {
     expect(screen.queryByLabelText(/^Barcode$/)).not.toBeInTheDocument();
     await userEvent.type(screen.getByLabelText(/^Brand/), "open");
     await userEvent.click(await screen.findByRole("button", { name: "OpenShelf" }));
+    await userEvent.type(screen.getByLabelText(/^Category/), "çanta");
     await userEvent.click(await screen.findByRole("button", { name: "Aksesuar › Çanta Süsü" }));
     await userEvent.selectOptions(await screen.findByLabelText("Color: Pembe"), "1001");
     await userEvent.selectOptions(screen.getByLabelText("Color: Mavi"), "1002");
@@ -574,6 +622,7 @@ describe("product wizard body", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(/public https/i);
     await userEvent.type(screen.getByLabelText(/^Brand/), "open");
     await userEvent.click(await screen.findByRole("button", { name: "OpenShelf" }));
+    await userEvent.type(screen.getByLabelText(/^Category/), "dekor");
     await userEvent.click(await screen.findByRole("button", { name: "Ev › Dekor" }));
     await userEvent.selectOptions(await screen.findByLabelText(/Color/), "1002");
     // https image required: replace the local url

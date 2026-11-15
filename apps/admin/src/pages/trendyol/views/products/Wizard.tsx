@@ -10,7 +10,7 @@ import { api, qs } from "../../../../lib/api";
 import { checkJson, prettyJson } from "../../../../lib/trendyol";
 import { useT } from "../../../../i18n";
 import { BatchPanel } from "./BatchPanel";
-import { absoluteImage, buildBody, emptyForm, isPublicHttps, leaves, validateBody } from "./build";
+import { absoluteImage, buildBody, emptyForm, filterLeaves, isPublicHttps, leaves, validateBody, type Leaf } from "./build";
 import { desiFromGrams, importedCategoryId, matchAttrValue, matchBrand, rankCategories, type BrandHit, type CategoryLeaf, type RememberedDefaults } from "./autofill";
 import { useCategories } from "../../../Categories";
 import { useSettings } from "../../../../lib/settings";
@@ -98,8 +98,11 @@ export function Wizard({ w, ops, onClose, productId }: { w: W; ops: Ops; onClose
     for (let n = 0; cur && n < 5; n++) { out.push(cur.name); cur = localCats.data?.find((c) => c.id === cur?.parentId); }
     return out;
   }, [localCat, localCats.data]);
-  const tree = useTyQuery(w.call.run, ops.getCategoryTree, {});
-  const allLeaves = useMemo(() => leaves(tree.data?.response.body), [tree.data]);
+  // Trendyol's full category tree is several MB (more than the console returns), so categories are searched BY NAME: the most specific
+  // local category name first, then its parent's name as a second chance.
+  const treeA = useTyQuery(w.call.run, ops.getCategoryTree, { query: { name: catNames[0] ?? "" } }, { enabled: !!product && remReady && catNames.length > 0 && form.categoryId == null && !manual.current.category });
+  const treeB = useTyQuery(w.call.run, ops.getCategoryTree, { query: { name: catNames[1] ?? "" } }, { enabled: !!product && remReady && catNames.length > 1 && form.categoryId == null && !manual.current.category && treeA.isFetched && leaves(treeA.data?.response.body).length === 0 });
+  const allLeaves = useMemo(() => { const m = new Map<number, Leaf>(); for (const l of [...leaves(treeA.data?.response.body), ...leaves(treeB.data?.response.body)]) m.set(l.id, l); return [...m.values()]; }, [treeA.data, treeB.data]);
   const brandWanted = (remembered?.brandName || product?.brand || storeSettings.data?.general?.storeName || "").trim();
   const brandQ = useTyQuery(w.call.run, ops.getBrandsByName, { query: { name: brandWanted } }, { enabled: !!product && remReady && brandWanted.length >= 2 && form.brandId == null && !manual.current.brand });
   const settings0 = useRef(false);
@@ -127,16 +130,16 @@ export function Wizard({ w, ops, onClose, productId }: { w: W; ops: Ops; onClose
 
   // category: remembered > the store imported it from Trendyol (id inside the local id) > an equal leaf name > suggestions
   useEffect(() => {
-    if (!product || !remReady || form.categoryId != null || manual.current.category || !allLeaves.length) return;
+    if (!product || !remReady || form.categoryId != null || manual.current.category) return;
     const pick = (leaf: { id: number; path: string }, why: "remembered" | "imported" | "name", attrs?: RememberedDefaults["attrs"]) => {
       set({ categoryId: leaf.id, attrs: Object.fromEntries(Object.entries(attrs ?? {}).map(([k, v]) => [Number(k), v])) }); setCatPath(leaf.path); setCatSugg([]);
       addNote("category", why === "remembered" ? t("trendyolviews.wizard.auto.category.remembered", { path: leaf.path }) : why === "imported" ? t("trendyolviews.wizard.auto.category.imported", { path: leaf.path }) : t("trendyolviews.wizard.auto.category.name", { path: leaf.path }));
     };
-    const known = (id: number) => allLeaves.find((l) => l.id === id);
-    const rl = remembered && known(remembered.trendyolCategoryId);
-    if (remembered && rl) { pick(rl, "remembered", remembered.attrs); return; }
-    const imp = importedCategoryId(product.categoryId); const il = imp != null ? known(imp) : undefined;
-    if (il) { pick(il, "imported"); return; }
+    // remembered and imported categories carry their Trendyol id: no lookup needed
+    if (remembered?.trendyolCategoryId) { pick({ id: remembered.trendyolCategoryId, path: remembered.categoryPath }, "remembered", remembered.attrs); return; }
+    const imp = importedCategoryId(product.categoryId);
+    if (imp != null) { pick({ id: imp, path: [...catNames].reverse().join(" › ") }, "imported"); return; }
+    if (!allLeaves.length) return;
     const r = rankCategories(allLeaves, catNames.length ? catNames : [product.nameTr]);
     if (r.exact) pick(r.exact, "name");
     else setCatSugg(r.ranked);
@@ -358,11 +361,11 @@ function BrandPicker({ w, ops, value, name, onPick, suggestions }: { w: W; ops: 
 
 function CategoryPicker({ w, ops, value, path, onPick, suggestions }: { w: W; ops: Ops; value: number | null; path: string; onPick: (id: number, path: string) => void; suggestions: CategoryLeaf[] }) {
   const { t } = useT();
-  const tree = useTyQuery(w.call.run, ops.getCategoryTree, {});
-  const all = useMemo(() => leaves(tree.data?.response.body), [tree.data]);
-  const [text, setText] = useState("");
-  const f = text.trim().toLocaleLowerCase("tr");
-  const list = (f ? all.filter((l) => l.path.toLocaleLowerCase("tr").includes(f)) : all).slice(0, 30);
+  const [text, setText] = useState(""); const dq = useDebounced(text.trim(), 350);
+  // Searched on Trendyol by name: the full category tree is far too big to download, and an unfiltered list would be useless anyway.
+  const tree = useTyQuery(w.call.run, ops.getCategoryTree, { query: { name: dq } }, { enabled: dq.length >= 2 });
+  const found = useMemo(() => filterLeaves(leaves(tree.data?.response.body), dq), [tree.data, dq]);
+  const truncated = tree.data?.response.truncated === true;
   return (
     <div className="space-y-1.5">
       <TextField label={t("trendyolviews.wizard.f.category")} hint={t("trendyolviews.wizard.f.category.hint")} help="trendyolviews.category" value={text} onChange={(e) => setText(e.target.value)} placeholder={t("trendyolviews.wizard.f.category.placeholder")} autoComplete="off" />
@@ -371,8 +374,14 @@ function CategoryPicker({ w, ops, value, path, onPick, suggestions }: { w: W; op
         <div className="space-y-1 text-xs" data-testid="tdyv-category-suggest"><span className="text-muted">{t("trendyolviews.wizard.auto.suggested")}</span>
           <div className="flex flex-wrap gap-1.5">{suggestions.map((l) => <button key={l.id} type="button" onClick={() => onPick(l.id, l.path)} className="rounded-full border border-brand-600/50 bg-brand-50 px-3 py-1 text-left text-brand-ink hover:border-brand-600">{l.path}</button>)}</div></div>
       )}
-      {tree.isPending ? <TableSkeleton rows={2} /> : tree.error ? <TyErrorBox error={tree.error} retry={() => void tree.refetch()} />
-        : <ul className="max-h-44 overflow-auto rounded-lg border border-line" aria-label={t("trendyolviews.wizard.f.category")}>{list.map((l) => <li key={l.id}><button type="button" onClick={() => onPick(l.id, l.path)} aria-pressed={value === l.id} className={cx("block w-full px-3 py-1.5 text-left text-xs hover:bg-hover", value === l.id && "bg-brand-50 text-brand-ink")}>{l.path}</button></li>)}{list.length === 0 && <li className="px-3 py-2 text-xs text-muted">{t("ui.typeahead.none")}</li>}</ul>}
+      {dq.length < 2 ? <p className="text-xs text-muted">{t("trendyolviews.wizard.f.category.type")}</p>
+        : tree.isFetching ? <TableSkeleton rows={2} />
+        : tree.error ? <TyErrorBox error={tree.error} retry={() => void tree.refetch()} />
+        : truncated && found.length === 0 ? <p role="alert" className="text-xs text-warn">{t("trendyolviews.wizard.f.category.tooMany")}</p>
+        : <>
+          <ul className="max-h-44 overflow-auto rounded-lg border border-line" aria-label={t("trendyolviews.wizard.f.category")}>{found.map((l) => <li key={l.id}><button type="button" onClick={() => onPick(l.id, l.path)} aria-pressed={value === l.id} className={cx("block w-full px-3 py-1.5 text-left text-xs hover:bg-hover", value === l.id && "bg-brand-50 text-brand-ink")}>{l.path}</button></li>)}{found.length === 0 && <li className="px-3 py-2 text-xs text-muted">{t("trendyolviews.wizard.f.category.none", { q: dq })}</li>}</ul>
+          {truncated && <p className="text-xs text-warn">{t("trendyolviews.wizard.f.category.tooMany")}</p>}
+        </>}
     </div>
   );
 }
