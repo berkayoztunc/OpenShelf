@@ -272,7 +272,8 @@ function FieldsStep({ notes, brandSugg, catSugg, onManual, setVarianters, rows, 
   useEffect(() => { if (!form.cargo && providers[0]) set({ cargo: str(providers[0].code) }); }, [providers.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const publicImages = form.images.every(isPublicHttps);
   const many = rows.length > 1;
-  const setRow = (id: string, p: Partial<VariantRow>) => setRows((rs) => rs.map((r) => (r.variantId === id ? { ...r, ...p } : r)));
+  // `attrs` patches are MERGED into the row's attributes (several attribute cells fill themselves in the same tick: none may overwrite another)
+  const setRow = (id: string, p: Partial<VariantRow>) => setRows((rs) => rs.map((r) => (r.variantId === id ? { ...r, ...p, ...(p.attrs ? { attrs: { ...r.attrs, ...p.attrs } } : {}) } : r)));
   return (
     <div className="space-y-6">
       {notes.length > 0 && (
@@ -394,7 +395,7 @@ function Attributes({ origin, w, ops, categoryId, attrs, onChange, setRequired, 
   const { t } = useT();
   const q = useTyQuery(w.call.run, ops.getCategoryAttributes, { path: { categoryId } });
   const list = arr(rec(q.data?.response.body).categoryAttributes);
-  useEffect(() => { setRequired(list.filter((a) => a.required === true).map((a) => num(rec(a.attribute).id))); setVarianters(list.filter((a) => a.varianter === true).map((a) => num(rec(a.attribute).id))); }, [q.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setRequired(list.filter((a) => a.required === true).map((a) => num(rec(a.attribute).id))); setVarianters(list.filter((a) => a.varianter === true || a.slicer === true).map((a) => num(rec(a.attribute).id))); }, [q.data]); // eslint-disable-line react-hooks/exhaustive-deps
   if (q.isPending) return <TableSkeleton rows={2} />;
   if (q.error) return <TyErrorBox error={q.error} retry={() => void q.refetch()} />;
   const sorted = [...list].sort((a, b) => Number(b.required === true) - Number(a.required === true));
@@ -430,25 +431,33 @@ function AttrField({ origin, a, w, ops, categoryId, choice, onChange, rows, setR
   // Automatic value: for a one-variant product from what the variant is called; a required attribute with a single possible value is simply taken.
   // Only fills an EMPTY field, and only when the options arrive: whatever the user (or last time's memory) set is never touched.
   const hintKey = sharedHints.join("|");
+  // Which attributes differ per variant: the ones Trendyol marks as variant-defining or as the product slicer (colour), and any attribute whose
+  // values match the NAMES of at least two different variants (a colour attribute without flags: "Kırmızı", "Mavi" are both in its list).
+  const perVariant = rows.length > 1 && (a.varianter === true || a.slicer === true || new Set(rows.map((r) => matchAttrValue(optList, r.hints ?? [r.label])?.id).filter((x) => x != null)).size >= 2);
   useEffect(() => {
-    if ((rows.length > 1 && a.varianter === true) || choice.ids.length || choice.custom.trim() || !optList.length) return; // per-variant cells fill the variant-defining ones
+    if (perVariant || choice.ids.length || choice.custom.trim() || !optList.length) return; // per-variant cells fill the variant-defining ones
     // "Menşei" (country of origin) is the product's origin field: TR -> "TR"/"Türkiye"
     const originHints = norm(attr.name) === "mensei" ? [origin, origin.toUpperCase() === "TR" ? "Türkiye" : ""].filter(Boolean) : [];
     const hit = originHints.length ? matchAttrValue(optList, originHints) : a.varianter === true || sharedHints.length ? matchAttrValue(optList, sharedHints) : null;
     const only = a.required === true && optList.length === 1 ? optList[0]! : null;
     const pick = hit ?? only;
     if (pick) onChange({ ids: [pick.id], custom: "" });
-  }, [optList, hintKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [optList, hintKey, perVariant]); // eslint-disable-line react-hooks/exhaustive-deps
   const tags = [a.required === true && t("trendyolviews.wizard.attr.required"), a.varianter === true && t("trendyolviews.wizard.attr.varianter"), a.slicer === true && t("trendyolviews.wizard.attr.slicer")].filter(Boolean) as string[];
   const hint = tags.join(" · ") || t("trendyolviews.wizard.attr.optional");
-  // A "varianter" attribute (colour, size...) is what tells the variants apart: one value per variant instead of one for all.
-  if (a.varianter === true && rows.length > 1) {
+  // A variant-defining attribute (colour, size...) is what tells the variants apart: one value per variant instead of one for all.
+  if (perVariant) {
     const EMPTY: AttrChoice = { ids: [], custom: "" };
     return (
       <div className="space-y-2 rounded-xl border border-brand-600/40 bg-brand-50/40 p-3 lg:col-span-2" data-testid={`tdyv-attr-${id}`}>
         <p className="text-[13px] font-medium">{str(attr.name)}{a.required === true ? " *" : ""} <span className="font-normal text-muted">· {t("trendyolviews.wizard.attr.perVariant")}</span></p>
+        {optList.length > 1 && (
+          <SelectField label={t("trendyolviews.wizard.attr.applyAll")} hint={t("trendyolviews.wizard.attr.applyAll.hint")} value="" onChange={(e) => { const v = Number(e.target.value); if (v) rows.forEach((r) => setRow(r.variantId, { attrs: { [id]: { ids: [v], custom: "" } } })); }}>
+            <option value="">{t("trendyolviews.wizard.attr.pick")}</option>{optList.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </SelectField>
+        )}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {rows.map((r) => <VariantAttrCell key={r.variantId} r={r} id={id} attrName={str(attr.name)} allowCustom={a.allowCustom === true} loading={vals.isPending} options={optList} setRow={setRow} empty={EMPTY} />)}
+          {rows.map((r) => <VariantAttrCell key={r.variantId} r={r} id={id} attrName={str(attr.name)} allowCustom={a.allowCustom === true} fillCustom={a.required === true && optList.length === 0} loading={vals.isPending} options={optList} setRow={setRow} empty={EMPTY} />)}
         </div>
       </div>
     );
@@ -467,16 +476,17 @@ function AttrField({ origin, a, w, ops, categoryId, choice, onChange, rows, setR
 
 
 /** One variant's value of a variant-defining attribute (colour, size...). Starts filled when the variant's name or options match a Trendyol value. */
-function VariantAttrCell({ r, id, attrName, allowCustom, loading, options, setRow, empty }: { r: VariantRow; id: number; attrName: string; allowCustom: boolean; loading: boolean; options: { id: number; name: string }[]; setRow: (id: string, p: Partial<VariantRow>) => void; empty: AttrChoice }) {
+function VariantAttrCell({ r, id, attrName, allowCustom, fillCustom, loading, options, setRow, empty }: { r: VariantRow; id: number; attrName: string; allowCustom: boolean; fillCustom: boolean; loading: boolean; options: { id: number; name: string }[]; setRow: (id: string, p: Partial<VariantRow>) => void; empty: AttrChoice }) {
   const { t } = useT();
   const c = r.attrs[id] ?? empty;
-  const put = (next: AttrChoice) => setRow(r.variantId, { attrs: { ...r.attrs, [id]: next } });
+  const put = (next: AttrChoice) => setRow(r.variantId, { attrs: { [id]: next } });
   const hintKey = (r.hints ?? []).join("|");
   useEffect(() => {
-    if (c.ids.length || c.custom.trim() || !options.length) return;
+    if (c.ids.length || c.custom.trim() || loading) return;
+    if (!options.length) { if (fillCustom && allowCustom) put({ ids: [], custom: r.hints?.[0] ?? r.label }); return; }   // free-text colour: the variant's own name
     const hit = matchAttrValue(options, r.hints ?? [r.label]);
     if (hit) put({ ids: [hit.id], custom: "" });
-  }, [options, hintKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [options, hintKey, loading]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="space-y-1.5">
       <SelectField label={`${attrName}: ${r.label}`} value={String(c.ids[0] ?? "")} onChange={(e) => put({ ...c, ids: e.target.value ? [Number(e.target.value)] : [] })}>

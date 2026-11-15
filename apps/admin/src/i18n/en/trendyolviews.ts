@@ -538,6 +538,8 @@ export const trendyolviews = {
   "trendyolviews.wizard.auto.category.name": "Category: {path} (from the store category's name)",
   "trendyolviews.wizard.auto.remembered": "Cargo, delivery time and origin were taken from what you last used in “{category}”.",
   "trendyolviews.wizard.attrs.optional": "Optional attributes ({n}): importer, manufacturer, package size and more. Not required; open them to enrich your product.",
+  "trendyolviews.wizard.attr.applyAll": "Give all variants the same value",
+  "trendyolviews.wizard.attr.applyAll.hint": "If all variants are the same (e.g. one size) pick it here once; you can still change each one.",
   "trendyolviews.wizard.done": "Done",
   "trendyolviews.map.title": "Link to a local variant",
   "trendyolviews.map.cta": "Link to a local variant",

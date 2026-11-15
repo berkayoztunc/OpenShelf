@@ -478,6 +478,43 @@ describe("product wizard body", () => {
     expect(folded.open).toBe(false); expect(folded.textContent).toContain("Season"); expect(folded.textContent).toContain("Importer name");
     expect(screen.getByTestId("tdyv-attr-48").closest("details")).toBeNull();      // required ones are not folded away
   });
+  it("colour-like attributes are per variant: flagged slicer, free-text colour from the variant name, an unflagged list matched by name; 'same value for all' for sizes", async () => {
+    setup({
+      filterApprovedProducts: () => result("filterApprovedProducts", { content: [], page: 0, size: 50, totalElements: 0, totalPages: 1 }),
+      getCargoProviders: () => result("getCargoProviders", [{ code: "YKMP", name: "Yurtiçi" }]),
+      getBrandsByName: () => result("getBrandsByName", [{ id: 9002, name: "OpenShelf" }]),
+      getCategoryTree: () => result("getCategoryTree", { categories: [{ id: 400, name: "Aksesuar", subCategories: [{ id: 411, name: "Çanta Süsü", subCategories: [] }] }] }),
+      getCategoryAttributes: () => result("getCategoryAttributes", { categoryAttributes: [
+        { attribute: { id: 60, name: "Web Color" }, required: true },
+        { attribute: { id: 61, name: "Renk" }, required: true, slicer: true, allowCustom: true },
+        { attribute: { id: 62, name: "Beden" }, required: true, varianter: true }] }),
+      getCategoryAttributeValues: (c) => result("getCategoryAttributeValues", { content: (c.path?.attributeId === 60 ? [[1, "Pembe"], [2, "Mavi"], [3, "Siyah"]] : c.path?.attributeId === 62 ? [[10, "Tek Ebat"], [11, "S"]] : [])
+        .map(([id, attributeValue]) => ({ attributeValueId: id, attributeValue })) }),
+      createProducts: () => result("createProducts", { batchRequestId: "b-12" }), getBatchRequestResult: () => result("getBatchRequestResult", { items: [] }),
+    }, "mock", {
+      "GET /api/admin/products/p9": () => ({ id: "p9", nameTr: "Charm", slug: "charm", brand: "OpenShelf", categoryId: "c1", descriptionTr: "x", images: [{ url: "https://cdn.example.com/c.jpg" }], variants: [
+        { id: "va", sku: "S-1", barcode: "B1", title: "Pembe", prices: { website: 1000, trendyol: null }, stock: { total: 5, reserved: 0, safetyStock: 0 } },
+        { id: "vb", sku: "S-2", barcode: "B2", title: "Mavi", prices: { website: 1000, trendyol: null }, stock: { total: 5, reserved: 0, safetyStock: 0 } }] }),
+      "GET /api/admin/categories": () => ({ items: [{ id: "c1", slug: "c", nameTr: "Çanta Süsü", parentId: null, position: 0 }] }),
+    });
+    renderRoutes({ "/*": <Products /> }, "/?create=p9");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    // unflagged "Web Color": its list holds both variant names -> one select per variant, matched by name
+    await waitFor(() => expect((screen.getByLabelText("Web Color: Pembe") as HTMLSelectElement).value).toBe("1"));
+    expect((screen.getByLabelText("Web Color: Mavi") as HTMLSelectElement).value).toBe("2");
+    // slicer "Renk" has no listed values (free text): each variant's own name goes in
+    await waitFor(() => expect((screen.getByLabelText(/^Custom value: Pembe/) as HTMLInputElement).value).toBe("Pembe"));
+    expect((screen.getByLabelText(/^Custom value: Mavi/) as HTMLInputElement).value).toBe("Mavi");
+    // size: nothing to match, so one choice for all
+    await userEvent.selectOptions(screen.getAllByLabelText(/^Give all variants the same value/).at(-1)!, "10");   // Web Color has one too; Beden is the last
+    expect((screen.getByLabelText("Beden: Pembe") as HTMLSelectElement).value).toBe("10"); expect((screen.getByLabelText("Beden: Mavi") as HTMLSelectElement).value).toBe("10");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    const body = JSON.parse((await screen.findByLabelText(/Request body/) as HTMLTextAreaElement).value);
+    const byId = (x: any, y: any) => x.attributeId - y.attributeId;
+    expect([...body.items[1].attributes].sort(byId)).toEqual([{ attributeId: 60, attributeValueId: 2 }, { attributeId: 61, customAttributeValue: "Mavi" }, { attributeId: 62, attributeValueId: 10 }]);
+    expect(screen.getByText(/No problems/)).toBeTruthy();
+  });
   it("wizard with remembered choices for the category: brand, category, material and cargo come back without any matching", async () => {
     autoSetup({ trendyolCategoryId: 412, categoryPath: "Aksesuar › Anahtarlık", brandId: 9055, brandName: "Eski Marka", attrs: { "48": { ids: [5], custom: "" } }, cargo: "YKMP", vatRate: "10", dimensionalWeight: "3", deliveryDuration: "2", origin: "TR" }, []);
     renderRoutes({ "/*": <Products /> }, "/?create=p9");
