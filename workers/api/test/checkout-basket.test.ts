@@ -2,7 +2,7 @@ import { env } from "cloudflare:test";
 import { afterAll, describe, expect, it } from "vitest";
 import { buildPaymentBasket } from "../src/lib/basket";
 import { clearSettingsCache } from "../src/lib/settings";
-import { admin, checkout, createProduct, enablePayment, ensureOwner, fakePay, freshIp, j, newCart } from "./helpers";
+import { admin, call, checkout, createProduct, enablePayment, ensureOwner, fakePay, freshIp, j, newCart } from "./helpers";
 
 const sum = (b: { price: number; quantity: number }[]) => b.reduce((t, i) => t + i.price * i.quantity, 0);
 const L = (variantId: string, lineTotal: number, quantity = 1) => ({ variantId, name: variantId.toUpperCase(), quantity, lineTotal });
@@ -44,6 +44,24 @@ describe("checkout with a shipping fee / failing provider", () => {
     expect(fakePay.lastInput!.amount).toBe(34900);
     expect(sum(fakePay.lastInput!.items)).toBe(34900);
     expect(fakePay.lastInput!.items.map((i) => i.id)).toEqual([variantId, "shipping"]);
+  });
+
+  it("free_shipping coupon waives only the shipping fee", async () => {
+    const s = await setShipping(15000); await enablePayment(s);
+    const { variantId } = await createProduct(s, { price: 19900 });
+    const code = `KARGO-${Date.now() % 100000}`;
+    expect((await admin(s, "/coupons", "POST", { code, type: "free_shipping", value: 0 })).status).toBe(201);
+    const bad = await admin(s, "/coupons", "POST", { code: `${code}X`, type: "percent", value: 0 });
+    expect(bad.status).toBe(400); // only free_shipping may have no value
+    const ip = freshIp(); const cart = await newCart(ip, variantId);
+    const ap = await call(`/api/store/cart/${cart}/coupon`, { json: { code: code.toLowerCase() }, ip, origin: "http://shop.test" });
+    expect(ap.status).toBe(200);
+    const r = await checkout(cart, ip, `ship-${Date.now()}@example.com`);
+    expect(r.status).toBe(201);
+    const o = await env.DB.prepare("SELECT subtotal, discount_total, shipping_total, total, coupon_code FROM orders WHERE number = ?1").bind((await j<any>(r)).orderNumber).first<any>();
+    expect(o).toMatchObject({ subtotal: 19900, discount_total: 0, shipping_total: 0, total: 19900, coupon_code: code });
+    expect(fakePay.lastInput!.amount).toBe(19900);
+    expect(fakePay.lastInput!.items.map((i) => i.id)).toEqual([variantId]);
   });
 
   it("provider failure: 502, reason logged, no order left behind, stock released, retry works on the same cart", async () => {

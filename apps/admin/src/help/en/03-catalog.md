@@ -237,16 +237,16 @@ Coupons are discount codes that customers enter in the cart.
 ### Creating a coupon {#kupon-olusturma}
 
 1. Click **Coupons** in the left menu, then **New coupon**.
-2. Enter the **Code** (example: `WELCOME10`). It is converted to capitals automatically; letters, digits, hyphens and underscores are allowed (2–40 characters).
-3. Choose the **Type**: **Percent** or **Fixed amount**.
-4. Enter the value in the **Percent** or **Amount** field (example: `10` = 10%; for a fixed amount, `50` = ₺50).
+2. Enter the **Code** (example: `WELCOME10`), or press **Generate** for a random, hard-to-guess code. It is converted to capitals automatically; letters, digits, hyphens and underscores are allowed (2–40 characters).
+3. Choose the **Type**: **Percent**, **Fixed amount** or **Free shipping**.
+4. Enter the value in the **Percent** or **Amount** field (example: `10` = 10%; for a fixed amount, `50` = ₺50). **Free shipping** has no value field.
 5. If you like, enter **Min. subtotal**, **Max uses** and **Expires**.
 6. Leave the **Active** switch on and press **Save**.
 
 | Field | Meaning | Example |
 |---|---|---|
 | **Code** | The code the customer enters | `WELCOME10` |
-| **Type** | Percent: a percentage of the cart subtotal. Fixed amount: a flat discount | Percent |
+| **Type** | Percent: a percentage of the cart subtotal. Fixed amount: a flat discount. Free shipping: only the shipping fee is waived | Percent |
 | **Percent / Amount** | The discount value; a percentage can be at most 100 | 10 |
 | **Min. subtotal** | The minimum subtotal required for the coupon to be valid | 500 |
 | **Max uses** | The total number of orders it can be used in (empty = unlimited) | 100 |
@@ -256,6 +256,7 @@ Coupons are discount codes that customers enter in the cart.
 ### How does a coupon work? {#kupon-nasil-isler}
 
 - The discount is taken off the **cart subtotal**; it cannot exceed the cart amount. The shipping fee is calculated on the amount after the discount (the free shipping threshold looks at the discounted amount).
+- A **Free shipping** coupon leaves product prices untouched; when the code is used, the order's shipping fee becomes 0. Min. subtotal, usage limit and expiry still apply. For this type **Generate** gives a code starting with `KARGO-`.
 - When an order is created, the coupon's "used" count goes up. If an unpaid order is cancelled or the reservation time runs out, the use is **given back**.
 - **By default, the same e-mail address can use a coupon only once.** A customer who has already used that coupon on a non-cancelled order gets a "This coupon has already been used with this e-mail" warning on the second attempt. (The per-customer limit is a configurable field in the system; it is not editable in this panel at present.)
 - When an invalid, expired, fully used or below-minimum coupon is entered, the customer sees a warning stating the reason.

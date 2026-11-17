@@ -69,7 +69,7 @@ export function buildOrderSummary(i: OrderSummaryInput, lang: Lang): OrderSummar
   const included = i.total === i.subtotal - i.discount + i.shipping;
   const rows: OrderSummary["rows"] = [{ label: t.subtotal, value: m(i.subtotal) }];
   if (i.discount > 0) rows.push({ label: i.couponCode ? `${t.discount} (${t.coupon}: ${i.couponCode})` : t.discount, value: `−${m(i.discount)}`, tone: "discount" });
-  rows.push({ label: t.shipping, value: i.shipping > 0 ? m(i.shipping) : t.free });
+  rows.push({ label: i.discount <= 0 && i.couponCode && i.shipping === 0 ? `${t.shipping} (${t.coupon}: ${i.couponCode})` : t.shipping, value: i.shipping > 0 ? m(i.shipping) : t.free });
   if (i.tax > 0) rows.push({ label: included ? t.taxIncl : t.taxAdded, value: m(i.tax), tone: included ? "muted" : undefined });
   rows.push({ label: t.total, value: m(i.total), tone: "total" });
   if (i.refunded && i.refunded > 0) rows.push({ label: t.refunded, value: `−${m(i.refunded)}`, tone: "refund" });

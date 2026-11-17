@@ -42,7 +42,7 @@ export interface OrderDetail extends OrderRow {
   shippingAddress?: Record<string, string>;
 }
 export interface Customer { id: string; email: string; name?: string; phone?: string; ordersCount?: number; totalSpent?: number; createdAt?: string; anonymizedAt?: string | null }
-export interface Coupon { id: string; code: string; type: "percent" | "fixed"; value: number; minSubtotal?: number | null; maxUses?: number | null; usedCount?: number; expiresAt?: string | null; active: boolean }
+export interface Coupon { id: string; code: string; type: "percent" | "fixed" | "free_shipping"; value: number; minSubtotal?: number | null; maxUses?: number | null; usedCount?: number; expiresAt?: string | null; active: boolean }
 
 export interface FieldDef {
   key: string; label: string; type?: "text" | "url" | "number" | "boolean" | "select" | "password";

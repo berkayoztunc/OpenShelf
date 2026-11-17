@@ -67,3 +67,12 @@ describe("profit matrix", () => {
     await waitFor(() => expect(screen.getByText("Maliyeti girilen varyant").nextSibling?.textContent).toBe("1 / 1"));
   });
 });
+
+describe("coupon code generator", () => {
+  it("makes unambiguous codes and prefixes free-shipping ones", async () => {
+    const { generateCouponCode } = await import("../pages/Coupons");
+    expect(generateCouponCode("percent")).toMatch(/^[A-HJKMNP-Z2-9]{8}$/);
+    expect(generateCouponCode("free_shipping")).toMatch(/^KARGO-[A-HJKMNP-Z2-9]{8}$/);
+    expect(new Set(Array.from({ length: 50 }, () => generateCouponCode("fixed"))).size).toBe(50);
+  });
+});

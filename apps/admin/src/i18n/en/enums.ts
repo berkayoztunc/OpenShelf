@@ -83,6 +83,7 @@ export const enums = {
   "enum.productStatus.archived": "Archived",
   "enum.couponType.percent": "Percent (%)",
   "enum.couponType.fixed": "Fixed amount",
+  "enum.couponType.free_shipping": "Free shipping",
   "enum.level.info": "Info",
   "enum.level.warn": "Warning",
   "enum.level.error": "Error",

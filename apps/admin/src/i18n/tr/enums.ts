@@ -83,6 +83,7 @@ export const enums = {
   "enum.productStatus.archived": "Arşivde",
   "enum.couponType.percent": "Yüzde (%)",
   "enum.couponType.fixed": "Sabit tutar",
+  "enum.couponType.free_shipping": "Kargo bedava",
   "enum.level.info": "Bilgi",
   "enum.level.warn": "Uyarı",
   "enum.level.error": "Hata",

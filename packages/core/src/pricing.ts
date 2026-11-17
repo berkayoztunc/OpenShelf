@@ -14,15 +14,17 @@ export interface PricedCart {
   couponCode: string | null; couponError: string | null;
 }
 
-export async function evaluateCoupon(db: Db, code: string, subtotal: number, now = new Date()): Promise<{ code: string; discount: number }> {
+/** `free_shipping` coupons take nothing off the goods; they only zero the shipping fee. */
+export async function evaluateCoupon(db: Db, code: string, subtotal: number, now = new Date()): Promise<{ code: string; discount: number; freeShipping: boolean }> {
   const [c] = await db.select().from(coupons).where(eq(coupons.code, code.toUpperCase())).limit(1)
     .then(async (r) => (r.length ? r : await db.select().from(coupons).where(eq(coupons.code, code)).limit(1)));
   if (!c || !c.active) throw new CouponError("coupon_invalid", "Coupon is not valid");
   if (c.expiresAt && c.expiresAt.getTime() <= now.getTime()) throw new CouponError("coupon_expired", "Coupon has expired");
   if (c.maxUses != null && c.used >= c.maxUses) throw new CouponError("coupon_exhausted", "Coupon usage limit reached");
   if (subtotal < c.minSubtotal) throw new CouponError("coupon_min_subtotal", "Minimum cart total not reached");
+  if (c.type === "free_shipping") return { code: c.code, discount: 0, freeShipping: true };
   const raw = c.type === "percent" ? Math.floor((subtotal * c.value) / 100) : c.value;
-  return { code: c.code, discount: Math.max(0, Math.min(raw, subtotal)) };
+  return { code: c.code, discount: Math.max(0, Math.min(raw, subtotal)), freeShipping: false };
 }
 
 /** Server-authoritative pricing: reads prices/stock/tax from DB only. */
@@ -64,15 +66,15 @@ export async function priceItems(db: Db, items: { variantId: string; quantity: n
     });
   }
   const subtotal = lines.reduce((s, l) => s + l.lineTotal, 0);
-  let discount = 0; let couponCode: string | null = null; let couponError: string | null = null;
+  let discount = 0; let freeShipping = false; let couponCode: string | null = null; let couponError: string | null = null;
   if (opts.couponCode && subtotal > 0) {
-    try { const c = await evaluateCoupon(db, opts.couponCode, subtotal, opts.now); discount = c.discount; couponCode = c.code; }
+    try { const c = await evaluateCoupon(db, opts.couponCode, subtotal, opts.now); discount = c.discount; freeShipping = c.freeShipping; couponCode = c.code; }
     catch (e) { if (e instanceof CouponError) couponError = e.code; else throw e; }
   }
   const after = subtotal - discount;
   const itemTax = subtotal > 0 ? Math.round(rawTax * (after / subtotal)) : 0;
   const { freeShippingThreshold, flatShippingFee } = opts.settings;
-  const shipping = subtotal === 0 ? 0 : freeShippingThreshold != null && after >= freeShippingThreshold ? 0 : flatShippingFee;
+  const shipping = subtotal === 0 || freeShipping ? 0 : freeShippingThreshold != null && after >= freeShippingThreshold ? 0 : flatShippingFee;
   // Shipping is charged as a final amount (nothing is added on top), but its KDV is part of what the customer pays and of the invoice:
   // count it in the order's KDV at the items' rate, like the invoice does.
   const shipRate = lines[0]?.taxRate ?? 0;

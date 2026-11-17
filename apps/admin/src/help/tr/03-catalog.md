@@ -237,16 +237,16 @@ Kuponlar, müşterinin sepette girdiği indirim kodlarıdır.
 ### Kupon oluşturma
 
 1. Sol menüden **Kuponlar**'a, ardından **Yeni kupon**'a tıklayın.
-2. **Kod**'u yazın (örnek: `HOSGELDIN10`). Otomatik büyük harfe çevrilir; harf, rakam, tire ve alt çizgi kullanılabilir (2–40 karakter).
-3. **Tür**'ü seçin: **Yüzde** veya **Tutar**.
-4. **Yüzde** veya **Tutar** alanına değeri yazın (örnek: `10` = %10; sabit tutarda `50` = 50 ₺).
+2. **Kod**'u yazın (örnek: `HOSGELDIN10`) ya da **Kod üret**'e basarak tahmin edilmesi zor rastgele bir kod oluşturun. Otomatik büyük harfe çevrilir; harf, rakam, tire ve alt çizgi kullanılabilir (2–40 karakter).
+3. **Tür**'ü seçin: **Yüzde**, **Sabit tutar** veya **Kargo bedava**.
+4. **Yüzde** veya **Tutar** alanına değeri yazın (örnek: `10` = %10; sabit tutarda `50` = 50 ₺). **Kargo bedava** türünde değer alanı yoktur.
 5. İsterseniz **Asgari sepet tutarı**, **En çok kullanım** ve **Bitiş tarihi** girin.
 6. **Aktif** anahtarını açık bırakın ve **Kaydet**'e basın.
 
 | Alan | Anlamı | Örnek |
 |---|---|---|
 | **Kod** | Müşterinin gireceği kod | `HOSGELDIN10` |
-| **Tür** | Yüzde: sepet ara toplamının yüzdesi. Sabit tutar: düz indirim | Yüzde |
+| **Tür** | Yüzde: sepet ara toplamının yüzdesi. Sabit tutar: düz indirim. Kargo bedava: yalnızca kargo ücreti sıfırlanır | Yüzde |
 | **Yüzde / Tutar** | İndirim değeri; yüzde en fazla 100 | 10 |
 | **Asgari sepet tutarı** | Kuponun geçerli olması için gereken en az ara toplam | 500 |
 | **En çok kullanım** | Toplam kaç siparişte kullanılabileceği (boş = sınırsız) | 100 |
@@ -256,6 +256,7 @@ Kuponlar, müşterinin sepette girdiği indirim kodlarıdır.
 ### Kupon nasıl işler?
 
 - İndirim, **sepet ara toplamından** düşülür; sepet tutarından fazla olamaz. Kargo ücreti indirimden sonraki tutara göre hesaplanır (ücretsiz kargo eşiği indirimli tutara bakar).
+- **Kargo bedava** kuponu ürün fiyatlarına dokunmaz; kod kullanıldığında siparişin kargo ücreti 0 olur. Asgari sepet tutarı, kullanım sınırı ve bitiş tarihi bu türde de geçerlidir. Kargo bedava kodu üretirken **Kod üret** `KARGO-` ile başlayan bir kod verir.
 - Sipariş oluşturulduğunda kuponun "kullanım sayısı" artar. Ödenmemiş sipariş iptal olursa veya rezervasyon süresi dolarsa kullanım hakkı **geri verilir**.
 - **Aynı e-posta adresi bir kuponu varsayılan olarak yalnızca bir kez kullanabilir.** İptal edilmemiş bir siparişte o kuponu zaten kullanmış müşteri, ikinci denemede "Bu kupon bu e-posta ile zaten kullanıldı" uyarısı alır. (Müşteri başına limit sistemde ayarlanabilir bir alandır; bu panelde şu an düzenlenmez.)
 - Geçersiz, süresi dolmuş, kullanım limiti dolmuş veya asgari tutara ulaşmamış kupon girildiğinde müşteri neden belirten bir uyarı görür.
