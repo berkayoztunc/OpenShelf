@@ -77,6 +77,7 @@ describe("Dashboard", () => {
     expect(await screen.findByText("Seramik Vazo")).toBeTruthy();
     expect(screen.getByText("8 adet")).toBeTruthy();
     expect(screen.getByText(/67% · 6 sipariş/)).toBeTruthy(); // website share is written out, not only drawn
+    await userEvent.click(screen.getByRole("tab", { name: "Hareketler" }));
     expect(screen.getByText(/Ayşe Kaya/)).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/order\.status/); // action codes are humanised
   });
