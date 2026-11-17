@@ -109,6 +109,8 @@ export const settings = {
   "storefront.home.add": "{name} ürününü ana sayfaya ekle",
   "storefront.home.addButton": "Ekle",
   "picker.notActive": "Aktif değil",
+  "picker.dragHint": "Kartları sürükleyip bırakarak sıralayın; mağazada bu sırayla görünür. Klavye ve dokunmatik ekranda kartın altındaki okları kullanın.",
+  "picker.from": "{price} ve üzeri",
   "storefront.tab.home": "Ana sayfa",
   "storefront.tab.home.description": "Ana sayfadaki öne çıkan ürünleri ve kategori kartlarının görünümünü belirleyin.",
   "storefront.home.cards.title": "Kategori kartları",

@@ -109,6 +109,8 @@ export const settings = {
   "storefront.home.add": "Add {name} to the home page",
   "storefront.home.addButton": "Add",
   "picker.notActive": "Not active",
+  "picker.dragHint": "Drag and drop the cards to reorder; the store shows them in this order. On keyboard or touch, use the arrows under each card.",
+  "picker.from": "from {price}",
   "storefront.tab.home": "Home page",
   "storefront.tab.home.description": "Choose the featured products on the home page and how the category cards look.",
   "storefront.home.cards.title": "Category cards",

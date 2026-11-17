@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HomepageSettings, MenuSettings, MerchandisingSettings } from "@openshelf/shared";
@@ -70,6 +70,20 @@ describe("Settings → Product order", () => {
     await u.click(screen.getByRole("button", { name: "Değişiklikleri kaydet" }));
     await waitFor(() => expect(put).toHaveBeenCalled());
     expect(put.mock.calls[0]![1]).toMatchObject({ defaultSort: "featured", pinned: ["p3", "p1"] });
+  });
+  it("reorders pinned product cards by drag and drop", async () => {
+    load(MerchandisingSettings.parse({ defaultSort: "featured", pinned: ["p1", "p2", "p3"] }));
+    const put = vi.spyOn(api, "put").mockImplementation(async (_p, b) => b as never); wrap(<Merchandising />);
+    await waitFor(() => expect(screen.getAllByTestId("picker-card")[2]!.textContent).toContain("Ahşap Tabak"));
+    const cards = screen.getAllByTestId("picker-card");
+    const dt = { effectAllowed: "", dropEffect: "", setData: () => {} };
+    fireEvent.dragStart(cards[2]!, { dataTransfer: dt });
+    fireEvent.dragOver(cards[0]!, { dataTransfer: dt });
+    fireEvent.drop(cards[0]!, { dataTransfer: dt });
+    expect(screen.getAllByTestId("picker-card").map((c) => c.textContent)).toEqual([expect.stringContaining("Ahşap Tabak"), expect.stringContaining("Seramik Vazo"), expect.stringContaining("Keten Örtü")]);
+    await userEvent.click(screen.getByRole("button", { name: "Değişiklikleri kaydet" }));
+    await waitFor(() => expect(put).toHaveBeenCalled());
+    expect(put.mock.calls[0]![1]).toMatchObject({ pinned: ["p3", "p1", "p2"] });
   });
   it("warns that pins are inactive unless the default order is Recommended; bestseller days only for that order", async () => {
     load(MerchandisingSettings.parse({ pinned: ["p1"] })); const u = userEvent.setup(); wrap(<Merchandising />);
