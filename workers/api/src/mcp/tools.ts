@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-  BrandingSettings, CategoryInput, CheckoutSettings, ComposeEmailBody, GeneralSettings, LegalSettings, HomepageSettings, MenuSettings, MerchandisingSettings, NotificationSettings, SeoSettings, TrackingSettings, CouponInput, EfaturamCallBody, GeliverCallBody, InventoryAdjustBody, ManualInvoiceBody, OrderAddressBody, OrderStatusBody, ProductBulkBody, ProductInput, RefundBody, SETTING_GROUPS, VariantPriceBody,
+  BrandingSettings, CategoryInput, CheckoutSettings, ComposeEmailBody, GeneralSettings, HandDeliveryBody, LegalSettings, HomepageSettings, MenuSettings, MerchandisingSettings, NotificationSettings, SeoSettings, TrackingSettings, CouponInput, EfaturamCallBody, GeliverCallBody, InventoryAdjustBody, ManualInvoiceBody, OrderAddressBody, OrderStatusBody, ProductBulkBody, ProductInput, RefundBody, SETTING_GROUPS, VariantPriceBody,
   ShipmentBody, TrendyolCallBody, TrendyolDraftOverrides,
 } from "@openshelf/shared";
 import { CampaignBody } from "../lib/campaigns";
@@ -138,6 +138,7 @@ export const TOOLS: ToolDef[] = [
   t({ name: "bulk_update_products", title: "Bulk update products", level: "write", method: "POST", path: "/products/bulk", shape: { body: ProductBulkBody },
     description: "Up to 100 products at once: action status (draft|active|archived), category (categoryId or null) or price (percent, e.g. 10 = +10%, -15 = -15%, applied to every active variant's website price and compare-at price)." }),
   t({ name: "update_order_address", title: "Correct order delivery address", level: "write", method: "PUT", path: "/orders/:id/shipping-address", shape: { id: id("order"), body: OrderAddressBody }, description: "Correct the delivery address (name, phone, lines, city = province, district, zip) of a WEBSITE order before it ships, e.g. when the carrier rejects the district. For Turkey use the province and district names the shipping provider lists." }),
+  t({ name: "hand_deliver_order", title: "Mark order as handed over in person", level: "write", method: "POST", path: "/orders/:id/hand-delivery", shape: { id: id("order"), body: HandDeliveryBody }, description: "Website orders only: the store delivered the order itself (no carrier, no tracking code). Moves the order to delivered; with notify the customer gets the 'delivered' message. Refused when a carrier shipment exists." }),
   t({ name: "update_order_status", title: "Update order status", level: "write", method: "POST", path: "/orders/:id/status", shape: { id: id("order"), body: OrderStatusBody },
     description: "Move an order along its allowed transitions (paid/refunded are set by payment flows and are rejected). Trendyol orders are managed by Trendyol." }),
   t({ name: "update_settings", title: "Update settings group", level: "write", method: "PUT", path: "/settings/:group",

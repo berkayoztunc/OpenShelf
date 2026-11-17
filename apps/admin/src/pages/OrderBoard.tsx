@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
-import { CircleCheck, CircleX, Clock, CreditCard, Eye, FileText, List, PackageCheck, Printer, RefreshCw, Truck, type LucideIcon } from "lucide-react";
+import { CircleCheck, CircleX, Clock, CreditCard, Eye, FileText, Handshake, List, PackageCheck, Printer, RefreshCw, Truck, type LucideIcon } from "lucide-react";
 import { ORDER_SOURCES, ORDER_TRANSITIONS } from "@openshelf/shared";
 import { api, qs } from "../lib/api";
 import { mapPaged, orderRowFromApi } from "../lib/adapt";
@@ -64,7 +64,7 @@ function IconBtn({ label, icon: Icon, onClick, danger, disabled }: { label: stri
   );
 }
 
-type Pending = { order: OrderRow; kind: "status"; status: string } | { order: OrderRow; kind: "invoice" };
+type Pending = { order: OrderRow; kind: "status"; status: string } | { order: OrderRow; kind: "invoice" } | { order: OrderRow; kind: "hand" };
 
 function OrderCard({ o, onQuick, onAct }: { o: OrderRow; onQuick: () => void; onAct: (p: Pending) => void }) {
   const { t } = useT();
@@ -75,6 +75,8 @@ function OrderCard({ o, onQuick, onAct }: { o: OrderRow; onQuick: () => void; on
   const next = website ? (ORDER_TRANSITIONS[o.status] ?? []).filter((s) => s !== "cancelled" && (MANUAL_STATUSES as readonly string[]).includes(s)) : [];
   const canCancel = website && (ORDER_TRANSITIONS[o.status] ?? []).includes("cancelled");
   const canInvoice = website && PAID_ON.has(o.status) && !o.invoice;
+  const handed = o.shipment?.provider === "hand";
+  const canHand = website && ["paid", "fulfilling", "shipped"].includes(o.status) && (!o.shipment || ["cancelled", "returned"].includes(o.shipment.status));
   const first = o.lines?.[0];
   return (
     <li className="rounded-lg border border-line bg-raised p-3 shadow-sm">
@@ -105,7 +107,8 @@ function OrderCard({ o, onQuick, onAct }: { o: OrderRow; onQuick: () => void; on
         <IconBtn label={t("orders.quick.open", { number: o.number })} icon={Eye} onClick={onQuick} />
         {next.map((s) => <IconBtn key={s} label={t("board.action.move", { status: enumLabel("status", s) })} icon={NEXT_ICON[s] ?? CircleCheck} onClick={() => onAct({ order: o, kind: "status", status: s })} />)}
         {canInvoice && <IconBtn label={t("board.action.invoice")} icon={FileText} onClick={() => onAct({ order: o, kind: "invoice" })} />}
-        <IconBtn label={t("board.action.label")} icon={Printer} onClick={() => openPrint("label", [o.id])} />
+        {canHand && <IconBtn label={t("board.action.hand")} icon={Handshake} onClick={() => onAct({ order: o, kind: "hand" })} />}
+        {!handed && <IconBtn label={t("board.action.label")} icon={Printer} onClick={() => openPrint("label", [o.id])} />}
         {canCancel && <span className="ml-auto"><IconBtn danger label={t("board.action.cancel")} icon={CircleX} onClick={() => onAct({ order: o, kind: "status", status: "cancelled" })} /></span>}
       </div>
     </li>
@@ -130,11 +133,13 @@ export default function OrderBoard() {
   const fetching = cols.some((c) => c.isFetching);
 
   const act = useMutation({
-    mutationFn: (p: Pending) => (p.kind === "status" ? api.post(`/api/admin/orders/${p.order.id}/status`, { status: p.status }) : api.post(`/api/admin/orders/${p.order.id}/invoice`)),
+    mutationFn: (p: Pending) => (p.kind === "status" ? api.post(`/api/admin/orders/${p.order.id}/status`, { status: p.status })
+      : p.kind === "hand" ? api.post(`/api/admin/orders/${p.order.id}/hand-delivery`, { notify: true })
+      : api.post(`/api/admin/orders/${p.order.id}/invoice`)),
     onSuccess: (_d, p) => {
       setPending(null);
       qc.invalidateQueries({ queryKey: ["orders"] }); qc.invalidateQueries({ queryKey: ["order", p.order.id] });
-      toast.success(p.kind === "status" ? t("orders.toast.statusUpdated") : t("board.toast.invoice"));
+      toast.success(p.kind === "status" ? t("orders.toast.statusUpdated") : p.kind === "hand" ? t("orders.toast.handDelivered") : t("board.toast.invoice"));
     },
     onError: (e) => { setPending(null); toast.error(describeOrderError(e).message); },
   });
@@ -179,9 +184,9 @@ export default function OrderBoard() {
       <OrderQuickView id={quick} onClose={() => setQuick(null)} />
       <ConfirmDialog open={!!pending} loading={act.isPending}
         danger={pending?.kind === "status" && pending.status === "cancelled"}
-        title={pending?.kind === "invoice" ? t("board.confirm.invoice.title") : t("board.confirm.status.title")}
+        title={pending?.kind === "invoice" ? t("board.confirm.invoice.title") : pending?.kind === "hand" ? t("board.confirm.hand.title") : t("board.confirm.status.title")}
         confirmLabel={t("board.confirm.apply")}
-        message={!pending ? "" : pending.kind === "invoice" ? t("board.confirm.invoice.body", { number: pending.order.number }) : t("board.confirm.status.body", { number: pending.order.number, status: enumLabel("status", pending.status) })}
+        message={!pending ? "" : pending.kind === "invoice" ? t("board.confirm.invoice.body", { number: pending.order.number }) : pending.kind === "hand" ? t("board.confirm.hand.body", { number: pending.order.number }) : t("board.confirm.status.body", { number: pending.order.number, status: enumLabel("status", pending.status) })}
         onConfirm={() => pending && act.mutate(pending)} onClose={() => !act.isPending && setPending(null)} />
     </>
   );

@@ -1,10 +1,11 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { addresses, auditLogs, customerConsents, customers, integrationConfigs, inventory, invoices, orderItems, orders, paymentEvents, payments, productVariants, products, refunds, shipments, utmAttributions } from "@openshelf/db";
+import { addresses, auditLogs, customerConsents, customers, integrationConfigs, inventory, invoices, orderItems, orders, paymentEvents, payments, productVariants, products, refunds, shipmentEvents, shipments, utmAttributions } from "@openshelf/db";
 import { InvalidTransitionError, enqueueJob, transitionOrder } from "@openshelf/core";
 import type { PaymentProvider, ShipmentInput, ShippingProvider } from "@openshelf/integration-sdk";
-import { ORDER_STATUSES, OrderAddressBody, orderPricesIncludeTax, OrderStatusBody, RefundBody, ShipmentBody, type OrderStatus } from "@openshelf/shared";
+import { HAND_DELIVERY_PROVIDER, HandDeliveryBody, ORDER_STATUSES, OrderAddressBody, orderPricesIncludeTax, OrderStatusBody, RefundBody, ShipmentBody, type OrderStatus } from "@openshelf/shared";
+import { stepsTo } from "../lib/shipmentTracking";
 import type { AppEnv } from "../env";
 import { ApiError, body, likeEscape, notFound, paged, paging } from "../lib/http";
 import { audit } from "../lib/audit";
@@ -101,7 +102,7 @@ adminOrders.get("/orders", requireRole("staff"), async (c) => {
       itemCount: its.reduce((n, i) => n + i.quantity, 0), lineCount: its.length,
       lines: its.slice(0, 3).map((i) => ({ name: i.name, sku: i.sku, quantity: i.quantity })),
       payment: pay ? { status: pay.status, provider: pay.provider } : null,
-      shipment: sh ? { status: sh.status, carrier: sh.carrier ?? null, trackingNumber: sh.trackingNumber ?? null, trackingUrl: sh.trackingUrl ?? null } : null,
+      shipment: sh ? { status: sh.status, provider: sh.provider ?? null, carrier: sh.carrier ?? null, trackingNumber: sh.trackingNumber ?? null, trackingUrl: sh.trackingUrl ?? null } : null,
       invoice: inv ? { status: inv.status, number: inv.number ?? null } : null,
     };
   }), t?.n ?? 0, p));
@@ -229,6 +230,8 @@ async function shipmentContext(c: Context<AppEnv>, id: string) {
   if (!o) throw notFound("Order");
   if (o.source !== "website") throw new ApiError(409, "channel_managed", `Shipping for ${o.source} orders is managed by the marketplace`);
   if (!["paid", "fulfilling"].includes(o.status)) throw new ApiError(409, "invalid_order_state", "Order must be paid before shipping");
+  const [hand] = await db.select({ id: shipments.id }).from(shipments).where(and(eq(shipments.orderId, id), eq(shipments.provider, HAND_DELIVERY_PROVIDER))).limit(1);
+  if (hand) throw new ApiError(409, "hand_delivered", "This order was handed over in person; no carrier shipment is needed");
   let a = null; let pid = "geliver";
   for (const p of SHIPPING_PROVIDER_IDS) { a = await getAdapter<ShippingProvider>(c.env, db, p); if (a) { pid = p; break; } }
   if (!a) throw new ApiError(503, "shipping_unavailable", "No shipping provider enabled");
@@ -272,6 +275,34 @@ adminOrders.post("/orders/:id/shipment", requireRole("staff"), async (c) => {
   if (o.status === "paid") await transitionOrder(db, id, "fulfilling").catch(() => {});
   await audit(c, "order.shipment", "order", id, { shipmentId: sid, serviceId: b.serviceId });
   return c.json({ id: sid, ...res }, 201);
+});
+
+/**
+ * Hand delivery (website orders only): the store gave the parcel to the customer itself — no carrier, no tracking code.
+ * Records a delivered "hand" shipment and walks the order to delivered. Intermediate steps stay silent (no "shipped, here is your
+ * tracking link" mail without a link); the customer gets only the "delivered" message, and only when `notify` is on.
+ */
+adminOrders.post("/orders/:id/hand-delivery", requireRole("staff"), async (c) => {
+  const id = c.req.param("id"); const b = await body(c, HandDeliveryBody); const db = c.get("db");
+  const [o] = await db.select({ id: orders.id, number: orders.number, source: orders.source, status: orders.status }).from(orders).where(eq(orders.id, id)).limit(1);
+  if (!o) throw notFound("Order");
+  if (o.source !== "website") throw new ApiError(409, "channel_managed", `Delivery of ${o.source} orders is managed by the marketplace`);
+  if (!["paid", "fulfilling", "shipped"].includes(o.status)) throw new ApiError(409, "invalid_order_state", "Only paid orders that are not delivered yet can be handed over");
+  const existing = await db.select({ provider: shipments.provider, status: shipments.status }).from(shipments).where(eq(shipments.orderId, id));
+  if (existing.some((s) => s.provider === HAND_DELIVERY_PROVIDER)) throw new ApiError(409, "hand_delivered", "This order is already marked as handed over");
+  if (existing.some((s) => !["cancelled", "returned"].includes(s.status))) throw new ApiError(409, "carrier_shipment_exists", "A carrier shipment exists for this order; cancel it first");
+  const steps = stepsTo(o.status as OrderStatus, "delivered");
+  try {
+    for (const next of steps) await transitionOrder(db, id, next, new Date(), { notify: next === "delivered" && b.notify });
+  } catch (e) {
+    if (e instanceof InvalidTransitionError) throw new ApiError(409, "invalid_transition", e.message, { from: e.from, to: e.to });
+    throw e;
+  }
+  const sid = crypto.randomUUID();
+  await db.insert(shipments).values({ id: sid, orderId: id, provider: HAND_DELIVERY_PROVIDER, carrier: "Elden teslimat", trackingNumber: null, status: "delivered" });
+  await db.insert(shipmentEvents).values({ shipmentId: sid, status: "delivered", detail: (b.note || "Elden teslim edildi").slice(0, 300) });
+  await audit(c, "order.hand_delivery", "order", id, { from: o.status, notify: b.notify, ...(b.note ? { note: b.note } : {}) });
+  return c.json({ id, status: "delivered", shipmentId: sid }, 201);
 });
 
 /** What the automatic invoice for this order will contain: KDV-inclusive basis, lines, KDV per rate and the total (must equal what was paid). */

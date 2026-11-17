@@ -139,7 +139,8 @@ export interface OrderView {
   subtotal?: number; shipping?: number; discount?: number; tax?: number; total: number;
   createdAt?: string; email?: string; couponCode?: string | null;
   shippingAddress?: Partial<Address>;
-  shipment?: { carrier?: string; trackingNumber?: string; trackingUrl?: string; status?: string } | null;
+  /** `hand`: the store handed the order over in person (no carrier, no tracking). */
+  shipment?: { carrier?: string; trackingNumber?: string; trackingUrl?: string; status?: string; hand?: boolean } | null;
   /** ASSUMED beyond contract: UUID the server uses for CAPI/MP purchase; browser reuses for dedup. */
   purchaseEventId?: string | null;
 }

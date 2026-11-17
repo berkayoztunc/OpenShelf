@@ -109,6 +109,10 @@ export const CouponInput = z.object({
 export const OrderStatusBody = z.object({ status: z.enum(["pending", "awaiting_payment", "paid", "fulfilling", "shipped", "delivered", "cancelled", "refunded"]) });
 export const RefundBody = z.object({ amount: z.number().int().min(1), reason: z.string().max(300).optional() });
 export const ShipmentBody = z.object({ serviceId: z.string().min(1) });
+/** Shipment `provider` for orders the store hands over itself (no carrier, no tracking number). */
+export const HAND_DELIVERY_PROVIDER = "hand";
+/** Mark a website order as handed over in person: no carrier, no code. `notify` sends the customer the "delivered" message. */
+export const HandDeliveryBody = z.object({ note: z.string().trim().max(300).optional(), notify: z.boolean().default(true) });
 
 // ---------- storefront ----------
 export const ShippingAddress = z.object({

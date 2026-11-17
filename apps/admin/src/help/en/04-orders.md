@@ -202,6 +202,18 @@ After you pack the order, you create a shipment from the order page. For this, t
 
 If you made the shipment another way (for example at a carrier branch), you do not have to use **Create shipment**. However, an order in the **Paid** status cannot go directly to **Shipped**: first move it to **Fulfilling**, then to **Shipped**. In this case, since the system has no tracking number, the customer notification cannot include one; you can pass the tracking number on by hand with **Email customer**.
 
+### Hand delivery {#elden-teslimat}
+
+If you gave the order to the customer yourself without a carrier (pick-up at the shop, your own courier, …) no tracking code is needed. Website orders only; Trendyol orders are delivered through Trendyol.
+
+1. On the order page press **Hand over in person** (the handshake icon on the order board does the same).
+2. Optionally write a note (e.g. who received it). It is only shown in the order history.
+3. With **Send the customer the "delivered" message** on, the customer gets only the "delivered" e-mail/SMS; no "shipped" message without a tracking link is sent.
+4. Confirm with **Mark as delivered**. The order becomes **Delivered** and the shipments list shows "Elden teslimat".
+
+- If the order has an active carrier shipment, cancel it in Geliver first. A handed-over order cannot get a carrier label later, and the automatic Geliver shipment skips it.
+- This cannot be undone. Invoicing is unaffected; issue the invoice with **Issue invoice** as usual.
+
 ### Parcel weight and dimensions {#paket-agirligi-ve-olculeri}
 
 The system uses each product's weight for the shipment. Because the product form has no weight field, **500 grams per unit** is assumed for products with no defined weight; dimensions are assumed to be 10×10×10 cm by default. If your real weights differ, the shipping fee may come out different from what you expect. Make sure **Test mode** in the Geliver drawer is **off** in production (otherwise free test shipments are created and parcels are not passed on to a real carrier).

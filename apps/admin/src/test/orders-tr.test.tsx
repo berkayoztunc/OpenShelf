@@ -116,6 +116,25 @@ describe("orders in Turkish", () => {
     await u.click(within(dlg).getByRole("button", { name: "Oluştur" }));
     await waitFor(() => expect(posted).toEqual([{ serviceId: "MNG_STANDART" }]));
   });
+  it("detail: hand delivery sends note + notify choice, then hides itself and the carrier button", async () => {
+    const posted: unknown[] = []; let handed = false;
+    mockApi({
+      "GET /api/admin/orders/o1/notifications": () => ({ items: [] }),
+      "GET /api/admin/orders/o1$": () => (handed ? { ...DETAIL, status: "delivered", shipments: [{ id: "s1", provider: "hand", carrier: "Elden teslimat", status: "delivered" }] } : DETAIL),
+      "POST /api/admin/orders/o1/hand-delivery": (_p, b) => { posted.push(b); handed = true; return { id: "o1", status: "delivered" }; },
+    });
+    const u = userEvent.setup(); renderRoutes({ "/orders/:id": <OrderDetail /> }, "/orders/o1");
+    await u.click(await screen.findByRole("button", { name: /Elden teslim et/ }));
+    const dlg = await screen.findByRole("dialog");
+    await u.type(within(dlg).getByLabelText("Not (isteğe bağlı)"), "Mağazada");
+    await u.click(within(dlg).getByRole("switch", { name: /teslim edildi” bildirimi/ }));
+    await u.click(within(dlg).getByRole("button", { name: /Teslim edildi olarak işaretle/ }));
+    await waitFor(() => expect(posted).toEqual([{ note: "Mağazada", notify: false }]));
+    await waitFor(() => expect(screen.queryByRole("button", { name: /Elden teslim et/ })).toBeNull());
+    expect(screen.queryByRole("button", { name: "Kargo oluştur" })).toBeNull();
+    expect(screen.getByText("Elden teslimat")).toBeInTheDocument();
+  });
+
   it("detail: create invoice shows what will be issued (KDV-inclusive basis, per-line KDV, total = amount paid) and refuses a mismatch", async () => {
     const posted: string[] = [];
     let preview: Record<string, unknown> = {

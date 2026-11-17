@@ -30,13 +30,13 @@ export interface OrderRow {
   itemCount?: number; lineCount?: number; lines?: { name: string; sku?: string; quantity: number }[];
   /** Latest payment / shipment / invoice, `null` when none exists yet (process tracking). */
   payment?: { status: string; provider: string } | null;
-  shipment?: { status: string; carrier?: string; trackingNumber?: string; trackingUrl?: string } | null;
+  shipment?: { status: string; provider?: string; carrier?: string; trackingNumber?: string; trackingUrl?: string } | null;
   invoice?: { status: string; number?: string } | null;
 }
 export interface OrderDetail extends OrderRow {
   items: { id: string; title: string; sku?: string; quantity: number; unitPrice: number; total: number }[];
   payments: { id: string; provider: string; status: string; amount: number; createdAt?: string; isMock?: boolean }[];
-  shipments: { id: string; carrier?: string; trackingNumber?: string; status: string; labelUrl?: string; trackingUrl?: string; createdAt?: string }[];
+  shipments: { id: string; provider?: string; carrier?: string; trackingNumber?: string; status: string; labelUrl?: string; trackingUrl?: string; createdAt?: string }[];
   invoices: { id: string; type: string; number?: string; status: string; url?: string; createdAt?: string }[];
   events: { id: string; type: string; detail?: string; createdAt: string }[];
   shippingAddress?: Record<string, string>;

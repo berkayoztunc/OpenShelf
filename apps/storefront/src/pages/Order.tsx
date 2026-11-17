@@ -157,7 +157,7 @@ export default function Order() {
           )}
           {!failed && !refunded && (
             <Panel icon={<TruckIcon size={15} />} title={t("order.tracking")}>
-              {order.shipment && (order.shipment.carrier || order.shipment.trackingNumber) ? (
+              {order.shipment?.hand ? <p className="flex gap-2 text-muted"><PackageIcon size={16} className="mt-0.5 shrink-0" />{t("order.handDelivered")}</p> : order.shipment && (order.shipment.carrier || order.shipment.trackingNumber) ? (
                 <>
                   <dl className="space-y-1.5">
                     {order.shipment.carrier && <div className="flex justify-between gap-3"><dt className="text-muted">{t("order.carrier")}</dt><dd className="font-medium">{order.shipment.carrier}</dd></div>}

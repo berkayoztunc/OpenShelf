@@ -161,6 +161,18 @@ export const orders = {
   "orders.recheck.no_payment": "This order has no payment attempt to check.",
   "orders.recheck.out_of_stock": "The money was taken but the order is cancelled and the stock is gone. The order could not be completed: refund the customer.",
   "orders.recheck.amount_mismatch": "The amount taken does not match the order total. The order was not completed; check the payment provider's panel.",
+  "orders.hand.button": "Hand over in person",
+  "orders.hand.buttonTitle": "Use when you deliver the order to the customer yourself, without a carrier",
+  "orders.hand.title": "#{number} — hand delivery",
+  "orders.hand.body": "The order becomes “Delivered” without a carrier or tracking code. No label is bought and the automatic Geliver shipment will not run for it. This cannot be undone.",
+  "orders.hand.note": "Note (optional)",
+  "orders.hand.noteHint": "E.g. who received it or where. Only shown in the order history.",
+  "orders.hand.notify": "Send the customer the “delivered” message",
+  "orders.hand.notifyHint": "Goes to {email} (and by SMS when enabled). No “shipped” message is sent.",
+  "orders.hand.confirm": "Mark as delivered",
+  "orders.toast.handDelivered": "Order marked as handed over",
+  "orders.error.hand_delivered": "This order is already marked as handed over in person.",
+  "orders.error.carrier_shipment_exists": "A carrier shipment exists for this order. Cancel it in Geliver first to hand it over in person.",
   "orders.toast.statusUpdated": "Status updated",
 
   // ---- Refund

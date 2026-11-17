@@ -343,7 +343,7 @@ store.get("/orders/:number", async (c) => {
         slug: v && v.status === "active" ? v.slug : null,
       };
     }),
-    shipments: ships.map((s) => ({ carrier: s.carrier, trackingNumber: s.trackingNumber, trackingUrl: s.trackingUrl, status: s.status })),
+    shipments: ships.map((s) => ({ carrier: s.carrier, trackingNumber: s.trackingNumber, trackingUrl: s.trackingUrl, status: s.status, method: s.provider === "hand" ? "hand" : "carrier" })),
     purchaseEventId: paid ? purchaseEventId(o.id) : null,
   });
 });

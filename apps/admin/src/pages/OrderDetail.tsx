@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { FileText, Mail } from "lucide-react";
+import { FileText, Handshake, Mail } from "lucide-react";
 import { PrintMenu } from "../components/PrintMenu";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ORDER_TRANSITIONS } from "@openshelf/shared";
@@ -14,7 +14,7 @@ import { dateTime, enumLabel, label, money, toMajor, toMinor } from "../lib/form
 import { orderDetailFromApi } from "../lib/adapt";
 import { NotificationHistory } from "../components/NotificationHistory";
 import { AddressDialog, AddressSummary, addressIssue, type OrderAddr } from "../components/OrderAddress";
-import { Badge, Button, Card, ConfirmDialog, EmptyState, ErrorState, Loading, Modal, PageHeader, SelectField, Skeleton, statusTone, Table, Td, TextField, useToast } from "../components/ui";
+import { Badge, Button, Card, ConfirmDialog, EmptyState, ErrorState, Loading, Modal, PageHeader, SelectField, Skeleton, statusTone, Table, Td, TextField, Toggle, useToast } from "../components/ui";
 
 export default function OrderDetail() {
   const { id } = useParams();
@@ -27,11 +27,13 @@ export default function OrderDetail() {
   const [ship, setShip] = useState<string | null>(null);
   const [editAddr, setEditAddr] = useState(false);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [hand, setHand] = useState<{ note: string; notify: boolean } | null>(null);
   const done = (msg: string) => () => { qc.invalidateQueries({ queryKey: ["order", id] }); qc.invalidateQueries({ queryKey: ["orders"] }); toast.success(msg); };
   const fail = (e: unknown) => toast.error(describeOrderError(e).message);
 
   const status = useMutation({ mutationFn: (s: string) => api.post(`/api/admin/orders/${id}/status`, { status: s }), onSuccess: () => { setTransition(null); done(t("orders.toast.statusUpdated"))(); }, onError: fail });
   const doRefund = useMutation({ mutationFn: () => api.post(`/api/admin/orders/${id}/refund`, { amount: toMinor(refund!.amount), reason: refund!.reason }), onSuccess: () => { setRefund(null); done(t("orders.toast.refundRequested"))(); }, onError: fail });
+  const doHand = useMutation({ mutationFn: () => api.post(`/api/admin/orders/${id}/hand-delivery`, { note: hand!.note.trim() || undefined, notify: hand!.notify }), onSuccess: () => { setHand(null); done(t("orders.toast.handDelivered"))(); }, onError: fail });
   const doShip = useMutation({ mutationFn: () => api.post(`/api/admin/orders/${id}/shipment`, { serviceId: ship }), onSuccess: () => { setShip(null); done(t("orders.toast.shipmentCreated"))(); }, onError: fail });
   // carrier offers for the "create shipment" dialog, loaded when it opens; the cheapest is preselected
   const quotes = useQuery({
@@ -86,12 +88,17 @@ export default function OrderDetail() {
   const addr = o.shippingAddress as OrderAddr | undefined;
   const canEditAddr = !managed && ["pending", "awaiting_payment", "paid", "fulfilling"].includes(o.status);
   const mockPay = o.payments.some((p) => p.isMock);
+  const handDone = o.shipments.some((s) => s.provider === "hand");
+  const activeCarrier = o.shipments.some((s) => s.provider !== "hand" && !["cancelled", "returned"].includes(s.status));
+  /** Hand delivery: website orders that are paid and not delivered, with no live carrier shipment. */
+  const canHand = !managed && !handDone && !activeCarrier && ["paid", "fulfilling", "shipped"].includes(o.status);
   return (
     <>
       <PageHeader title={t("orders.detail.title", { number: o.number })} description={t("orders.detail.description", { date: dateTime(o.createdAt), customer: `${o.customerName ?? ""} ${o.email ?? ""}`.trim() || "-" })} guide="orders#siparis-detayi"
         actions={<><Link to="/orders"><Button variant="ghost">{t("common.back")}</Button></Link>
           {canRefund && <Button variant="secondary" title={t("orders.detail.refund.title")} onClick={() => setRefund({ amount: "", reason: "" })}>{t("orders.detail.refund")}</Button>}
-          {!managed && <Button variant="secondary" title={t("orders.detail.createShipment.title")} onClick={() => setShip("")}>{t("orders.detail.createShipment")}</Button>}
+          {!managed && !handDone && <Button variant="secondary" title={t("orders.detail.createShipment.title")} onClick={() => setShip("")}>{t("orders.detail.createShipment")}</Button>}
+          {canHand && <Button variant="secondary" title={t("orders.hand.buttonTitle")} onClick={() => setHand({ note: "", notify: true })}><Handshake size={15} />{t("orders.hand.button")}</Button>}
           {!managed && <Button variant="secondary" title={t("orders.detail.issueInvoice.title")} loading={invoice.isPending} onClick={() => setInvoiceOpen(true)}>{t("orders.detail.issueInvoice")}</Button>}
           {!managed && <Link to={`/invoices/new?orderId=${encodeURIComponent(o.id)}`} title={t("orders.detail.invoiceFromOrder.title")}><Button variant="secondary"><FileText size={15} />{t("orders.detail.invoiceFromOrder")}</Button></Link>}
           <Link to={`/emails/compose?${new URLSearchParams({ ...(o.email ? { to: o.email } : {}), orderId: o.id, subject: t("orders.detail.emailSubject", { number: o.number }) })}`} title={t("orders.detail.emailCustomer.title")}><Button variant="secondary"><Mail size={15} />{t("orders.detail.emailCustomer")}</Button></Link>
@@ -171,6 +178,14 @@ export default function OrderDetail() {
           <Button size="sm" variant="secondary" onClick={() => setRefund({ ...refund, amount: toMajor(o.total) })}>{t("orders.refund.fillFull")}</Button>
           <TextField label={t("orders.refund.reason")} help="orders.refundReason" hint={t("orders.refund.reason.hint")} value={refund.reason} onChange={(e) => setRefund({ ...refund, reason: e.target.value })} />
           <p role="note" className="rounded-lg border border-warn-line bg-warn-soft px-3 py-2 text-sm text-warn">{t("orders.refund.consequences")}</p>
+        </div>}
+      </Modal>
+      <Modal open={!!hand} onClose={() => setHand(null)} title={t("orders.hand.title", { number: o.number })}
+        footer={<><Button variant="ghost" onClick={() => setHand(null)}>{t("common.cancel")}</Button><Button loading={doHand.isPending} onClick={() => doHand.mutate()}><Handshake size={15} />{t("orders.hand.confirm")}</Button></>}>
+        {hand && <div className="space-y-4">
+          <p className="text-sm text-muted">{t("orders.hand.body")}</p>
+          <TextField label={t("orders.hand.note")} hint={t("orders.hand.noteHint")} maxLength={300} value={hand.note} onChange={(e) => setHand({ ...hand, note: e.target.value })} />
+          <Toggle label={t("orders.hand.notify")} hint={o.email ? t("orders.hand.notifyHint", { email: o.email }) : undefined} checked={hand.notify} onChange={(v) => setHand({ ...hand, notify: v })} />
         </div>}
       </Modal>
       {editAddr && <AddressDialog orderId={o.id} address={addr} onClose={() => setEditAddr(false)} />}

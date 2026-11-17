@@ -161,6 +161,18 @@ export const orders = {
   "orders.recheck.no_payment": "Bu siparişte kontrol edilecek bir ödeme denemesi yok.",
   "orders.recheck.out_of_stock": "Para çekilmiş ama sipariş iptal ve stok kalmamış. Sipariş tamamlanamadı: müşteriye iade yapın.",
   "orders.recheck.amount_mismatch": "Çekilen tutar sipariş tutarıyla uyuşmuyor. Sipariş tamamlanmadı; ödeme sağlayıcı panelinden kontrol edin.",
+  "orders.hand.button": "Elden teslim et",
+  "orders.hand.buttonTitle": "Kargo kullanmadan, siparişi müşteriye kendiniz teslim ettiğinizde kullanın",
+  "orders.hand.title": "#{number} — elden teslim",
+  "orders.hand.body": "Sipariş kargo ve takip kodu olmadan “Teslim edildi” olur. Kargo etiketi alınmaz, Geliver otomatik gönderisi bu sipariş için çalışmaz. Bu işlem geri alınamaz.",
+  "orders.hand.note": "Not (isteğe bağlı)",
+  "orders.hand.noteHint": "Örn. teslim alan kişi veya yer. Yalnızca sipariş geçmişinde görünür.",
+  "orders.hand.notify": "Müşteriye “teslim edildi” bildirimi gönder",
+  "orders.hand.notifyHint": "{email} adresine (ve açıksa SMS ile) gider. “Kargoya verildi” bildirimi gönderilmez.",
+  "orders.hand.confirm": "Teslim edildi olarak işaretle",
+  "orders.toast.handDelivered": "Sipariş elden teslim edildi olarak işaretlendi",
+  "orders.error.hand_delivered": "Bu sipariş zaten elden teslim edildi olarak işaretli.",
+  "orders.error.carrier_shipment_exists": "Bu sipariş için bir kargo gönderisi var. Elden teslim etmek için önce gönderiyi Geliver'de iptal edin.",
   "orders.toast.statusUpdated": "Durum güncellendi",
 
   // ---- İade

@@ -202,6 +202,18 @@ Siparişi paketledikten sonra sipariş sayfasından kargo gönderisi oluştururs
 
 Gönderiyi başka bir yoldan (örneğin kargo şubesinden) yaptıysanız **Kargo oluştur** kullanmak zorunda değilsiniz. Ancak **Ödendi** durumundaki bir sipariş doğrudan **Kargoya verildi**'ye geçemez: önce **Hazırlanıyor**'a, sonra **Kargoya verildi**'ye alın. Bu durumda sistemde takip numarası olmadığından müşteri bildirimine takip numarası eklenemez; takip numarasını **Müşteriye e-posta gönder** ile elle iletebilirsiniz.
 
+### Elden teslimat
+
+Siparişi kargo kullanmadan müşteriye kendiniz verdiyseniz (mağazadan teslim, kurye ile kendiniz götürme vb.) takip kodu gerekmez. Yalnızca web sitesi siparişlerinde kullanılır; Trendyol siparişlerinin teslimatını Trendyol yönetir.
+
+1. Sipariş detayında **Elden teslim et**'e basın (sipariş panosunda el sıkışma ikonu da aynı işi yapar).
+2. İsterseniz bir not yazın (örn. teslim alan kişi). Not yalnızca sipariş geçmişinde görünür.
+3. **Müşteriye "teslim edildi" bildirimi gönder** açıksa müşteriye yalnızca "teslim edildi" e-postası/SMS'i gider; takip linksiz "kargoya verildi" bildirimi gönderilmez.
+4. **Teslim edildi olarak işaretle** ile onaylayın. Sipariş **Teslim edildi** olur, kargo listesinde "Elden teslimat" görünür.
+
+- Siparişin aktif bir kargo gönderisi varsa önce onu Geliver'de iptal edin. Elden teslim edilen siparişe sonradan kargo etiketi alınamaz; Geliver otomatik gönderisi de bu siparişi atlar.
+- İşlem geri alınamaz. Fatura kesimi bundan etkilenmez; faturayı her zamanki gibi **Fatura kes** ile kesin.
+
 ### Paket ağırlığı ve ölçüleri
 
 Sistem, gönderi için her ürünün ağırlığını kullanır. Ürün formunda ağırlık alanı bulunmadığından ağırlığı tanımlı olmayan ürünler için **adet başına 500 gram** varsayılır; boyutlar varsayılan olarak 10×10×10 cm kabul edilir. Gerçek ağırlıklarınız farklıysa kargo ücreti beklediğinizden farklı çıkabilir. Geliver çekmecesindeki **Test modu**'nun canlıda **kapalı** olduğundan emin olun (aksi halde ücretsiz test gönderileri oluşur ve paketler gerçek bir kargoya iletilmez).

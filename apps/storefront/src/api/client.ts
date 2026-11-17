@@ -62,7 +62,7 @@ const orderOf = (o: Wire): OrderView => ({
     imageUrl: i.imageUrl ?? null, productSlug: i.slug ?? null, sku: i.sku ?? undefined,
   })),
   shippingAddress: o.shippingAddress ? addressFromWire(o.shippingAddress) : undefined,
-  shipment: o.shipments?.[0] ? { carrier: o.shipments[0].carrier ?? undefined, trackingNumber: o.shipments[0].trackingNumber ?? undefined, trackingUrl: o.shipments[0].trackingUrl ?? undefined, status: o.shipments[0].status } : null,
+  shipment: o.shipments?.[0] ? { carrier: o.shipments[0].carrier ?? undefined, trackingNumber: o.shipments[0].trackingNumber ?? undefined, trackingUrl: o.shipments[0].trackingUrl ?? undefined, status: o.shipments[0].status, hand: o.shipments[0].method === "hand" } : null,
 });
 const addressFromWire = (a: Wire): Partial<Address> => ({
   fullName: [a.name, a.surname].filter(Boolean).join(" "), phone: a.phone, line1: a.line1, line2: a.line2, city: a.city, district: a.district, postalCode: a.zip, country: a.country,

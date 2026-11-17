@@ -81,6 +81,17 @@ describe("geliver", () => {
     await createShipmentHandler(() => repo)({ id: "j", kind: "shipment.create", payload: { orderId: "o1" }, attempts: 0 }, ctx);
     expect(calls).toBe(0); expect(logs[0]).toContain("channel-managed");
   });
+  it("shipment.create never buys a label for an order handed over in person (or no longer shippable)", async () => {
+    let calls = 0;
+    const repo: ShipmentRepo = {
+      sourceOf: async () => "website", blockedReason: async () => "handed over in person",
+      loadOrder: async () => { calls++; return { input, currency: "TRY", total: 1 }; }, findShipment: async () => null, saveShipment: async () => { calls++; },
+    };
+    const logs: string[] = [];
+    const adapter = new Proxy({}, { get: () => () => { calls++; } });
+    await createShipmentHandler(() => repo)({ id: "j", kind: "shipment.create", payload: { orderId: "o1" }, attempts: 0 }, { db: {}, env: {}, getAdapter: async () => adapter, log: async (_l: string, m: string) => { logs.push(m); } });
+    expect(calls).toBe(0); expect(logs[0]).toContain("handed over in person");
+  });
   it("shipment.create still ships website orders", async () => {
     let created = 0;
     const repo: ShipmentRepo = { sourceOf: async () => "website", loadOrder: async () => ({ input, currency: "TRY", total: 1 }), findShipment: async () => null, saveShipment: async () => {} };
