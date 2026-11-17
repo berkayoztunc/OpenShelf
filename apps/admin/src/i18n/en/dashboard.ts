@@ -59,6 +59,7 @@ export const dashboard = {
   "dashboard.recent.viewAll": "View all",
   "dashboard.recent.empty": "Orders placed in the storefront appear here.",
   "dashboard.recent.caption": "Recent orders",
+  "dashboard.recent.customer": "Customer",
   "dashboard.recent.order": "Order",
   "dashboard.mockBadge": "MOCK",
   "dashboard.health.title": "Integration health",

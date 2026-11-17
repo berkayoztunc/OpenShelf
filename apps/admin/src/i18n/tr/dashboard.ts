@@ -59,6 +59,7 @@ export const dashboard = {
   "dashboard.recent.viewAll": "Tümünü gör",
   "dashboard.recent.empty": "Vitrinden verilen siparişler burada görünür.",
   "dashboard.recent.caption": "Son siparişler",
+  "dashboard.recent.customer": "Müşteri",
   "dashboard.recent.order": "Sipariş",
   "dashboard.mockBadge": "MOCK",
   "dashboard.health.title": "Entegrasyon sağlığı",
