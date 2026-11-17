@@ -4,8 +4,8 @@ import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { useSettings } from "../../lib/settings";
-import { MAX_PRINT_IDS, mapPool, parseIds, PRINT_KINDS } from "../../lib/print";
-import type { PrintKind } from "../../lib/print";
+import { isLabelSize, LABEL_MM, LABEL_SIZES, MAX_PRINT_IDS, mapPool, parseIds, PRINT_KINDS, storedLabelSize, storeLabelSize } from "../../lib/print";
+import type { LabelSize, PrintKind } from "../../lib/print";
 import type { RawOrder } from "../../lib/rawOrder";
 import type { InvoiceFull } from "../../lib/invoices";
 import { tNow, useT } from "../../i18n";
@@ -15,10 +15,8 @@ import { InvoiceDoc, LabelDoc, manualInvoiceData, orderInvoiceData, PackingDoc, 
 import type { Seller } from "./docs";
 import "./print.css";
 
-const PAGE_CSS: Record<PrintKind, string> = {
-  label: "@page { size: 100mm 150mm; margin: 0; }",
-  packing: "@page { size: A4; margin: 14mm; }", invoice: "@page { size: A4; margin: 14mm; }", summary: "@page { size: A4; margin: 14mm; }", "manual-invoice": "@page { size: A4; margin: 14mm; }",
-};
+const A4 = "@page { size: A4; margin: 14mm; }";
+const pageCss = (kind: PrintKind, size: LabelSize) => (kind === "label" ? `@page { size: ${LABEL_MM[size][0]}mm ${LABEL_MM[size][1]}mm; margin: 0; }` : A4);
 interface Loaded<T> { id: string; data?: T; error?: string }
 const reason = (e: unknown) => (e instanceof Error ? e.message : tNow("print.loadError"));
 
@@ -28,6 +26,8 @@ export default function PrintPage() {
   const kind = PRINT_KINDS.includes(rawKind as PrintKind) ? (rawKind as PrintKind) : null;
   const { ids, truncated } = useMemo(() => parseIds(sp.get("ids")), [sp]);
   const [showPrices, setShowPrices] = useState(false);
+  const [size, setSizeState] = useState<LabelSize>(() => { const q = sp.get("size"); return isLabelSize(q) ? q : storedLabelSize(); });
+  const setSize = (v: LabelSize) => { setSizeState(v); storeLabelSize(v); };
   const settings = useSettings();
 
   // Screen-only chrome (admin theme) must not leak into the paper: force light colour scheme while mounted.
@@ -62,10 +62,14 @@ export default function PrintPage() {
         <span className="text-sm text-muted">{title} · {tp("print.count", ok.length)}</span>
         <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1">
           {kind === "packing" && <span className="flex items-center gap-1"><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={showPrices} onChange={(e) => setShowPrices(e.target.checked)} />{t("print.showPrices")}</label><HelpTip id="orders.printPrices" guide="orders#yazdirma" /></span>}
-          <span className="flex items-center gap-1 text-xs text-muted">{kind === "label" ? t("print.labelPaper") : t("print.tipA4")}<HelpTip id="print.paper" guide="orders#yazdirma" /></span>
+          {kind === "label" && <div role="radiogroup" aria-label={t("print.labelSize")} className="flex items-center gap-1 rounded-lg border border-line p-0.5">
+            {LABEL_SIZES.map((s) => <button key={s} type="button" role="radio" aria-checked={size === s} onClick={() => setSize(s)}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium tabular-nums transition ${size === s ? "bg-brand-600 text-white" : "text-muted hover:bg-hover hover:text-ink"}`}>{t(`print.size.${s}`)}</button>)}
+          </div>}
+          <span className="flex items-center gap-1 text-xs text-muted">{kind === "label" ? t("print.labelPaper", { w: LABEL_MM[size][0], h: LABEL_MM[size][1] }) : t("print.tipA4")}<HelpTip id="print.paper" guide="orders#yazdirma" /></span>
         </div>
       </div>
-      <style>{PAGE_CSS[kind]}</style>
+      <style>{pageCss(kind, size)}</style>
       {ids.length === 0 && <p className="pr-notice">{t("print.noIds")}</p>}
       {truncated && <p className="pr-notice">{t("print.truncated", { max: MAX_PRINT_IDS })}</p>}
       {bad.length > 0 && <div className="pr-notice" role="alert">{tp("print.loadFailed", bad.length, { list: bad.map((b) => `${b.id.slice(0, 8)} (${b.error})`).join(", ") })}</div>}
@@ -74,7 +78,7 @@ export default function PrintPage() {
           {ok.map((d) => {
             if (kind === "manual-invoice") return <InvoiceDoc key={d.id} data={manualInvoiceData(d.data as InvoiceFull, seller)} />;
             const o = d.data as RawOrder;
-            if (kind === "label") return <LabelDoc key={d.id} order={o} seller={seller} />;
+            if (kind === "label") return <LabelDoc key={d.id} order={o} seller={seller} size={size} />;
             if (kind === "packing") return <PackingDoc key={d.id} order={o} seller={seller} showPrices={showPrices} />;
             if (kind === "invoice") return <InvoiceDoc key={d.id} data={orderInvoiceData(o, seller, defaultRate)} />;
             return <SummaryDoc key={d.id} order={o} seller={seller} />;

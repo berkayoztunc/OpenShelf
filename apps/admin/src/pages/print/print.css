@@ -52,6 +52,42 @@
 .pr-label-foot { display: grid; grid-template-columns: 1.3fr .9fr 1fr; gap: 2mm; border-top: .75pt solid #000; padding-top: 2mm; }
 .pr-label-foot strong { font-size: 11pt; }
 
+/* Compact sizes: the barcode block takes the free space, everything else shrinks to one or two lines. */
+.pr-label-100x100, .pr-label-50x70 { justify-content: flex-start; }
+.pr-label-100x100 .pr-label-to, .pr-label-50x70 .pr-label-to { flex: none; }
+.pr-label-100x100 .pr-label-code, .pr-label-50x70 .pr-label-code { flex: 1; display: flex; flex-direction: column; justify-content: center; min-height: 0; }
+.pr-label-100x100 .pr-label-from, .pr-label-50x70 .pr-label-from { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pr-label-100x100 .pr-label-from small, .pr-label-50x70 .pr-label-from small,
+.pr-label-100x100 .pr-label-from strong, .pr-label-50x70 .pr-label-from strong { display: inline; margin-right: 1.5mm; }
+.pr-label-100x100 .pr-label-street, .pr-label-50x70 .pr-label-street { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pr-label-100x100 .pr-label-city, .pr-label-50x70 .pr-label-city { margin-top: 0; }
+
+/* 100 x 100 mm */
+.pr-label-100x100 { height: 100mm; padding: 3.5mm; gap: 2mm; font-size: 7.5pt; }
+.pr-label-100x100 .pr-label-from { font-size: 6.5pt; padding-bottom: 1.2mm; }
+.pr-label-100x100 .pr-label-from strong { font-size: 7.5pt; }
+.pr-label-100x100 .pr-label-to { padding: 2mm; gap: .5mm; border-width: 1pt; }
+.pr-label-100x100 .pr-label-name { font-size: 11pt; }
+.pr-label-100x100 .pr-label-phone, .pr-label-100x100 .pr-label-street { font-size: 8pt; }
+.pr-label-100x100 .pr-label-city { font-size: 9.5pt; }
+.pr-label-100x100 .pr-label-codetext { font-size: 14pt; }
+.pr-label-100x100 .pr-label-foot { padding-top: 1.2mm; font-size: 6pt; }
+.pr-label-100x100 .pr-label-foot strong { font-size: 8pt; }
+
+/* 50 x 70 mm */
+.pr-label-50x70 { width: 50mm; height: 70mm; padding: 2mm; gap: 1mm; font-size: 6pt; line-height: 1.2; }
+.pr-label-50x70 small { font-size: 4.5pt; letter-spacing: .04em; }
+.pr-label-50x70 .pr-label-from { font-size: 5pt; padding-bottom: .8mm; border-bottom-width: .5pt; }
+.pr-label-50x70 .pr-label-from strong { font-size: 6pt; }
+.pr-label-50x70 .pr-label-to { padding: 1.2mm; gap: .3mm; border-width: .75pt; border-radius: 1mm; }
+.pr-label-50x70 .pr-label-name { font-size: 8pt; }
+.pr-label-50x70 .pr-label-phone, .pr-label-50x70 .pr-label-street { font-size: 6pt; line-height: 1.15; }
+.pr-label-50x70 .pr-label-city { font-size: 7pt; }
+.pr-label-50x70 .pr-label-carrier { font-size: 5.5pt; margin-bottom: .5mm; }
+.pr-label-50x70 .pr-label-codetext { margin-top: .8mm; font-size: 9pt; letter-spacing: .05em; }
+.pr-label-50x70 .pr-label-foot { gap: 1mm; padding-top: .8mm; border-top-width: .5pt; font-size: 5pt; }
+.pr-label-50x70 .pr-label-foot strong { font-size: 6.5pt; }
+
 @media print {
   html, body { background: #fff !important; color: #000 !important; margin: 0 !important; padding: 0 !important; }
   .pr-stage { background: #fff; padding: 0; min-height: 0; }

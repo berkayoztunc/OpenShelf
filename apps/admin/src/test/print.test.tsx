@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CODE128_PATTERNS, code128Pattern, code128Values } from "../lib/barcode";
 import { mapPool, parseIds } from "../lib/print";
@@ -111,6 +111,23 @@ describe("print page", () => {
     expect(document.querySelectorAll("style").length).toBeGreaterThan(0);
     await waitFor(() => expect(Array.from(document.querySelectorAll("style")).some((s) => s.textContent?.includes("100mm 150mm"))).toBe(true));
     vi.unstubAllGlobals();
+  });
+  it("label size switch: 10x10 and 5x7 change the page size, keep the barcode, and are remembered", async () => {
+    try { localStorage.clear(); } catch { /* */ }
+    mockApi({ "GET /api/admin/orders/o1": () => order() });
+    const u = userEvent.setup(); const view = renderRoutes({ "/print/:kind": <PrintPage /> }, "/print/label?ids=o1");
+    expect((await screen.findByTestId("label-doc")).getAttribute("data-size")).toBe("100x150");
+    const pageSize = () => Array.from(document.querySelectorAll("style")).map((x) => x.textContent ?? "").find((x) => x.includes("@page"));
+    await u.click(screen.getByRole("radio", { name: "10 × 10 cm" }));
+    expect(screen.getByTestId("label-doc").getAttribute("data-size")).toBe("100x100");
+    expect(pageSize()).toContain("100mm 100mm");
+    await u.click(screen.getByRole("radio", { name: "5 × 7 cm" }));
+    expect(screen.getByTestId("label-doc").className).toContain("pr-label-50x70");
+    expect(pageSize()).toContain("50mm 70mm");
+    expect(within(screen.getByTestId("label-doc")).getByRole("img")).toBeInTheDocument(); // barcode still drawn
+    view.unmount();
+    renderRoutes({ "/print/:kind": <PrintPage /> }, "/print/label?ids=o1");
+    expect((await screen.findByTestId("label-doc")).getAttribute("data-size")).toBe("50x70");
   });
   it("packing page toggles prices", async () => {
     mockApi({ "GET /api/admin/orders/o1": () => order() });
