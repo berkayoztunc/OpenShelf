@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
-  isE164, pickTemplate, smsCountryAllowed, renderEmailHtml, renderEmailText, renderSms, renderSubject, toE164,
-  type NotificationChannel, type NotificationEvent, type NotificationLang, type SettingsOf, type OrderStatus, type TemplateVars,
+  isE164, pickTemplate, smsCountryAllowed, renderEmailHtml, renderEmailTextFull, renderSms, renderSubject, toE164, buildOrderSummary, ctaLabel,
+  type NotificationChannel, type NotificationEvent, type NotificationLang, type SettingsOf, type OrderStatus, type TemplateVars, type OrderSummaryInput,
 } from "@openshelf/shared";
 import { raw, nowSec, type Db } from "../types";
 
@@ -38,6 +38,12 @@ export interface NotifyOrder {
 export interface PlanInput {
   event: NotificationEvent; order: NotifyOrder; settings: SettingsOf<"notifications">; storeName: string; defaultLocale: NotificationLang;
   storefrontOrigin: string; trackingNumber?: string | null; trackingUrl?: string | null; amountMinor?: number; lang?: NotificationLang;
+  /** Items, totals, payment and address for the e-mail's order summary (omitted = no summary block). */
+  summary?: OrderSummaryInput | null;
+  branding?: { primaryColor?: string; logoUrl?: string | null } | null;
+  footer?: { address?: string; email?: string; phone?: string } | null;
+  /** Admin order URL, used as the CTA of admin_new_order. */
+  adminOrderUrl?: string | null;
 }
 export interface ChannelPlan { channel: NotificationChannel; enabled: boolean; to: string | null; skip?: "no_recipient" | "invalid_recipient" | "country_not_allowed" }
 export interface MessagePlan {
@@ -63,6 +69,11 @@ export function planMessages(i: PlanInput): MessagePlan {
     orderNumber: i.order.number, customerName, total: formatMoney(i.amountMinor ?? i.order.total, i.order.currency, lang),
     trackingNumber: i.trackingNumber ?? "-", trackingUrl: i.trackingUrl || orderUrl, storeName: i.storeName, orderUrl,
   };
+  const summary = i.summary ? buildOrderSummary(i.summary, lang) : null;
+  const cta = admin ? (i.adminOrderUrl ? { label: ctaLabel(lang, "admin"), url: i.adminOrderUrl } : null)
+    : i.event === "order_shipped" ? { label: ctaLabel(lang, "track"), url: vars.trackingUrl! }
+    : { label: ctaLabel(lang, "order"), url: orderUrl };
+  const chrome = { lang, event: i.event, primaryColor: i.branding?.primaryColor, logoUrl: i.branding?.logoUrl, cta, summary, footer: i.footer };
   const tplSms = pickTemplate(i.settings.templates[lang], lang, i.event);
   const tplEmail = tplSms;
 
@@ -79,7 +90,7 @@ export function planMessages(i: PlanInput): MessagePlan {
   };
   const email: MessagePlan["email"] = {
     channel: "email", enabled: i.settings.events[i.event].email, to: emailTo, from: i.settings.fromEmail, fromName: i.settings.fromName || i.storeName,
-    subject: renderSubject(tplEmail.subject, vars), html: renderEmailHtml(tplEmail.body, vars, i.storeName), text: renderEmailText(tplEmail.body, vars),
+    subject: renderSubject(tplEmail.subject, vars), html: renderEmailHtml(tplEmail.body, vars, i.storeName, chrome), text: renderEmailTextFull(tplEmail.body, vars, summary, lang),
     ...(emailTo ? {} : { skip: (rawEmail ? "invalid_recipient" : "no_recipient") as "no_recipient" }),
   };
   return { lang, vars, sms, email };

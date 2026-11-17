@@ -1,5 +1,5 @@
 import { desc, eq } from "drizzle-orm";
-import { notificationLog, orders, refunds, shipments } from "@openshelf/db";
+import { notificationLog, orderItems, orders, payments, refunds, shipments } from "@openshelf/db";
 import { maskRecipient, notifyJobKind, planMessages, type NotifyOrder } from "@openshelf/core";
 import type { EmailProvider, SmsProvider } from "@openshelf/integration-sdk";
 import { NOTIFICATION_EVENTS, type NotificationChannel, type NotificationEvent, type ProviderId } from "@openshelf/shared";
@@ -61,25 +61,41 @@ export async function sendOrderNotification(event: NotificationEvent, orderId: s
   const db = ctx.db; const d1 = ctx.env.DB; const t = Math.floor(ctx.now.getTime() / 1000);
   const [o] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
   if (!o) return;
-  const [notif, general] = await Promise.all([getSettings(db, "notifications"), getSettings(db, "general")]);
+  const [notif, general, branding] = await Promise.all([getSettings(db, "notifications"), getSettings(db, "general"), getSettings(db, "branding")]);
   const flags = notif.events[event];
   if (!flags.sms && !flags.email) return;
 
-  let tracking: { trackingNumber?: string | null } = {};
-  if (event === "order_shipped") {
-    const ships = await db.select().from(shipments).where(eq(shipments.orderId, orderId)).orderBy(desc(shipments.createdAt));
-    tracking = { trackingNumber: ships.find((s) => s.trackingNumber)?.trackingNumber ?? null };
-  }
+  const [items, pays, ships] = await Promise.all([
+    db.select().from(orderItems).where(eq(orderItems.orderId, orderId)),
+    db.select().from(payments).where(eq(payments.orderId, orderId)).orderBy(desc(payments.createdAt)),
+    db.select().from(shipments).where(eq(shipments.orderId, orderId)).orderBy(desc(shipments.createdAt)),
+  ]);
+  const ship = ships.find((s) => s.trackingNumber) ?? ships[0];
+  const tracking = event === "order_shipped" ? { trackingNumber: ship?.trackingNumber ?? null, trackingUrl: ship?.trackingUrl ?? null } : {};
   let amountMinor: number | undefined;
   if (event === "order_refunded") {
     const rs = await db.select().from(refunds).where(eq(refunds.orderId, orderId));
     const sum = rs.filter((r) => r.status === "succeeded").reduce((s, r) => s + r.amount, 0);
     if (sum > 0) amountMinor = sum;
   }
+  const origin = (ctx.env.STOREFRONT_ORIGIN || (await recallOrigin(d1)) || "").replace(/\/+$/, "");
+  const pay = pays.find((p) => p.status === "succeeded") ?? pays[0];
   const order: NotifyOrder = { id: o.id, number: o.number, email: o.email, currency: o.currency, total: o.total, trackingToken: o.trackingToken, shippingAddress: o.shippingAddress };
   const plan = planMessages({
     event, order, settings: notif, storeName: general.storeName, defaultLocale: general.defaultLocale,
-    storefrontOrigin: ctx.env.STOREFRONT_ORIGIN || (await recallOrigin(d1)) || "", trackingNumber: tracking.trackingNumber, amountMinor,
+    storefrontOrigin: origin, trackingNumber: tracking.trackingNumber, trackingUrl: tracking.trackingUrl, amountMinor,
+    summary: {
+      currency: o.currency,
+      lines: items.map((it) => ({ name: it.name, sku: it.sku, quantity: it.quantity, unitPrice: it.unitPrice, taxRate: it.taxRate })),
+      subtotal: o.subtotal, discount: o.discountTotal, shipping: o.shippingTotal, tax: o.taxTotal, total: o.total, couponCode: o.couponCode,
+      payment: pay ? { provider: pay.provider, status: pay.status } : null,
+      refunded: amountMinor ?? null,
+      shippingAddress: o.shippingAddress as never,
+      carrier: ship?.carrier ?? null, trackingNumber: ship?.trackingNumber ?? null,
+    },
+    branding: { primaryColor: branding.primaryColor, logoUrl: origin && branding.logoMediaId ? `${origin}/media/${branding.logoMediaId}` : null },
+    footer: { address: general.address, email: general.contactEmail, phone: general.contactPhone },
+    adminOrderUrl: origin ? `${origin}/admin/orders/${o.id}` : null,
   });
 
   const results: { channel: NotificationChannel; outcome: Outcome; detail?: string }[] = [];
