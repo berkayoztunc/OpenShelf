@@ -14,7 +14,7 @@ describe("sidebar structure", () => {
   it("groups are in the intended order with the intended pages", () => {
     expect(NAV_GROUPS.map((g) => [g.id, g.items.map((i) => i.to)])).toEqual([
       ["home", ["/"]],
-      ["sales", ["/orders", "/customers", "/invoices", "/coupons"]],
+      ["sales", ["/orders", "/order-board", "/customers", "/invoices", "/coupons", "/profit"]],
       ["catalog", ["/products", "/categories", "/media", "/storefront"]],
       ["communication", ["/campaigns", "/emails", "/sms"]],
       ["channels", ["/trendyol", "/geliver", "/efaturam"]],

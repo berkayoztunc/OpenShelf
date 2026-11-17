@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { applyBrandTheme } from "@openshelf/ui";
-import { Truck, ShoppingBag, BookOpen, BarChart3, ChevronRight, ClipboardList, Database, LayoutDashboard, LogOut, Menu, Package, Plug, Settings, ShieldCheck, Tags, Ticket, Users, X, Zap, Inbox, FileText, Mail, Megaphone, MessageSquare, LayoutTemplate, Images, Receipt } from "lucide-react";
+import { Truck, ShoppingBag, BookOpen, BarChart3, ChevronRight, ClipboardList, Database, LayoutDashboard, LogOut, Menu, Package, Plug, Settings, ShieldCheck, Tags, Ticket, Users, X, Zap, Inbox, FileText, Mail, Megaphone, MessageSquare, LayoutTemplate, Images, Receipt, SquareKanban, Calculator } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { api } from "../lib/api";
 import { useAdmin } from "../lib/auth";
@@ -25,9 +25,11 @@ export const NAV_GROUPS: { id: string; titleKey?: MessageKey; items: NavItem[] }
   ] },
   { id: "sales", titleKey: "nav.group.sales", items: [
     { to: "/orders", labelKey: "nav.orders", icon: ClipboardList },
+    { to: "/order-board", labelKey: "nav.orderBoard", icon: SquareKanban },
     { to: "/customers", labelKey: "nav.customers", icon: Users },
     { to: "/invoices", labelKey: "nav.invoices", icon: FileText },
     { to: "/coupons", labelKey: "nav.coupons", icon: Ticket },
+    { to: "/profit", labelKey: "nav.profit", icon: Calculator },
   ] },
   { id: "catalog", titleKey: "nav.group.catalog", items: [
     { to: "/products", labelKey: "nav.products", icon: Package },
@@ -62,7 +64,7 @@ const TITLE_KEYS: Record<string, MessageKey> = Object.fromEntries(NAV_GROUPS.fla
 
 /** Persistent (non-dismissible) banner for owner/admin accounts that have not enrolled TOTP yet. */
 /** List pages that benefit from the full screen width (many columns). */
-const WIDE_ROUTES = new Set(["/orders", "/products"]);
+const WIDE_ROUTES = new Set(["/orders", "/products", "/order-board", "/profit"]);
 
 export function MfaBanner() {
   const admin = useAdmin();

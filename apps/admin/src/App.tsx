@@ -34,6 +34,8 @@ const Trendyol = lazy(() => import("./pages/trendyol/Trendyol"));
 const Geliver = lazy(() => import("./pages/Geliver"));
 const Efaturam = lazy(() => import("./pages/Efaturam"));
 const Sms = lazy(() => import("./pages/Sms"));
+const OrderBoard = lazy(() => import("./pages/OrderBoard"));
+const Profit = lazy(() => import("./pages/Profit"));
 const CampaignList = lazy(() => import("./pages/Campaigns").then((m) => ({ default: m.CampaignList })));
 const CampaignEditor = lazy(() => import("./pages/Campaigns").then((m) => ({ default: m.CampaignEditor })));
 
@@ -54,6 +56,8 @@ export function App() {
           <Route path="media" element={<Media />} />
           <Route path="orders" element={<Orders />} />
           <Route path="orders/:id" element={<OrderDetail />} />
+          <Route path="order-board" element={<OrderBoard />} />
+          <Route path="profit" element={<Profit />} />
           <Route path="invoices" element={<Invoices />} />
           <Route path="invoices/new" element={<InvoiceEditor />} />
           <Route path="invoices/:id" element={<InvoiceEditor />} />
