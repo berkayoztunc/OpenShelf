@@ -17,6 +17,8 @@ export const shell = {
   "shell.nav.primary": "Ana menü",
   "shell.nav.close": "Menüyü kapat",
   "shell.nav.toggle": "Menüyü aç veya kapat",
+  "shell.nav.collapse": "Yan menüyü gizle (tam ekran)",
+  "shell.nav.expand": "Yan menüyü göster",
   "shell.caption": "Yönetim",
   "shell.breadcrumb": "Sayfa yolu",
   "shell.integrationsFailing": " entegrasyon hatalı",

@@ -17,6 +17,8 @@ export const shell = {
   "shell.nav.primary": "Primary",
   "shell.nav.close": "Close navigation",
   "shell.nav.toggle": "Toggle navigation",
+  "shell.nav.collapse": "Hide side menu (full width)",
+  "shell.nav.expand": "Show side menu",
   "shell.caption": "Admin",
   "shell.breadcrumb": "Breadcrumb",
   "shell.integrationsFailing": " integrations failing",
