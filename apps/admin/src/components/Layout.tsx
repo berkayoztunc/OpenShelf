@@ -11,6 +11,7 @@ import { mediaUrl } from "../lib/media";
 import { useSettings } from "../lib/settings";
 import { unhealthyCount, useIntegrations } from "../lib/integrations";
 import { cx } from "./ui";
+import { CommandPalette } from "./CommandPalette";
 import { useT, type MessageKey } from "../i18n";
 import { enumLabel } from "../lib/format";
 import { LocaleSwitch } from "./LocaleSwitch";
@@ -65,7 +66,7 @@ const TITLE_KEYS: Record<string, MessageKey> = Object.fromEntries(NAV_GROUPS.fla
 
 /** Persistent (non-dismissible) banner for owner/admin accounts that have not enrolled TOTP yet. */
 /** List pages that benefit from the full screen width (many columns). */
-const WIDE_ROUTES = new Set(["/orders", "/products", "/order-board", "/profit"]);
+const WIDE_ROUTES = new Set(["/", "/orders", "/products", "/order-board", "/profit"]);
 
 export function MfaBanner() {
   const admin = useAdmin();
@@ -205,6 +206,7 @@ export function Layout() {
             <Crumbs />
           </div>
           <div className="flex items-center gap-1">
+            <CommandPalette />
             <LocaleSwitch className="mr-1 hidden sm:inline-flex" />
             <ThemeMenu />
             <UserMenu onLogout={() => logout.mutate()} />

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errMsg, qs } from "../lib/api";
 import { useT } from "../i18n";
@@ -12,7 +12,8 @@ import { Badge, Button, Card, ConfirmDialog, EmptyState, ErrorState, Loading, Pa
 
 export default function Customers() {
   const { t } = useT();
-  const [q, setQ] = useState(""); const dq = useDebounced(q);
+  const [sp] = useSearchParams();
+  const [q, setQ] = useState(sp.get("q") ?? ""); const dq = useDebounced(q);
   const [page, setPage] = useState(1);
   const [anon, setAnon] = useState<Customer | null>(null);
   const qc = useQueryClient(); const toast = useToast();
