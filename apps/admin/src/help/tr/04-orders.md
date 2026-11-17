@@ -77,7 +77,7 @@ Durum kartında düğme yoksa "Bu sipariş son durumda; artık değiştirilemez.
 
 ### Rezervasyon süresi ve otomatik iptal
 
-Müşteri ödemeye geçtiğinde stok, **Mağaza ayarları → Ödeme ve sipariş → Stok rezervasyonu (dakika)** kadar ayrılır (varsayılan 15). Süre dolup ödeme gelmediyse sistem (her dakika çalışan bir kontrolle) siparişi kendiliğinden **İptal edildi** yapar, stoğu serbest bırakır. Siz bir şey yapmazsınız.
+Müşteri ödemeye geçtiğinde stok, **Mağaza ayarları → Ödeme ve sipariş → Stok rezervasyonu (dakika)** kadar ayrılır (varsayılan 15). Süre dolup ödeme gelmediyse sistem (15 dakikada bir çalışan bir kontrolle) siparişi kendiliğinden **İptal edildi** yapar, stoğu serbest bırakır. Siz bir şey yapmazsınız.
 
 ### Sık yapılan hatalar
 
@@ -141,7 +141,7 @@ Sipariş, ancak şu kontroller geçildikten sonra **Ödendi** olur:
 | **Ödeme başarısız** | Ödeme "Başarısız" olur; sipariş **Ödeme bekleniyor**'da kalır, süre dolunca iptal olur. | Gerekmez; müşteri tekrar deneyebilir. |
 
 > [!NOTE]
-> Rezervasyon süresini çok kısa tutmak "geç ödeme" olasılığını artırır. 15–30 dakika makul bir aralıktır.
+> Rezervasyon süresini çok kısa tutmak "geç ödeme" olasılığını artırır. 15–30 dakika makul bir aralıktır. Süresi dolan rezervasyonlar 15 dakikada bir toplu olarak bırakılır; bu yüzden ödenmeyen sipariş, sürenin dolmasından sonra en fazla 15 dakika daha stok tutabilir.
 
 Ödeme sorunları için [Sorun giderme](/help/troubleshooting#odeme-sorunlari) bölümüne bakın.
 
@@ -273,7 +273,7 @@ Sipariş sayfasındaki **Yazdır** menüsü veya sipariş listesindeki toplu çu
 
 **Trendyol** entegrasyonunu açtıysanız Trendyol'daki siparişleriniz de **Siparişler** listesine düşer. Bunları **Kaynak: Trendyol** filtresiyle ayırabilirsiniz. Kurulum için [Trendyol](/help/integrations#trendyol) bölümüne bakın.
 
-- Siparişler **yaklaşık her 5 dakikada** bir otomatik çekilir (webhook kullanıyorsanız anında da gelir). Sipariş numarası `TY-` ile başlar.
+- Siparişler **yaklaşık her 15 dakikada** bir otomatik çekilir (webhook kullanıyorsanız anında da gelir). Sipariş numarası `TY-` ile başlar.
 - Her Trendyol siparişi yalnızca bir kez içeri alınır; tekrar çekildiğinde çoğaltılmaz, yalnızca durumu güncellenir.
 - Ürün satırları SKU/barkod ile mağazanızdaki varyantlara eşlenir. Eşleşen varyantın stoğu otomatik **düşer** ("Trendyol satışı"). Eşleşmeyen satır, stok düşmeden kaydedilir ve günlüğe uyarı düşer; SKU'ları Trendyol'daki ile aynı tutun.
 - Trendyol durumları OpenShelf durumlarına çevrilir (örneğin "Created" → **Ödendi**, "Shipped" → **Kargoya verildi**, "Delivered" → **Teslim edildi**, "Cancelled" → **İptal edildi**). Bu eşleme Trendyol'un güncel durum sözlüğüyle doğrulanmamıştır; sonuçları kendi panelinizle karşılaştırın.

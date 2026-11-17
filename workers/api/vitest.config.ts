@@ -33,6 +33,7 @@ export default defineWorkersConfig(async () => {
               ADMIN_ORIGIN: "http://admin.test",
               STOREFRONT_ORIGIN: "http://shop.test",
               API_ORIGIN: "http://api.test",
+              INLINE_OUTBOX: "false", // tests drive the queue explicitly; one test switches it on
             },
           },
         },

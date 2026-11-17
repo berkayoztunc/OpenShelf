@@ -1,7 +1,10 @@
 import { Hono } from "hono";
 import { eq } from "drizzle-orm";
 import { orders } from "@openshelf/db";
-import type { PaymentProvider } from "@openshelf/integration-sdk";
+import type { PaymentProvider, ShippingProvider } from "@openshelf/integration-sdk";
+import { enqueueJob } from "@openshelf/core";
+import { timingSafeEqual } from "../lib/crypto";
+import { shipmentIdFromWebhook, TRACK_JOB } from "../lib/shipmentTracking";
 import type { AppEnv, Env } from "../env";
 import { ApiError, notFound } from "../lib/http";
 import { getAdapter, logIntegrationEvent } from "../lib/integrations";
@@ -51,6 +54,27 @@ webhooks.post("/trendyol", async (c) => {
     // Verified signal only: the reconcile handler pulls + imports orders (single, idempotent ingestion path).
     await enqueueJob(c.get("db"), { kind: "trendyol.reconcile_orders", payload: {}, dedupeKey: `trendyol.reconcile_orders:wh:${order.externalId}:${order.status}` });
   }
+  return c.json({ ok: true });
+});
+
+/**
+ * Geliver TRACK_UPDATED. Unsigned by Geliver, so the secret URL token (derived from the API token) gates it and the body is only a hint:
+ * the tracking job reads the real status back from the Geliver API before touching any order.
+ */
+webhooks.post("/geliver/:token", async (c) => {
+  await enforceRateLimit(c, "webhook", 600, 60);
+  const db = c.get("db");
+  const a = await getAdapter<ShippingProvider & { webhookToken?: () => Promise<string> }>(c.env as Env, db, "geliver");
+  if (!a?.adapter.webhookToken) throw notFound("Shipping provider");
+  if (!timingSafeEqual(c.req.param("token"), await a.adapter.webhookToken())) {
+    await logIntegrationEvent(db, "geliver", "warn", "Rejected webhook: wrong URL token").catch(() => {});
+    throw new ApiError(401, "invalid_token", "Webhook token mismatch");
+  }
+  let payload: unknown = null;
+  try { payload = JSON.parse((await c.req.text()).slice(0, 64_000)); } catch { /* empty or non-JSON: re-check all open shipments */ }
+  const id = shipmentIdFromWebhook(payload);
+  const minute = Math.floor(Date.now() / 60000);
+  await enqueueJob(db, { kind: TRACK_JOB, payload: id ? { providerShipmentId: id } : {}, dedupeKey: `${TRACK_JOB}:wh:${id ?? "all"}:${minute}` });
   return c.json({ ok: true });
 });
 

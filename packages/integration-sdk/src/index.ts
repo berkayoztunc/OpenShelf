@@ -57,7 +57,11 @@ export interface PaymentProvider extends OpenShelfIntegration {
 export interface ShipmentInput { orderId: string; recipient: { name: string; phone: string; email?: string; address: string; city: string; district?: string; zip?: string }; parcels: { weightKg: number; desi?: number }[]; codAmount?: number }
 export interface ShippingQuote { carrier: string; serviceId: string; price: number; currency: string; etaDays?: number }
 export interface ShipmentResult { providerShipmentId: string; trackingNumber?: string; labelUrl?: string; carrier?: string }
-export interface TrackingStatus { status: "created" | "in_transit" | "delivered" | "returned" | "cancelled" | "unknown"; events: { at: string; detail: string }[] }
+export interface TrackingStatus {
+  status: "created" | "in_transit" | "delivered" | "returned" | "cancelled" | "unknown"; events: { at: string; detail: string }[];
+  /** Filled when the carrier assigns them after the label was bought (public tracking page, tracking number). */
+  trackingNumber?: string; trackingUrl?: string;
+}
 export interface ShippingProvider extends OpenShelfIntegration {
   quote(input: ShipmentInput): Promise<ShippingQuote[]>;
   createShipment(input: ShipmentInput, serviceId: string): Promise<ShipmentResult>;

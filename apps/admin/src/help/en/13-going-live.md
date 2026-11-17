@@ -163,7 +163,7 @@ OpenShelf itself is free software, but the services it runs on and uses may cost
 | Item | Status | Note |
 |---|---|---|
 | Cloudflare Workers and D1 | Aimed to fit within the free plans for most small stores | Limits can be exceeded as traffic, product count and order volume grow; the limits are set by Cloudflare and may change |
-| The background task that runs every minute ([cron](term:cron)) | Every minute by default | If you hit the free limits, you can lower the frequency (for example to every 5 minutes); the trade-off is that email/invoice retries and the expiry of stock reservations get slower |
+| The background task that runs every 15 minutes ([cron](term:cron)) | Every 15 minutes (hourly work on the full hour) | Sparse enough for the free limits. Trade-off: order e-mails and releasing stock reservations can lag by up to 15 minutes; jobs you start from the panel do not wait |
 | R2 (image storage) | Optional, may be a paid add-on | If you do not use it, images are stored in the database; R2 may require a payment method |
 | Queues | Optional, may be paid | Not required for the core |
 | Cloudflare Email Service | **Beta**; sending to arbitrary recipients may require the **Workers Paid** plan | On the free plan you can send only to verified addresses; domain verification is needed |

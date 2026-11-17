@@ -50,7 +50,7 @@ Entegrasyon ekranındaki **Ortam** alanı iki değer alır: **Production** (vars
 
 **Yalnızca web sitesi mi, senkron mu?** Her ürünün bir anahtarı vardır:
 
-* **Senkron:** Ürünün stoğu tek havuzdur ve Trendyol'a gönderilir. Web sitesinde ya da Trendyol'da satış olduğunda, bir Trendyol siparişi iptal edildiğinde veya stoğu elle değiştirdiğinizde yeni adet birkaç dakika içinde Trendyol'a gider. Ayrıca her 10 dakikada bir, gönderilen adet ile buradaki adet karşılaştırılır ve fark varsa düzeltilir.
+* **Senkron:** Ürünün stoğu tek havuzdur ve Trendyol'a gönderilir. Web sitesinde ya da Trendyol'da satış olduğunda, bir Trendyol siparişi iptal edildiğinde veya stoğu elle değiştirdiğinizde yeni adet birkaç dakika içinde Trendyol'a gider. Ayrıca her 15 dakikada bir, gönderilen adet ile buradaki adet karşılaştırılır ve fark varsa düzeltilir.
 * **Yalnızca web sitesi:** Trendyol'a stok ya da fiyat gönderilmez. Aynı barkod Trendyol'da satılsa bile o satış buradaki stoğu düşürmez.
 
 Anahtarı ilk kez açtığınızda varyantlar [barkodlarıyla](term:barcode) Trendyol'a bağlanır. Barkodu olmayan varyant bağlanamaz; önce ürün sayfasında barkodu girin. Listede birden çok ürünü işaretleyip toplu olarak açıp kapatabilirsiniz.
@@ -59,7 +59,7 @@ Anahtarı ilk kez açtığınızda varyantlar [barkodlarıyla](term:barcode) Tre
 
 | Tercih | Bu mağaza | Trendyol |
 | --- | --- | --- |
-| **İçerik kaynağı** (ad, açıklama, marka, fotoğraflar) | Burada düzenlersiniz; Trendyol'daki içerik buraya yazılmaz. | 30 dakikada bir Trendyol'dan alınır; burada yaptığınız içerik değişikliklerinin üzerine yazılır. |
+| **İçerik kaynağı** (ad, açıklama, marka, fotoğraflar) | Burada düzenlersiniz; Trendyol'daki içerik buraya yazılmaz. | Saatte bir Trendyol'dan alınır; burada yaptığınız içerik değişikliklerinin üzerine yazılır. |
 | **Fiyat kaynağı** | Girdiğiniz Trendyol fiyatı stokla birlikte Trendyol'a gönderilir. | Web sitesi ve Trendyol fiyatı Trendyol'daki satış fiyatından alınır; buradan fiyat gönderilmez. |
 
 > [!NOTE]
@@ -73,7 +73,7 @@ Anahtarı ilk kez açtığınızda varyantlar [barkodlarıyla](term:barcode) Tre
 **Ürün Trendyol'da yoksa.** Senkron yalnızca Trendyol'da **zaten var olan** ürünün stok ve fiyatını günceller; yeni ilan açmaz. Anahtarı açtığınızda barkodlar Trendyol'da aranır:
 
 * *Trendyol'da yok*: ürün Trendyol kataloğunuzda bulunamadı. Ürün kartındaki **Trendyol'da oluştur** düğmesi [ürün oluşturma sihirbazını](#urun-olusturma-sihirbazi) bu ürünle açar.
-* *Onay bekliyor*: ürün Trendyol'a gönderildi, onayı bekleniyor. Onaylanınca senkron kendiliğinden başlar; durum 30 dakikada bir denetlenir, **Trendyol'da yeniden kontrol et** ile hemen denetleyebilirsiniz.
+* *Onay bekliyor*: ürün Trendyol'a gönderildi, onayı bekleniyor. Onaylanınca senkron kendiliğinden başlar; durum saatte bir denetlenir, **Trendyol'da yeniden kontrol et** ile hemen denetleyebilirsiniz.
 
 **Durum rozetleri:** *Güncel* son gönderilen adet buradaki adetle aynı demektir. *Gönderilecek* bir değişikliğin sırada beklediğini gösterir. *Hata* Trendyol'un son gönderimi reddettiğini gösterir; nedeni ürün kartında varyantın altında yazar (çoğu zaman barkod Trendyol'da bulunamamıştır).
 

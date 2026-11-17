@@ -33,7 +33,7 @@
     { "binding": "DB", "database_name": "openshelf", "migrations_dir": "workers/api/migrations" }
   ],
 
-  "triggers": { "crons": ["* * * * *"] },
+  "triggers": { "crons": ["*/15 * * * *"] },
 
   // Origins default to the origin of each request (single-domain deployment). Set them only to pin a strict allowlist,
   // e.g. when you serve the storefront from a different domain than the API.

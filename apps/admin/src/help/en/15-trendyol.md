@@ -50,7 +50,7 @@ The **Sync control** tab manages every product's relationship with Trendyol on o
 
 **Website only or synced?** Every product has a switch:
 
-* **Synced:** The product's stock is one shared pool and is sent to Trendyol. When a sale happens on the website or on Trendyol, when a Trendyol order is cancelled or when you change stock by hand, the new quantity reaches Trendyol within a few minutes. In addition, every 10 minutes the quantity last sent is compared with the quantity here and any difference is corrected.
+* **Synced:** The product's stock is one shared pool and is sent to Trendyol. When a sale happens on the website or on Trendyol, when a Trendyol order is cancelled or when you change stock by hand, the new quantity reaches Trendyol within a few minutes. In addition, every 15 minutes the quantity last sent is compared with the quantity here and any difference is corrected.
 * **Website only:** No stock or price is sent to Trendyol. Even if the same barcode sells on Trendyol, that sale does not take stock here.
 
 The first time you turn the switch on, variants are linked to Trendyol by their [barcode](term:barcode). A variant without a barcode cannot be linked; enter the barcode on the product page first. You can tick several products in the list and switch them in bulk.
@@ -59,7 +59,7 @@ The first time you turn the switch on, variants are linked to Trendyol by their 
 
 | Preference | This store | Trendyol |
 | --- | --- | --- |
-| **Content source** (name, description, brand, photos) | You edit it here; Trendyol's content is never written over it. | Taken from Trendyol every 30 minutes; content edits made here are overwritten. |
+| **Content source** (name, description, brand, photos) | You edit it here; Trendyol's content is never written over it. | Taken from Trendyol every hour; content edits made here are overwritten. |
 | **Price source** | The Trendyol price you enter is sent to Trendyol together with stock. | Website and Trendyol prices are taken from Trendyol's sale price; no price is sent from here. |
 
 > [!NOTE]
@@ -73,7 +73,7 @@ The first time you turn the switch on, variants are linked to Trendyol by their 
 **When the product is not on Trendyol.** Sync only updates the stock and price of a product that **already exists** on Trendyol; it does not open a new listing. When you turn the switch on, the barcodes are looked up on Trendyol:
 
 * *Not on Trendyol*: the product was not found in your Trendyol catalog. The **Create on Trendyol** button on the product card opens the [create-product wizard](#urun-olusturma-sihirbazi) with this product.
-* *Awaiting approval*: the product was sent to Trendyol and waits for approval. Sync starts by itself once it is approved; the state is checked every 30 minutes, or right away with **Check on Trendyol again**.
+* *Awaiting approval*: the product was sent to Trendyol and waits for approval. Sync starts by itself once it is approved; the state is checked every hour, or right away with **Check on Trendyol again**.
 
 **Status badges:** *In sync* means the quantity last sent equals the quantity here. *Pending* means a change is waiting in the queue. *Error* means Trendyol rejected the last push; the reason is shown under the variant on the product card (most often the barcode was not found on Trendyol).
 

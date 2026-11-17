@@ -24,6 +24,8 @@ import { siteRoutes } from "./routes/site";
 import { storefrontNotFound, storefrontRoutes } from "./routes/storefront";
 import { adminSeo } from "./routes/admin-seo";
 import { runOutbox, registerJobHandlers } from "./outbox";
+import { TRACK_JOB, trackShipmentsHandler } from "./lib/shipmentTracking";
+import { enqueueQuestionScan, QUESTION_NOTIFY_JOB, QUESTION_SCAN_JOB, questionNotifyHandler, questionScanHandler } from "./lib/trendyolQuestions";
 import { adminNotifications } from "./routes/notifications";
 import { adminManualInvoices } from "./routes/manual-invoices";
 import { adminEmails } from "./routes/admin-emails";
@@ -44,9 +46,10 @@ import { adminTokens } from "./routes/admin-tokens";
 import { adminMcp } from "./routes/admin-mcp";
 import { notificationJobHandlers } from "./lib/notify";
 import { log } from "./lib/log";
-import { getAdapter } from "./lib/integrations";
+import { getAdapter, isIntegrationEnabled } from "./lib/integrations";
 
 registerJobHandlers(notificationJobHandlers);
+registerJobHandlers({ [TRACK_JOB]: trackShipmentsHandler, [QUESTION_SCAN_JOB]: questionScanHandler, [QUESTION_NOTIFY_JOB]: questionNotifyHandler });
 registerJobHandlers({ "campaign.send": campaignSendJob });
 export const app = new Hono<AppEnv>();
 app.use("*", baseMiddleware);
@@ -62,6 +65,12 @@ app.use("*", async (c, next) => {
 
 const admin = new Hono<AppEnv>();
 admin.use("*", adminGuard);
+// Operator actions (issue invoice, Trendyol sync, campaign send, "check now" …) queue jobs; run them now instead of at the next 15-minute tick.
+admin.use("*", async (c, next) => {
+  await next();
+  if (c.req.method === "GET" || c.res.status >= 400 || c.env.INLINE_OUTBOX === "false") return;
+  try { c.executionCtx.waitUntil(runOutbox(c.env, { limit: 10 }).catch((e) => log("warn", "inline outbox failed", { error: String(e) }))); } catch { /* no execution context (tests) */ }
+});
 admin.route("/", adminAuth);
 admin.route("/", mockAdmin); // before adminSettings: owner-only PUT /settings/system wins over the generic group route
 admin.route("/", adminSettings);
@@ -122,25 +131,57 @@ app.onError((err, c) => {
 });
 
 /** Cron (every minute): outbox, reservation expiry, periodic housekeeping, marketplace reconcile. */
+/**
+ * Cron schedule. Wrangler fires every 15 minutes (minutes 0/15/30/45, UTC); everything runs in that tick, hourly work only on the full hour:
+ *   15 min  expired stock reservations released (unpaid orders cancelled)
+ *   15 min  Trendyol order import (marketplace sales take stock)       — the Trendyol webhook only queues it, it runs in the next tick
+ *   15 min  Trendyol stock push sweep (catches any drift)
+ *   15 min  job queue: e-mails/SMS, labels, tracking, marketplace pushes …
+ *   hourly  housekeeping; Trendyol followed-product refresh, listing approval check, unanswered-question reminder; Geliver tracking
+ * Jobs started by an operator in the admin panel do not wait for the tick (see the admin router).
+ * Invoices are never issued by cron: staff cut them with the "Issue invoice" button.
+ */
+const OUTBOX_BUDGET_MS = 25_000;
 export async function runScheduled(env: Env, now = new Date()) {
   const db = drizzle(env.DB, { schema });
   const out: Record<string, unknown> = {};
-  try { out.reservations = await expireReservations(db, now); } catch (e) { log("error", "expireReservations failed", { error: String(e) }); }
   const minute = Math.floor(now.getTime() / 60000);
+  const q = Math.floor(minute / 15), h = Math.floor(minute / 60);
+  const quarter = minute % 15 === 0, hour = minute % 60 === 0;
+  if (!quarter) return out; // manual/off-schedule invocation: nothing is due
+  try { out.reservations = await expireReservations(db, now); } catch (e) { log("error", "expireReservations failed", { error: String(e) }); }
   try {
     const ty = await getAdapter(env, db, "trendyol");
     if (ty) {
-      await enqueueJob(db, { kind: "trendyol.reconcile_orders", payload: {}, dedupeKey: `trendyol.reconcile_orders:${Math.floor(minute / 5)}` }, now);
-      // Safety net: whatever changed stock (sale, refund, cancel, reservation, manual edit), drifted listings are pushed within 10 minutes.
-      if (minute % 10 === 0) await enqueueJob(db, { kind: "trendyol.stock_push", payload: { stockOnly: true }, dedupeKey: `trendyol.stock_push:sweep:${Math.floor(minute / 10)}` }, now);
-      // Listings waiting for a product to be created/approved on Trendyol are re-checked every 30 minutes (then stock starts flowing).
-      if (minute % 30 === 15) await enqueueJob(db, { kind: "trendyol.verify_listings", payload: {}, dedupeKey: `trendyol.verify_listings:cron:${Math.floor(minute / 30)}` }, now);
-      // Products whose content or price follows Trendyol are refreshed every 30 minutes.
-      if (minute % 30 === 0 && await hasFollowedProducts(db)) await enqueueJob(db, { kind: "trendyol.pull_products", payload: {}, dedupeKey: `trendyol.pull_products:cron:${Math.floor(minute / 30)}:first` }, now);
+      await enqueueJob(db, { kind: "trendyol.reconcile_orders", payload: {}, dedupeKey: `trendyol.reconcile_orders:${q}` }, now);
+      // Safety net: whatever changed stock (sale, refund, cancel, reservation, manual edit), drifted listings are pushed within 15 minutes.
+      await enqueueJob(db, { kind: "trendyol.stock_push", payload: { stockOnly: true }, dedupeKey: `trendyol.stock_push:sweep:${q}` }, now);
+      if (hour) {
+        // Unanswered customer questions: admin e-mail when new and again 6 hours before Trendyol's 24-hour answer limit.
+        await enqueueQuestionScan(db, now);
+        // Listings waiting for a product to be created/approved on Trendyol are re-checked hourly (then stock starts flowing).
+        await enqueueJob(db, { kind: "trendyol.verify_listings", payload: {}, dedupeKey: `trendyol.verify_listings:cron:${h}` }, now);
+        // Products whose content or price follows Trendyol are refreshed hourly.
+        if (await hasFollowedProducts(db)) await enqueueJob(db, { kind: "trendyol.pull_products", payload: {}, dedupeKey: `trendyol.pull_products:cron:${h}:first` }, now);
+      }
     }
   } catch (e) { log("warn", "trendyol reconcile enqueue failed", { error: String(e) }); }
-  try { out.outbox = await runOutbox(env, { now, limit: 20 }); } catch (e) { log("error", "outbox failed", { error: String(e) }); }
-  if (minute % 60 === 0) {
+  // Geliver tracking sweep: moves website orders to shipped/delivered even when the webhook is not registered or a delivery was missed.
+  if (hour) {
+    try { if (await isIntegrationEnabled(env, db, "geliver")) await enqueueJob(db, { kind: TRACK_JOB, payload: {}, dedupeKey: `${TRACK_JOB}:cron:${h}` }, now); }
+    catch (e) { log("warn", "geliver tracking enqueue failed", { error: String(e) }); }
+  }
+  // The queue only runs every 15 minutes, so drain it: keep claiming (chained jobs such as campaign batches included) within a time budget.
+  try {
+    const started = Date.now(); const total = { claimed: 0, done: 0, failed: 0, dead: 0 };
+    for (let round = 0; round < 10 && Date.now() - started < OUTBOX_BUDGET_MS; round++) {
+      const r = await runOutbox(env, { now: round === 0 ? now : new Date(now.getTime() + (Date.now() - started)), limit: 50 });
+      for (const k of Object.keys(total) as (keyof typeof total)[]) total[k] += r[k];
+      if (r.claimed === 0) break;
+    }
+    out.outbox = total;
+  } catch (e) { log("error", "outbox failed", { error: String(e) }); }
+  if (hour) {
     const t = Math.floor(now.getTime() / 1000);
     await env.DB.batch([
       env.DB.prepare("DELETE FROM rate_limits WHERE window_start < ?1").bind(t - 86400),
@@ -165,5 +206,5 @@ export async function runScheduled(env: Env, now = new Date()) {
 
 export default {
   fetch: app.fetch,
-  scheduled(_ev: ScheduledController, env: Env, ctx: ExecutionContext) { ctx.waitUntil(runScheduled(env)); },
+  scheduled(ev: ScheduledController, env: Env, ctx: ExecutionContext) { ctx.waitUntil(runScheduled(env, new Date(ev.scheduledTime))); },
 } satisfies ExportedHandler<Env>;

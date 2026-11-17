@@ -68,7 +68,8 @@ class MockGeliver implements ShippingProvider {
     await recordMock(this.d.db, { channel: "shipment", to: input.recipient.name, subject: `Mock shipment label ${r.trackingNumber}`, body: `${input.recipient.address}, ${input.recipient.city}`, meta: { provider: "geliver", orderId: input.orderId, serviceId, ...r } });
     return r;
   }
-  async track(_id: string): Promise<TrackingStatus> { return { status: "in_transit", events: [{ at: new Date(0).toISOString(), detail: "Mock: in transit" }] }; }
+  async track(_id: string): Promise<TrackingStatus> { return { status: "in_transit", events: [{ at: new Date(0).toISOString(), detail: "Mock: in transit" }], trackingUrl: `${this.d.apiOrigin}/mock/track/${encodeURIComponent(_id)}` }; }
+  async webhookToken(): Promise<string> { return "mock"; }
   async cancel(id: string) { await recordMock(this.d.db, { channel: "shipment", subject: "Mock shipment cancelled", meta: { providerShipmentId: id } }); return { ok: true }; }
 }
 

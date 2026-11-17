@@ -77,7 +77,7 @@ If there are no buttons on the Status card, it says "Final state."
 
 ### Reservation time and automatic cancellation {#rezervasyon-suresi-ve-otomatik-iptal}
 
-When a customer goes to payment, stock is held for the number of minutes set in **Settings → Checkout → Stock reservation (minutes)** (15 by default). If the time runs out and no payment has arrived, the system (with a check that runs every minute) sets the order to **Cancelled** on its own and releases the stock. You do not have to do anything.
+When a customer goes to payment, stock is held for the number of minutes set in **Settings → Checkout → Stock reservation (minutes)** (15 by default). If the time runs out and no payment has arrived, the system (with a check that runs every 15 minutes) sets the order to **Cancelled** on its own and releases the stock. You do not have to do anything.
 
 ### Common mistakes {#sik-yapilan-hatalar}
 
@@ -141,7 +141,7 @@ An order becomes **Paid** only after these checks pass:
 | **Payment failed** | The payment becomes "Failed"; the order stays in **Awaiting payment** and is cancelled when the time runs out. | Nothing needed; the customer can try again. |
 
 > [!NOTE]
-> Keeping the reservation time very short raises the chance of a "late payment". 15–30 minutes is a sensible range.
+> Keeping the reservation time very short raises the chance of a "late payment". 15–30 minutes is a sensible range. Expired reservations are released in a sweep every 15 minutes, so an unpaid order can hold stock for up to 15 minutes after its time runs out.
 
 For payment problems, see the [Troubleshooting](/help/troubleshooting#odeme-sorunlari) section.
 
@@ -273,7 +273,7 @@ The **Print** menu on the order page, or the bulk bar on the order list, opens d
 
 If you have turned on the **Trendyol** integration, your orders on Trendyol also land in the **Orders** list. You can separate them with the **Source: Trendyol** filter. For setup, see the [Trendyol](/help/integrations#trendyol) section.
 
-- Orders are fetched automatically **about every 5 minutes** (they also arrive instantly if you use the webhook). The order number starts with `TY-`.
+- Orders are fetched automatically **about every 15 minutes** (they also arrive instantly if you use the webhook). The order number starts with `TY-`.
 - Each Trendyol order is imported only once; fetching it again does not duplicate it, it only updates its status.
 - Product lines are matched to variants in your store by SKU/barcode. The stock of a matching variant is automatically **deducted** ("Trendyol sale"). A line that does not match is saved without deducting stock, and a warning is logged; keep SKUs the same as on Trendyol.
 - Trendyol statuses are translated into OpenShelf statuses (for example "Created" → **Paid**, "Shipped" → **Shipped**, "Delivered" → **Delivered**, "Cancelled" → **Cancelled**). This mapping has not been verified against Trendyol's current status dictionary; compare the results with your own panel.

@@ -99,7 +99,7 @@ describe("inventory: oversell protection", () => {
     const ok = await j<any>(await checkout(c2));
     const order = await orderOf(ok.orderNumber);
     await env.DB.prepare("UPDATE inventory_reservations SET expires_at = unixepoch() - 5 WHERE order_id = ?1").bind(order.id).run();
-    await runScheduled(env);
+    await runScheduled(env, new Date(Math.ceil(Date.now() / 900_000) * 900_000)); // reservation sweep runs at :00/:15/:30/:45
     expect((await stock(variantId))!.reserved).toBe(0);
     expect((await orderOf(ok.orderNumber)).status).toBe("cancelled");
   });

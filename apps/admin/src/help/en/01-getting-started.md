@@ -32,7 +32,7 @@ To understand the system as a whole, let's follow a single order from start to f
 Every link in this chain corresponds to a section of this guide. For details, see [Orders](/help/orders#siparis-durumlari), [Invoices](/help/invoices#otomatik-fatura) and [Integrations](/help/integrations#entegrasyonlari-test-etme).
 
 > [!NOTE]
-> Queued jobs ([outbox](term:outbox)) may not run instantly; the system checks them every minute. If a provider is temporarily unavailable, the job is retried several times at longer intervals. A slow SMS provider will never hold up your customer's payment. You can see stuck jobs on the **Integration events** screen.
+> Queued jobs ([outbox](term:outbox)) may not run instantly; the system runs them every 15 minutes (order e-mails included). Jobs you start from the panel (issuing an invoice, Trendyol sync, sending a campaign, …) start right away. If a provider is temporarily unavailable, the job is retried several times at longer intervals. A slow SMS provider will never hold up your customer's payment. You can see stuck jobs on the **Integration events** screen.
 
 ## Getting to know the admin panel {#yonetim-panelini-taniyin}
 

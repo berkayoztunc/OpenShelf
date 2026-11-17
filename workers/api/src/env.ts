@@ -11,6 +11,8 @@ export interface Env {
   STOREFRONT_ORIGIN: string;
   ADMIN_ORIGIN: string;
   API_ORIGIN: string;
+  /** "false" turns off running operator-queued jobs right after the admin request (tests). Default on. */
+  INLINE_OUTBOX?: string;
   APP_ENCRYPTION_KEY?: string;
   SETUP_TOKEN?: string;
   TURNSTILE_SECRET?: string;

@@ -59,6 +59,22 @@ async function resolveState(c: { env: AppEnv["Bindings"]; get: (k: "db") => AppE
   return { mock: false, mode: "live", env, sellerId, row };
 }
 
+/**
+ * Read-only Trendyol call for background jobs (no admin, no console history): same mock/live switch as the console.
+ * Returns null when the integration is not usable.
+ */
+export async function trendyolSystemRead(appEnv: AppEnv["Bindings"], db: AppEnv["Variables"]["db"], operationId: string, call: { path?: Record<string, string>; query?: Record<string, string | number> }): Promise<TrendyolCallResult | null> {
+  const op = operations().find((o) => o.id === operationId);
+  if (!op || op.risk !== "read") throw new Error(`trendyolSystemRead: ${operationId} is not a read operation`);
+  const st = await resolveState({ env: appEnv, get: () => db });
+  if (st.mode === "disabled" || !st.sellerId) return null;
+  const req = { path: call.path ?? {}, query: Object.fromEntries(Object.entries(call.query ?? {}).map(([k, v]) => [k, String(v)])) };
+  if (st.mock) return runMock(appEnv.DB, op, { sellerId: st.sellerId, env: st.env, ...req, body: undefined }, mocks());
+  const sec = await loadSecrets(appEnv, st.row).catch(() => ({}) as Record<string, string>);
+  if (!sec.apiKey || !sec.apiSecret) return null;
+  return runCall({ fetch: adapterDeps().fetch }, { sellerId: st.sellerId, apiKey: sec.apiKey, apiSecret: sec.apiSecret }, st.env, op, { ...req, body: undefined });
+}
+
 adminTrendyol.get("/trendyol/catalog", async (c) => {
   const st = await resolveState(c);
   const res: TrendyolCatalogResponse = {

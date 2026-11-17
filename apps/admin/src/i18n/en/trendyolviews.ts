@@ -615,7 +615,7 @@ export const trendyolviews = {
   "trendyolviews.import.create.hint": "New products are created as drafts, with stock and prices from Trendyol.",
   "trendyolviews.import.dry": "Preview",
   "trendyolviews.import.run": "Import now",
-  "trendyolviews.import.queued": "Import queued. It runs within a minute.",
+  "trendyolviews.import.queued": "Import started; it continues in the background.",
   "trendyolviews.import.state.queued": "Queued",
   "trendyolviews.import.state.running": "Running",
   "trendyolviews.import.state.done": "Done",

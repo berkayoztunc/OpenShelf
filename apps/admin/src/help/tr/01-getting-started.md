@@ -32,7 +32,7 @@ Sistemin bütününü anlamak için tek bir siparişi baştan sona izleyelim. Ö
 Bu zincirin her halkası, bu rehberin bir bölümüne karşılık gelir. Ayrıntılar için [Siparişler](/help/orders#siparis-durumlari), [Faturalar](/help/invoices#otomatik-fatura) ve [Entegrasyonlar](/help/integrations#entegrasyonlari-test-etme) bölümlerine bakın.
 
 > [!NOTE]
-> Kuyruğa alınan işler ([outbox](term:outbox)) hemen çalışmayabilir; sistem bunları her dakika kontrol eder. Bir sağlayıcı geçici olarak yanıt vermezse iş daha uzun aralıklarla birkaç kez yeniden denenir. Yavaş bir SMS sağlayıcısı müşterinizin ödemesini asla bekletmez. Takılan işleri **Entegrasyon olayları** ekranından görebilirsiniz.
+> Kuyruğa alınan işler ([outbox](term:outbox)) hemen çalışmayabilir; sistem bunları 15 dakikada bir çalıştırır (sipariş e-postaları dahil). Panelden sizin başlattığınız işler (fatura kesme, Trendyol senkronu, kampanya gönderimi vb.) beklemeden hemen başlar. Bir sağlayıcı geçici olarak yanıt vermezse iş daha uzun aralıklarla birkaç kez yeniden denenir. Yavaş bir SMS sağlayıcısı müşterinizin ödemesini asla bekletmez. Takılan işleri **Entegrasyon olayları** ekranından görebilirsiniz.
 
 ## Yönetim panelini tanıyın
 

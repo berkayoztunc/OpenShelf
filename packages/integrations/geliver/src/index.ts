@@ -173,7 +173,16 @@ export class GeliverAdapter implements ShippingProvider {
     let status: TrackingStatus["status"] = (code && map[code]) || "unknown";
     if (s.statusCode === "CANCELED") status = "cancelled";
     const events = s.trackingStatus ? [{ at: s.trackingStatus.statusDate, detail: s.trackingStatus.statusDetails || s.trackingStatus.trackingSubStatusCode || "" }] : [];
-    return { status, events };
+    return { status, events, ...(s.trackingNumber ? { trackingNumber: String(s.trackingNumber) } : {}), ...(s.trackingUrl ? { trackingUrl: String(s.trackingUrl) } : {}) };
+  }
+
+  /**
+   * Secret path segment for our Geliver webhook URL. Geliver does not sign webhooks, so the URL itself is the secret; it is derived
+   * from the API token (no extra setting to store) and changes when the token is rotated.
+   */
+  async webhookToken(): Promise<string> {
+    const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`openshelf-geliver-webhook:${this.p.secrets.apiToken}`));
+    return [...new Uint8Array(d)].slice(0, 16).map((b) => b.toString(16).padStart(2, "0")).join("");
   }
 
   async cancel(providerShipmentId: string): Promise<{ ok: boolean }> {

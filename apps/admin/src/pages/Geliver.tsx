@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, ExternalLink, RefreshCw, X } from "lucide-react";
+import { Check, Copy, ExternalLink, RefreshCw, X } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, errMsg } from "../lib/api";
 import type { GeliverCallResult, GeliverOperation } from "@openshelf/shared";
-import { Badge, Banner, Button, Card, Drawer, EmptyState, ErrorState, FilterBar, PageHeader, Skeleton, SelectField, Table, Tabs, Td, TextArea, TextField } from "../components/ui";
+import { Badge, Banner, Button, Card, Drawer, EmptyState, ErrorState, FilterBar, PageHeader, Skeleton, SelectField, Table, Tabs, Td, TextArea, TextField, useToast } from "../components/ui";
 import { fmtDate, gloc, moneyStr, offersOf, place, rowsOf, statusTone, useGeliverCall, type GeliverInput, type OfferView } from "../lib/geliver";
 import { JsonPanel } from "../components/geliver/JsonPanel";
 import { OffersTable } from "../components/geliver/Offers";
@@ -122,6 +124,40 @@ function FlowCard({ call }: { call: ReturnType<typeof useGeliverCall> }) {
             {accepted && !cancelled && <Button variant="secondary" loading={busy === "track"} onClick={() => void track()}>{t("geliver.flow.track")}</Button>}
             {!cancelled && <Button variant="danger" loading={busy === "cancel"} onClick={() => void cancel()}>{t("geliver.flow.cancel")}</Button>}
             <Button variant="ghost" onClick={reset}>{t("geliver.flow.reset")}</Button>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/* -------------------------------------------------------- Auto tracking */
+
+interface TrackingInfo { enabled: boolean; webhookUrl: string | null; lastRun: { at: string; status: string } | null }
+/** Website orders follow the carrier: shipped / delivered + customer e-mail/SMS, via a 30-minute sweep and (optionally) Geliver's webhook. */
+function TrackingCard({ call }: { call: ReturnType<typeof useGeliverCall> }) {
+  const { t, locale } = useT(); const toast = useToast(); const qc = useQueryClient();
+  const info = useQuery({ queryKey: ["geliver", "tracking"], queryFn: () => api.get<TrackingInfo>("/api/admin/geliver/tracking"), enabled: call.cat.mode !== "disabled" && !!call.cat.mode });
+  const runNow = useMutation({ mutationFn: () => api.post("/api/admin/geliver/tracking/run"), onSuccess: () => { toast.success(t("geliver.track.queued")); void qc.invalidateQueries({ queryKey: ["geliver", "tracking"] }); }, onError: (e) => toast.error(errMsg(e)) });
+  const [busy, setBusy] = useState(false);
+  const url = info.data?.webhookUrl;
+  const register = async () => { if (!url) return; setBusy(true); const r = await call.run("createWebhook", { body: { url } }); setBusy(false); if (r?.ok) toast.success(t("geliver.track.registered")); };
+  const copy = async () => { if (!url) return; try { await navigator.clipboard.writeText(url); toast.success(t("geliver.track.copied")); } catch { /* clipboard blocked */ } };
+  const last = info.data?.lastRun;
+  return (
+    <Card title={t("geliver.track.title")} actions={<Button size="sm" variant="secondary" loading={runNow.isPending} disabled={!info.data?.enabled} onClick={() => runNow.mutate()}><RefreshCw size={13} />{t("geliver.track.runNow")}</Button>}>
+      <p className="mb-3 text-sm text-muted">{t("geliver.track.body")}</p>
+      {info.isPending ? <Skeleton className="h-16" /> : !info.data?.enabled ? <p className="text-sm text-muted">{t("geliver.track.disabled")}</p> : (
+        <div className="space-y-3" data-testid="gl-tracking">
+          <p className="text-sm">{t("geliver.track.lastRun")}: <span className="text-muted">{last ? `${fmtDate(last.at, locale)} · ${last.status}` : t("geliver.track.never")}</span></p>
+          <div>
+            <p className="mb-1 text-sm font-medium">{t("geliver.track.webhook")}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <code className="min-w-0 flex-1 truncate rounded-lg bg-canvas px-2.5 py-1.5 text-xs" title={url ?? ""}>{url}</code>
+              <Button size="sm" variant="ghost" onClick={() => void copy()} aria-label={t("geliver.track.copy")}><Copy size={13} />{t("geliver.track.copy")}</Button>
+              <Button size="sm" variant="secondary" loading={busy} disabled={!call.cat.canSend} onClick={() => void register()}>{t("geliver.track.register")}</Button>
+            </div>
+            <p className="mt-1.5 text-xs text-muted">{t("geliver.track.webhookHint")}</p>
           </div>
         </div>
       )}
@@ -278,7 +314,7 @@ export default function Geliver() {
       {call.cat.error ? <ErrorState error={call.cat.error} retry={call.cat.refetch} /> : (
         <div className="space-y-5">
           <Tabs<TabId> tabs={TABS.map((x) => ({ id: x, label: t(`geliver.tab.${x}`) }))} value={tab} onChange={setTab} label={t("geliver.tabs.label")} />
-          {tab === "check" && <div className="grid gap-5 lg:grid-cols-2"><ConnectionCard call={call} /><QuoteCard call={call} /><div className="lg:col-span-2"><FlowCard call={call} /></div></div>}
+          {tab === "check" && <div className="grid gap-5 lg:grid-cols-2"><ConnectionCard call={call} /><QuoteCard call={call} /><div className="lg:col-span-2"><TrackingCard call={call} /></div><div className="lg:col-span-2"><FlowCard call={call} /></div></div>}
           {tab === "shipments" && <Shipments call={call} />}
           {tab === "explorer" && !call.cat.isPending && <Explorer call={call} />}
         </div>

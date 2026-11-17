@@ -615,7 +615,7 @@ export const trendyolviews = {
   "trendyolviews.import.create.hint": "Yeni ürünler taslak olarak, Trendyol'daki stok ve fiyatla oluşturulur.",
   "trendyolviews.import.dry": "Önizle",
   "trendyolviews.import.run": "Şimdi içe aktar",
-  "trendyolviews.import.queued": "İçe aktarma sıraya alındı. Bir dakika içinde çalışır.",
+  "trendyolviews.import.queued": "İçe aktarma başlatıldı; arka planda sürer.",
   "trendyolviews.import.state.queued": "Sırada",
   "trendyolviews.import.state.running": "Çalışıyor",
   "trendyolviews.import.state.done": "Tamamlandı",

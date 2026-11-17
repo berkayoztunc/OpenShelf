@@ -120,7 +120,7 @@ describe("coupons", () => {
     expect(await couponUsed(code)).toBe(1);
     const ob = await orderOf(b.orderNumber);
     await env.DB.prepare("UPDATE inventory_reservations SET expires_at = unixepoch() - 5 WHERE order_id = ?1").bind(ob.id).run();
-    await runScheduled(env);
+    await runScheduled(env, new Date(Math.ceil(Date.now() / 900_000) * 900_000)); // reservation sweep runs at :00/:15/:30/:45
     expect((await orderOf(b.orderNumber)).status).toBe("cancelled");
     expect(await couponUsed(code)).toBe(0);
   });

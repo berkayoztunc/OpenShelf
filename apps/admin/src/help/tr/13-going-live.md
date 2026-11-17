@@ -163,7 +163,7 @@ OpenShelf'in kendisi ücretsiz bir yazılımdır, ancak üzerinde çalıştığ�
 | Kalem | Durum | Not |
 |---|---|---|
 | Cloudflare Workers ve D1 | Çoğu küçük mağaza için ücretsiz planlara sığması hedeflenir | Trafik, ürün sayısı, sipariş hacmi arttıkça limit aşılabilir; limitler Cloudflare tarafından belirlenir ve değişebilir |
-| Her dakika çalışan arka plan görevi ([cron](term:cron)) | Varsayılan olarak her dakika | Ücretsiz limitlere takılırsanız sıklığı düşürmek mümkündür (örneğin 5 dakikada bir); bunun bedeli e-posta/fatura yeniden denemelerinin ve stok rezervasyonu süresinin dolmasının yavaşlamasıdır |
+| 15 dakikada bir çalışan arka plan görevi ([cron](term:cron)) | 15 dakikada bir (saatlik işler tam saatte) | Ücretsiz limitler için yeterince seyrek. Bedeli: sipariş e-postaları ve stok rezervasyonunun bırakılması 15 dakikaya kadar gecikebilir; panelden başlattığınız işler beklemez |
 | R2 (görsel depolama) | İsteğe bağlı, ücretli eklenti olabilir | Kullanmazsanız görseller veritabanında saklanır; R2 için ödeme yöntemi gerekebilir |
 | Queues | İsteğe bağlı, ücretli olabilir | Çekirdek için şart değil |
 | Cloudflare E-posta Hizmeti | **Beta**; rastgele alıcılara göndermek için **Workers Paid** planı gerekebilir | Ücretsiz planda yalnızca doğrulanmış adreslere gönderilebilir; alan adı doğrulaması gerekir |
