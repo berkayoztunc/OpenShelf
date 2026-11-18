@@ -282,6 +282,45 @@ export async function loadImportStatus(db: any): Promise<ImportStatus | null> {
   try { return JSON.parse(r.value) as ImportStatus; } catch { return null; }
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// Missing-on-website report: Trendyol products that match nothing local (filled by every import run, dry runs included)
+// ---------------------------------------------------------------------------------------------------------------------
+
+export const MISSING_KEY = "trendyol:products:missing";
+/** Products kept in the report; the count goes on past this (overflow). */
+const MISSING_CAP = 500;
+export interface MissingProduct {
+  externalId: string; title: string; brand?: string; image?: string; barcodes: string[]; variants: number; quantity: number; salePrice: number;
+}
+export interface MissingReport {
+  runId: string; complete: boolean; startedAt: string; finishedAt?: string;
+  /** true when the run created the missing products (import with createMissing, not a dry run) */
+  imported: boolean;
+  /** unique Trendyol products not on the website; variants = their sellable variants */
+  total: number; variants: number; items: MissingProduct[];
+}
+export async function loadMissingReport(db: any): Promise<MissingReport | null> {
+  const r = (await db.select().from(syncCursors).where(eq(syncCursors.key, MISSING_KEY)).limit(1))[0];
+  if (!r) return null;
+  try { return JSON.parse(r.value) as MissingReport; } catch { return null; }
+}
+async function saveMissingReport(db: any, rep: MissingReport) {
+  const value = JSON.stringify(rep);
+  await db.insert(syncCursors).values({ key: MISSING_KEY, value }).onConflictDoUpdate({ target: syncCursors.key, set: { value, updatedAt: new Date() } });
+}
+/** Merges one page's unmatched products into the stored report (keyed by Trendyol id, so a retried page does not double count). */
+export function mergeMissing(rep: MissingReport, page: Map<string, MissingProduct>): MissingReport {
+  const items = new Map(rep.items.map((i) => [i.externalId, i]));
+  let { total, variants } = rep;
+  for (const [id, m] of page) {
+    const prev = items.get(id);
+    if (prev) { variants += m.variants - prev.variants; items.set(id, m); continue; }
+    total++; variants += m.variants;
+    if (items.size < MISSING_CAP) items.set(id, m);
+  }
+  return { ...rep, total, variants, items: [...items.values()] };
+}
+
 const optionsTitle = (o?: Record<string, string>) => (o && Object.keys(o).length ? Object.values(o).join(" / ") : null);
 
 /**
@@ -343,7 +382,11 @@ async function resolveCategories(
  */
 export async function applyTrendyolProducts(
   db: any, remote: MarketplaceProduct[],
-  opts: { sourceOfTruth: "local" | "trendyol"; createMissing: boolean; dryRun: boolean; now?: Date; fetchCategories?: () => Promise<MarketplaceCategory[]> },
+  opts: {
+    sourceOfTruth: "local" | "trendyol"; createMissing: boolean; dryRun: boolean; now?: Date; fetchCategories?: () => Promise<MarketplaceCategory[]>;
+    /** collects products with at least one variant that matches nothing local (before anything is created) */
+    missing?: Map<string, MissingProduct>;
+  },
 ): Promise<Omit<ImportTotals, "pages">> {
   const t: Omit<ImportTotals, "pages"> = { contents: remote.length, variants: 0, linked: 0, created: 0, updated: 0, skipped: 0, stockChanged: 0, categories: 0 };
   const truth = opts.sourceOfTruth === "trendyol";
@@ -416,6 +459,11 @@ export async function applyTrendyolProducts(
       continue;
     }
     // unmatched
+    if (opts.missing) {
+      const m = opts.missing.get(p.externalId) ?? { externalId: p.externalId, title: p.title || "Untitled", ...(p.brand ? { brand: p.brand } : {}), ...(p.images[0] ? { image: p.images[0] } : {}), barcodes: [], variants: 0, quantity: 0, salePrice: v.salePrice };
+      m.variants++; m.quantity += v.quantity; if (m.barcodes.length < 5) m.barcodes.push(v.barcode);
+      opts.missing.set(p.externalId, m);
+    }
     const sku = v.stockCode || v.barcode;
     if (!opts.createMissing || usedSkus.has(sku)) { t.skipped++; continue; }
     usedSkus.add(sku); t.created++;
@@ -435,6 +483,22 @@ export async function applyTrendyolProducts(
 
   for (const c of chunks(stmts, BATCH_SIZE)) await db.batch(c as [any, ...any[]]);
   return t;
+}
+
+/** An import counts as running while queued/running and younger than 30 minutes (a dead run must not block forever). */
+export const importRunning = (st: ImportStatus | null, now = Date.now()) =>
+  !!st && (st.state === "queued" || st.state === "running") && now - Date.parse(st.startedAt) < 30 * 60_000;
+
+/** Queues an import run (admin button, scheduled missing-product scan). Returns null when one is already running. */
+export async function enqueueImport(db: any, opts: { createMissing: boolean; dryRun: boolean; runId?: string }, now = new Date()): Promise<string | null> {
+  if (importRunning(await loadImportStatus(db), now.getTime())) return null;
+  const runId = opts.runId ?? crypto.randomUUID();
+  const { createMissing, dryRun } = opts;
+  const ins = await db.insert(outboxJobs).values({ id: crypto.randomUUID(), kind: "trendyol.import_products", dedupeKey: `trendyol.import_products:${runId}:first`, payload: { runId, createMissing, dryRun } })
+    .onConflictDoNothing().returning({ id: outboxJobs.id });
+  if (!ins.length) return null; // same scheduled run already queued
+  await saveStatus(db, { runId, state: "queued", dryRun, createMissing, sourceOfTruth: "local", startedAt: now.toISOString(), totals: emptyTotals() });
+  return runId;
 }
 
 /**
@@ -457,9 +521,15 @@ export const importProducts: JobHandler = async (job, ctx) => {
   };
   try {
     const page = await provider.fetchProducts(job.payload?.cursor);
-    const r = await applyTrendyolProducts(ctx.db, page.products, { sourceOfTruth, createMissing, dryRun, fetchCategories: provider.fetchCategories?.bind(provider) });
+    // a real import that creates missing products leaves nothing missing: only dry runs / link-only runs fill the report
+    const imported = createMissing && !dryRun;
+    const missing = imported ? undefined : new Map<string, MissingProduct>();
+    const r = await applyTrendyolProducts(ctx.db, page.products, { sourceOfTruth, createMissing, dryRun, fetchCategories: provider.fetchCategories?.bind(provider), missing });
     totals.pages++;
     for (const k of Object.keys(r) as (keyof typeof r)[]) totals[k] += r[k];
+    const prevRep = job.payload?.cursor ? await loadMissingReport(ctx.db) : null;
+    const rep = mergeMissing(prevRep?.runId === runId ? prevRep : { runId, complete: false, imported, startedAt: base.startedAt, total: 0, variants: 0, items: [] }, missing ?? new Map());
+    await saveMissingReport(ctx.db, page.nextCursor ? rep : { ...rep, complete: true, finishedAt: new Date().toISOString() });
     if (page.nextCursor) {
       await saveStatus(ctx.db, base);
       await ctx.db.insert(outboxJobs).values({

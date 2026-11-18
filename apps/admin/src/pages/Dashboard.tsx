@@ -12,6 +12,7 @@ import { AlertTriangle, ArrowUpRight, Banknote, Check, CheckCircle2, Package, Pl
 import { Badge, Card, EmptyState, ErrorState, PageHeader, Skeleton, statusTone, Table, Td } from "../components/ui";
 import { mapPaged, orderRowFromApi } from "../lib/adapt";
 import type { Insights } from "../lib/insights";
+import { TrendyolMissing } from "../components/dashboard/TrendyolMissing";
 import { Delta, RankBars, RevenueChart, Sparkline, SplitBar } from "../components/dashboard/charts";
 import { dateTime } from "../lib/format";
 import type { Paged } from "../lib/types";
@@ -140,7 +141,11 @@ export default function Dashboard() {
   const q = useQuery({ queryKey: ["dashboard"], queryFn: () => api.get<DashboardData>("/api/admin/dashboard") });
   const ins = useQuery({ queryKey: ["dashboard", "insights", days], queryFn: () => api.get<Insights>(`/api/admin/dashboard/insights?days=${days}`) });
   const recent = useQuery({ queryKey: ["orders", "dashboard-recent"], queryFn: async () => mapPaged(await api.get<Paged<unknown>>("/api/admin/orders?pageSize=6"), orderRowFromApi) });
+  const elevated = !!admin && admin.role !== "staff";
+  const ints = useIntegrations(elevated);
   const settings = useSettings().data;
+  // also in mock mode and when Trendyol reports an error; the card hides itself if the API refuses (not configured)
+  const trendyolOn = elevated && (!!settings?.system?.mockMode || !!ints.data?.some((x) => x.provider === "trendyol" && x.enabled));
   const cur = settings?.general?.currency ?? "TRY";
   if (q.isPending) return <DashboardSkeleton />;
   if (q.isError) return <ErrorState error={q.error} retry={() => q.refetch()} />;
@@ -185,6 +190,8 @@ export default function Dashboard() {
           <AlertTriangle size={18} className="mt-0.5 shrink-0" /><p><strong>{t("dashboard.origin.title")}</strong> {t("dashboard.origin.body")}</p>
         </div>
       )}
+
+      {trendyolOn && <TrendyolMissing />}
 
       {ins.isError ? (
         <ErrorState error={ins.error} retry={() => ins.refetch()} />

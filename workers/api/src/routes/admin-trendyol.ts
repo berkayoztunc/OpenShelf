@@ -1,12 +1,12 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { channelListings, integrationConfigs, integrationEvents, outboxJobs, syncCursors, productMappings, productVariants, products, trendyolCalls } from "@openshelf/db";
+import { channelListings, integrationConfigs, integrationEvents, syncCursors, productMappings, productVariants, products, trendyolCalls } from "@openshelf/db";
 import {
   TrendyolCallBody, type MockHandler, type TrendyolCallResult, type TrendyolCatalogResponse, type TrendyolEnv, type TrendyolOperation,
 } from "@openshelf/shared";
 import {
-  ConsoleError, MAX_BODY_BYTES, MAX_RESPONSE_BYTES, TRENDYOL_MOCKS, TRENDYOL_OPERATIONS, loadImportStatus, opAvailableOn, runCall, stockDriftReport, ORDERS_CURSOR_KEY, htmlToText, looksLikeHtml,
+  ConsoleError, MAX_BODY_BYTES, MAX_RESPONSE_BYTES, TRENDYOL_MOCKS, TRENDYOL_OPERATIONS, loadImportStatus, loadMissingReport, enqueueImport, importRunning, opAvailableOn, runCall, stockDriftReport, ORDERS_CURSOR_KEY, htmlToText, looksLikeHtml,
 } from "@openshelf/integration-trendyol";
 import { z } from "zod";
 import type { AppEnv } from "../env";
@@ -228,21 +228,21 @@ adminTrendyol.post("/trendyol/import", async (c) => {
   const b = await body(c, ImportBody); const db = c.get("db");
   const st = await resolveState(c);
   if (st.mode === "disabled") throw new ApiError(409, "integration_unavailable", st.reason === "integration_disabled" ? "Trendyol integration is disabled" : "Trendyol integration is not configured");
-  const running = await loadImportStatus(db);
-  if (running && (running.state === "queued" || running.state === "running") && Date.now() - Date.parse(running.startedAt) < 30 * 60_000) {
-    throw new ApiError(409, "import_running", "A Trendyol product import is already running");
-  }
-  const runId = crypto.randomUUID();
   const createMissing = b.createMissing ?? false; const dryRun = b.dryRun ?? false;
-  await db.insert(outboxJobs).values({ id: crypto.randomUUID(), kind: "trendyol.import_products", dedupeKey: `trendyol.import_products:${runId}:first`, payload: { runId, createMissing, dryRun } });
-  const initial = { runId, state: "queued", dryRun, createMissing, sourceOfTruth: "local", startedAt: new Date().toISOString(), totals: { pages: 0, contents: 0, variants: 0, linked: 0, created: 0, updated: 0, skipped: 0, stockChanged: 0 } };
-  await db.run(sql`INSERT INTO sync_cursors (key, value) VALUES ('trendyol:products:last', ${JSON.stringify(initial)})
-    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = unixepoch()`);
+  const runId = await enqueueImport(db, { createMissing, dryRun });
+  if (!runId) throw new ApiError(409, "import_running", "A Trendyol product import is already running");
   await audit(c, "trendyol.import.start", "trendyol_import", runId, { createMissing, dryRun });
   return c.json({ queued: true, runId }, 202);
 });
 
 adminTrendyol.get("/trendyol/import", async (c) => c.json({ status: await loadImportStatus(c.get("db")) }));
+
+/** Trendyol products that are not on the website (last scan) plus the running import, for the dashboard card. */
+adminTrendyol.get("/trendyol/import/missing", async (c) => {
+  const db = c.get("db");
+  const [report, status] = await Promise.all([loadMissingReport(db), loadImportStatus(db)]);
+  return c.json({ report, status, running: importRunning(status) });
+});
 
 /** Sync health for the console overview: orders mirrored, cargo coverage, stock drift (local is the truth), last errors. */
 adminTrendyol.get("/trendyol/health", async (c) => {

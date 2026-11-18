@@ -48,6 +48,33 @@ describe("POST /trendyol/import (mock mode)", () => {
     expect(map?.n).toBe(2);
   });
 
+  it("dry run lists Trendyol products missing on the website; a real import with createMissing clears the list", async () => {
+    await env.DB.exec("DELETE FROM sync_cursors WHERE key IN ('trendyol:products:last','trendyol:products:missing'); DELETE FROM product_mappings; DELETE FROM inventory; DELETE FROM product_variants WHERE id LIKE 'tyv-%'; DELETE FROM products WHERE id LIKE 'ty-%';");
+    await clearOutbox();
+    expect((await admin(staff, "/trendyol/import/missing")).status).toBe(403);
+    expect((await j<any>(await admin(owner, "/trendyol/import/missing"))).report).toBeNull();
+    expect((await admin(owner, "/trendyol/import", "POST", { createMissing: true, dryRun: true })).status).toBe(202);
+    expect((await j<any>(await admin(owner, "/trendyol/import/missing"))).running).toBe(true);
+    await runOutbox(env as never, { limit: 20 });
+    const m = await j<any>(await admin(owner, "/trendyol/import/missing"));
+    expect(m.running).toBe(false);
+    expect(m.report).toMatchObject({ complete: true, imported: false, total: 1, variants: 2 });
+    expect(m.report.items[0]).toMatchObject({ externalId: "900001", title: "Mock Trendyol Tişört", variants: 2 });
+
+    await clearOutbox();
+    expect((await admin(owner, "/trendyol/import", "POST", { createMissing: true })).status).toBe(202);
+    await runOutbox(env as never, { limit: 20 });
+    const after = await j<any>(await admin(owner, "/trendyol/import/missing"));
+    expect(after.report).toMatchObject({ complete: true, imported: true, total: 0, items: [] });
+    expect(after.status.totals.created).toBe(2);
+
+    // a fresh scan now finds everything linked
+    await clearOutbox();
+    expect((await admin(owner, "/trendyol/import", "POST", { createMissing: true, dryRun: true })).status).toBe(202);
+    await runOutbox(env as never, { limit: 20 });
+    expect((await j<any>(await admin(owner, "/trendyol/import/missing"))).report).toMatchObject({ complete: true, imported: false, total: 0 });
+  });
+
   it("dry run writes nothing", async () => {
     await env.DB.exec("DELETE FROM sync_cursors WHERE key = 'trendyol:products:last'; DELETE FROM product_mappings; DELETE FROM inventory; DELETE FROM product_variants WHERE id LIKE 'tyv-%'; DELETE FROM products WHERE id LIKE 'ty-%';");
     await clearOutbox();

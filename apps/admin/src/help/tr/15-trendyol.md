@@ -104,6 +104,8 @@ Her satırın sağında küçük işlem simgeleri vardır (üzerine gelince adı
 
 Barkodu Trendyol'da zaten olan bir ürünü oluşturursanız varyant ona bağlanır, yeniden oluşturulmaz.
 
+**Sitede olmayan Trendyol ürünleri.** Trendyol kataloğunuz her 6 saatte bir otomatik taranır (hiçbir şey yazılmaz). Barkod veya stok koduyla hiçbir yerel varyanta eşleşmeyen ürünler **Genel bakış** sayfasında bir kartta listelenir. **N ürünü içe aktar** düğmesi hepsini tek seferde taslak ürün olarak ekler (stok ve fiyat Trendyol'dan gelir, varyantlar Trendyol barkodlarına bağlanır); kontrol edip yayınlarsınız. **Şimdi tara** taramayı beklemeden başlatır.
+
 ## Ürün oluşturma sihirbazı {#urun-olusturma-sihirbazi}
 
 > [!NOTE]

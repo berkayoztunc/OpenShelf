@@ -104,6 +104,8 @@ The **Mappings** sub-tab (**Local variant mappings**) links a Trendyol barcode t
 
 If you create a product whose barcode already exists on Trendyol, the variant is linked to it and nothing is created again.
 
+**Trendyol products not on the website.** Your Trendyol catalog is scanned automatically every 6 hours (nothing is written). Products that match no local variant by barcode or stock code are listed in a card on the **Overview** page. **Import N products** adds them all at once as draft products (stock and price from Trendyol, variants linked to their Trendyol barcodes) for you to review and publish. **Scan now** starts a scan without waiting.
+
 ## Create-product wizard {#urun-olusturma-sihirbazi}
 
 > [!NOTE]

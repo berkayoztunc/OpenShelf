@@ -32,7 +32,7 @@ import { adminEmails } from "./routes/admin-emails";
 import { adminTrendyol } from "./routes/admin-trendyol";
 import { adminTrendyolSync } from "./routes/admin-trendyol-sync";
 import { adminTrendyolDraft } from "./routes/admin-trendyol-draft";
-import { hasFollowedProducts } from "@openshelf/integration-trendyol";
+import { enqueueImport, hasFollowedProducts } from "@openshelf/integration-trendyol";
 import { adminGeliver } from "./routes/admin-geliver";
 import { adminEfaturam } from "./routes/admin-efaturam";
 import { adminCampaigns } from "./routes/admin-campaigns";
@@ -138,6 +138,7 @@ app.onError((err, c) => {
  *   15 min  Trendyol stock push sweep (catches any drift)
  *   15 min  job queue: e-mails/SMS, labels, tracking, marketplace pushes …
  *   hourly  housekeeping; Trendyol followed-product refresh, listing approval check, unanswered-question reminder; Geliver tracking
+ *   6-hourly  Trendyol missing-product scan (dry-run import; result on the dashboard)
  * Jobs started by an operator in the admin panel do not wait for the tick (see the admin router).
  * Invoices are never issued by cron: staff cut them with the "Issue invoice" button.
  */
@@ -163,6 +164,8 @@ export async function runScheduled(env: Env, now = new Date()) {
         await enqueueJob(db, { kind: "trendyol.verify_listings", payload: {}, dedupeKey: `trendyol.verify_listings:cron:${h}` }, now);
         // Products whose content or price follows Trendyol are refreshed hourly.
         if (await hasFollowedProducts(db)) await enqueueJob(db, { kind: "trendyol.pull_products", payload: {}, dedupeKey: `trendyol.pull_products:cron:${h}:first` }, now);
+        // Every 6 hours: dry-run scan of the whole Trendyol catalog; products missing on the website show up on the dashboard.
+        if (h % 6 === 0) await enqueueImport(db, { createMissing: true, dryRun: true, runId: `scan-${h}` }, now);
       }
     }
   } catch (e) { log("warn", "trendyol reconcile enqueue failed", { error: String(e) }); }
