@@ -1,6 +1,15 @@
 export type PrintKind = "label" | "packing" | "invoice" | "summary" | "manual-invoice";
 export const PRINT_KINDS: PrintKind[] = ["label", "packing", "invoice", "summary", "manual-invoice"];
 export const MAX_PRINT_IDS = 50;
+
+/** Shipping label paper sizes (width x height, mm). Smaller sizes keep the barcode big and shrink everything else. */
+export const LABEL_SIZES = ["100x150", "100x100", "50x70"] as const;
+export type LabelSize = (typeof LABEL_SIZES)[number];
+export const LABEL_MM: Record<LabelSize, [number, number]> = { "100x150": [100, 150], "100x100": [100, 100], "50x70": [50, 70] };
+const LABEL_SIZE_KEY = "os_admin_label_size";
+export const isLabelSize = (v: unknown): v is LabelSize => LABEL_SIZES.includes(v as LabelSize);
+export function storedLabelSize(): LabelSize { try { const v = localStorage.getItem(LABEL_SIZE_KEY); return isLabelSize(v) ? v : "100x150"; } catch { return "100x150"; } }
+export function storeLabelSize(v: LabelSize) { try { localStorage.setItem(LABEL_SIZE_KEY, v); } catch { /* private mode */ } }
 /** URL for the chrome-less print route (opens outside the SPA router, so BASE_URL is prefixed). */
 export function printUrl(kind: PrintKind, ids: string[]): string {
   const base = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");

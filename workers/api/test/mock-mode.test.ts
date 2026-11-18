@@ -79,14 +79,10 @@ describe("mock mode", () => {
 
     const o = await env.DB.prepare("SELECT id FROM orders WHERE number = ?1").bind(order.orderNumber).first<{ id: string }>();
     const kinds = await jobKinds(o!.id);
-    expect(kinds).toEqual(expect.arrayContaining(["invoice.issue", "marketing.purchase.ga4", "marketing.purchase.meta", "notify.admin_new_order", "notify.order_paid", "shipment.create"]));
+    expect(kinds).toEqual(expect.arrayContaining(["marketing.purchase.ga4", "marketing.purchase.meta", "notify.admin_new_order", "notify.order_paid", "shipment.create"]));
+    expect(kinds).not.toContain("invoice.issue"); // invoices are never cut automatically; only the "Issue invoice" button queues one
     await runOutbox(env, { limit: 100 });
-    for (const ch of ["invoice", "shipment", "event", "payment"]) expect((await messages(ch)).length, ch).toBeGreaterThan(0);
-    const inv = (await messages("invoice"))[0];
-    expect(JSON.parse(inv.meta).pdfUrl).toMatch(new RegExp(`^${API}/mock/doc/invoice-[0-9a-f]{8}\\.pdf$`));
-    const pdf = await call(new URL(JSON.parse(inv.meta).pdfUrl).pathname);
-    expect(pdf.headers.get("Content-Type")).toBe("application/pdf");
-    expect((await pdf.text()).startsWith("%PDF-")).toBe(true);
+    for (const ch of ["shipment", "event", "payment"]) expect((await messages(ch)).length, ch).toBeGreaterThan(0);
 
     // replay: no second set of jobs / side effects
     const before = { jobs: await jobKinds(o!.id), inv: (await messages("invoice")).length, ev: (await messages("event")).length };

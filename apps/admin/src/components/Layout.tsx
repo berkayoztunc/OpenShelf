@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { applyBrandTheme } from "@openshelf/ui";
-import { Truck, ShoppingBag, BookOpen, BarChart3, ChevronRight, ClipboardList, Database, LayoutDashboard, LogOut, Menu, Package, Plug, Settings, ShieldCheck, Tags, Ticket, Users, X, Zap, Inbox, FileText, Mail, Megaphone, MessageSquare, LayoutTemplate, Images } from "lucide-react";
+import { Truck, ShoppingBag, BookOpen, BarChart3, ChevronRight, ClipboardList, Database, LayoutDashboard, LogOut, Menu, Package, Plug, Settings, ShieldCheck, Tags, Ticket, Users, X, Zap, Inbox, FileText, Mail, Megaphone, MessageSquare, LayoutTemplate, Images, Receipt, SquareKanban, Calculator } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { api } from "../lib/api";
 import { useAdmin } from "../lib/auth";
@@ -10,6 +11,7 @@ import { mediaUrl } from "../lib/media";
 import { useSettings } from "../lib/settings";
 import { unhealthyCount, useIntegrations } from "../lib/integrations";
 import { cx } from "./ui";
+import { CommandPalette } from "./CommandPalette";
 import { useT, type MessageKey } from "../i18n";
 import { enumLabel } from "../lib/format";
 import { LocaleSwitch } from "./LocaleSwitch";
@@ -25,9 +27,11 @@ export const NAV_GROUPS: { id: string; titleKey?: MessageKey; items: NavItem[] }
   ] },
   { id: "sales", titleKey: "nav.group.sales", items: [
     { to: "/orders", labelKey: "nav.orders", icon: ClipboardList },
+    { to: "/order-board", labelKey: "nav.orderBoard", icon: SquareKanban },
     { to: "/customers", labelKey: "nav.customers", icon: Users },
     { to: "/invoices", labelKey: "nav.invoices", icon: FileText },
     { to: "/coupons", labelKey: "nav.coupons", icon: Ticket },
+    { to: "/profit", labelKey: "nav.profit", icon: Calculator },
   ] },
   { id: "catalog", titleKey: "nav.group.catalog", items: [
     { to: "/products", labelKey: "nav.products", icon: Package },
@@ -43,6 +47,7 @@ export const NAV_GROUPS: { id: string; titleKey?: MessageKey; items: NavItem[] }
   { id: "channels", titleKey: "nav.group.channels", items: [
     { to: "/trendyol", labelKey: "nav.trendyol", icon: ShoppingBag },
     { to: "/geliver", labelKey: "nav.geliver", icon: Truck },
+    { to: "/efaturam", labelKey: "nav.efaturam", icon: Receipt },
   ] },
   { id: "integrations", titleKey: "nav.group.integrations", items: [
     { to: "/integrations", labelKey: "nav.integrations", icon: Plug, badge: "integrations" },
@@ -61,7 +66,7 @@ const TITLE_KEYS: Record<string, MessageKey> = Object.fromEntries(NAV_GROUPS.fla
 
 /** Persistent (non-dismissible) banner for owner/admin accounts that have not enrolled TOTP yet. */
 /** List pages that benefit from the full screen width (many columns). */
-const WIDE_ROUTES = new Set(["/orders", "/products"]);
+const WIDE_ROUTES = new Set(["/", "/orders", "/products", "/order-board", "/profit"]);
 
 export function MfaBanner() {
   const admin = useAdmin();
@@ -127,9 +132,15 @@ function UserMenu({ onLogout }: { onLogout: () => void }) {
   );
 }
 
+const COLLAPSE_KEY = "os_admin_sidebar_collapsed";
+const readCollapsed = () => { try { return localStorage.getItem(COLLAPSE_KEY) === "1"; } catch { return false; } };
+
 export function Layout() {
   const { t } = useT();
   const [open, setOpen] = useState(false);
+  /** Desktop only: hide the side menu to give the page the full width. Remembered per browser. */
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+  const toggleCollapsed = () => setCollapsed((c) => { try { localStorage.setItem(COLLAPSE_KEY, c ? "0" : "1"); } catch { /* private mode */ } return !c; });
   const loc = useLocation();
   const nav = useNavigate();
   const qc = useQueryClient();
@@ -149,9 +160,9 @@ export function Layout() {
   const name = settings.data?.general.storeName ?? "OpenShelf";
   const logoId = settings.data?.branding?.logoMediaId;
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[15rem_1fr]">
+    <div className={cx("min-h-screen lg:grid", collapsed ? "lg:grid-cols-[1fr]" : "lg:grid-cols-[15rem_1fr]")} data-sidebar={collapsed ? "collapsed" : "expanded"}>
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:rounded-lg focus:bg-surface focus:px-3 focus:py-2">{t("shell.skip")}</a>
-      <aside data-app-chrome className={cx("fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-line bg-surface transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0", open ? "translate-x-0 shadow-lift" : "-translate-x-full")}
+      <aside data-app-chrome className={cx("fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-line bg-surface transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0", open ? "translate-x-0 shadow-lift" : "-translate-x-full", collapsed && "lg:hidden")}
         aria-label={t("shell.nav.primary")}>
         <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-line px-4">
           <Link to="/" className="flex min-w-0 items-center gap-2.5">
@@ -159,6 +170,7 @@ export function Layout() {
             <span className="min-w-0 leading-tight"><span className="block truncate font-display text-[15px] font-semibold">{name}</span><span className="block text-[11px] text-muted">{t("shell.caption")}</span></span>
           </Link>
           <button className="grid size-8 place-items-center rounded-lg text-muted hover:bg-hover lg:hidden" aria-label={t("shell.nav.close")} onClick={() => setOpen(false)}><X size={18} /></button>
+          <button className="hidden size-8 shrink-0 place-items-center rounded-lg text-muted transition hover:bg-hover hover:text-ink lg:grid" aria-label={t("shell.nav.collapse")} title={t("shell.nav.collapse")} onClick={toggleCollapsed}><PanelLeftClose size={18} /></button>
         </div>
         <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
           {NAV_GROUPS.map((g) => {
@@ -190,9 +202,11 @@ export function Layout() {
         <header data-app-chrome className="sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b border-line bg-[var(--os-glass)] px-4 backdrop-blur-xl sm:px-6">
           <div className="flex min-w-0 items-center gap-2">
             <button className="grid size-9 place-items-center rounded-lg text-ink transition hover:bg-hover lg:hidden" aria-expanded={open} aria-label={t("shell.nav.toggle")} onClick={() => setOpen((o) => !o)}><Menu size={20} /></button>
+            {collapsed && <button className="hidden size-9 shrink-0 place-items-center rounded-lg text-ink transition hover:bg-hover lg:grid" aria-label={t("shell.nav.expand")} title={t("shell.nav.expand")} onClick={toggleCollapsed}><PanelLeftOpen size={20} /></button>}
             <Crumbs />
           </div>
           <div className="flex items-center gap-1">
+            <CommandPalette />
             <LocaleSwitch className="mr-1 hidden sm:inline-flex" />
             <ThemeMenu />
             <UserMenu onLogout={() => logout.mutate()} />
@@ -200,7 +214,7 @@ export function Layout() {
         </header>
         <MockBanner />
         <MfaBanner />
-        <main id="main" tabIndex={-1} className={`page-in mx-auto p-4 outline-none sm:p-6 lg:p-8 ${WIDE_ROUTES.has(loc.pathname) ? "max-w-[110rem]" : "max-w-6xl"}`} key={loc.pathname.split("/")[1] ?? ""}><Outlet /></main>
+        <main id="main" tabIndex={-1} className={`page-in mx-auto p-4 outline-none sm:p-6 lg:p-8 ${WIDE_ROUTES.has(loc.pathname) ? (collapsed ? "max-w-none" : "max-w-[110rem]") : collapsed ? "max-w-[90rem]" : "max-w-6xl"}`} key={loc.pathname.split("/")[1] ?? ""}><Outlet /></main>
       </div>
     </div>
   );

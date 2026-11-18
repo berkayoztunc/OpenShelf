@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { factory, createShipmentHandler, GeliverAdapter } from "../src/index";
+import { factory, createShipmentHandler, GeliverAdapter, trCityCode, trPhone } from "../src/index";
 import type { ShipmentRepo } from "../src/index";
 
 const cfg = { test: true, senderAddressId: "S1" };
@@ -7,6 +7,8 @@ const secrets = { apiToken: "tok-12345678" };
 const calls: { url: string; init: any }[] = [];
 const mk = (routes: (u: string, init: any) => any) =>
   factory.create({ config: cfg, secrets }, { now: () => new Date(), fetch: async (u: string, init: any) => { calls.push({ url: u, init }); return new Response(JSON.stringify(routes(u, init)), { status: 200 }); } }) as GeliverAdapter;
+const mkLive = (routes: (u: string, init: any) => any) =>
+  factory.create({ config: { ...cfg, test: false }, secrets }, { now: () => new Date(), fetch: async (u: string, init: any) => { calls.push({ url: u, init }); return new Response(JSON.stringify(routes(u, init)), { status: 200 }); } }) as GeliverAdapter;
 const input = { orderId: "o1", recipient: { name: "A B", phone: "+905051234567", address: "Addr", city: "34", district: "Kadikoy" }, parcels: [{ weightKg: 2 }] };
 
 describe("geliver", () => {
@@ -14,12 +16,31 @@ describe("geliver", () => {
     expect(() => factory.create({ config: {}, secrets }, { now: () => new Date(), fetch: fetch as any })).toThrow();
     expect(() => factory.create({ config: cfg, secrets: {} }, { now: () => new Date(), fetch: fetch as any })).toThrow();
   });
+  it("test mode offers only Geliver's test carrier (no API call) and explains a rejected service", async () => {
+    const before = calls.length;
+    const a = mk(() => ({ result: false, code: "E1064", message: "Teklif bulunamadı", additionalMessage: "offerId is empty" }));
+    expect(await a.quote(input)).toEqual([{ carrier: "GELIVER", serviceId: "GELIVER_STANDART", price: 0, currency: "TRY" }]);
+    expect(calls.length).toBe(before);
+    await expect(a.createShipment(input, "SURAT_STANDART")).rejects.toThrow(/service SURAT_STANDART has no offer for this shipment; Geliver is in TEST mode, where only GELIVER_STANDART is offered/);
+  });
   it("quote flattens offers, bearer auth, host allowlisted", async () => {
-    const a = mk(() => ({ result: true, priceList: [{ desi: "1", offers: [{ totalAmount: "115.76", currency: "TL", providerCode: "SURAT", providerServiceCode: "SURAT_STANDART" }] }] }));
+    const a = mkLive(() => ({ result: true, priceList: [{ desi: "1", offers: [{ totalAmount: "115.76", currency: "TL", providerCode: "SURAT", providerServiceCode: "SURAT_STANDART" }] }] }));
     const q = await a.quote(input);
     expect(q).toEqual([{ carrier: "SURAT", serviceId: "SURAT_STANDART", price: 11576, currency: "TRY" }]);
     const c = calls.at(-1)!; expect(c.url.startsWith("https://api.geliver.io/api/v1/priceList?")).toBe(true);
     expect(c.init.headers.Authorization).toBe("Bearer tok-12345678");
+  });
+  it("recipient is normalised for Geliver: +90 phone, city code from the typed city name", async () => {
+    const a = mk(() => ({ result: true, data: { shipment: { id: "sh1" } } }));
+    await a.createShipment({ ...input, recipient: { ...input.recipient, phone: "0541 123 45 67", city: " mersin " } }, "X");
+    const r = JSON.parse(calls.at(-1)!.init.body).shipment.recipientAddress;
+    expect(r).toMatchObject({ phone: "+905411234567", cityCode: "33", cityName: "mersin" });
+    expect([trPhone("5411234567"), trPhone("+90 541 123 45 67"), trPhone("905411234567"), trPhone("+49 30 1234")]).toEqual(["+905411234567", "+905411234567", "+905411234567", "+49 30 1234"]);
+    expect(["İstanbul", "ISTANBUL", "içel", "Şanlıurfa", "K.Maraş", "6", "34", "Atlantis", "99"].map(trCityCode)).toEqual(["34", "34", "33", "63", undefined, "06", "34", undefined, undefined]);
+  });
+  it("errors carry Geliver's own message", async () => {
+    const a = mk(() => ({ result: false, code: "E1", message: "Validation failed", additionalMessage: "district not found" }));
+    await expect(a.createShipment(input, "X")).rejects.toThrow("geliver error: Validation failed - district not found");
   });
   it("createShipment posts one-step transaction", async () => {
     const a = mk(() => ({ result: true, data: { shipment: { id: "sh1", labelURL: "https://l/x.pdf", providerCode: "SURAT" } } }));
@@ -59,6 +80,17 @@ describe("geliver", () => {
     const ctx = { db: {}, env: {}, getAdapter: async () => adapter, log: async (_l: string, m: string) => { logs.push(m); } };
     await createShipmentHandler(() => repo)({ id: "j", kind: "shipment.create", payload: { orderId: "o1" }, attempts: 0 }, ctx);
     expect(calls).toBe(0); expect(logs[0]).toContain("channel-managed");
+  });
+  it("shipment.create never buys a label for an order handed over in person (or no longer shippable)", async () => {
+    let calls = 0;
+    const repo: ShipmentRepo = {
+      sourceOf: async () => "website", blockedReason: async () => "handed over in person",
+      loadOrder: async () => { calls++; return { input, currency: "TRY", total: 1 }; }, findShipment: async () => null, saveShipment: async () => { calls++; },
+    };
+    const logs: string[] = [];
+    const adapter = new Proxy({}, { get: () => () => { calls++; } });
+    await createShipmentHandler(() => repo)({ id: "j", kind: "shipment.create", payload: { orderId: "o1" }, attempts: 0 }, { db: {}, env: {}, getAdapter: async () => adapter, log: async (_l: string, m: string) => { logs.push(m); } });
+    expect(calls).toBe(0); expect(logs[0]).toContain("handed over in person");
   });
   it("shipment.create still ships website orders", async () => {
     let created = 0;

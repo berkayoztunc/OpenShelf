@@ -30,10 +30,16 @@ export function Sparkline({ values }: { values: number[] }) {
   );
 }
 
-const W = 720, H = 300, BOX = { x0: 52, x1: 706, yTop: 14, yBottom: 264 };
+const DIMS = {
+  normal: { W: 720, H: 300, BOX: { x0: 52, x1: 706, yTop: 14, yBottom: 264 } },
+  /** wide and short: keeps the dashboard on one screen */
+  compact: { W: 1000, H: 230, BOX: { x0: 52, x1: 986, yTop: 12, yBottom: 200 } },
+};
 
 /** Revenue per day with the previous period overlaid. Hover/keyboard crosshair + tooltip, and a table view for screen readers. */
-export function RevenueChart({ series, previous, currency, days }: { series: DayPoint[]; previous: { revenue: number; orders: number }[]; currency: string; days: number }) {
+export function RevenueChart({ series, previous, currency, days, compact = false }: { series: DayPoint[]; previous: { revenue: number; orders: number }[]; currency: string; days: number; compact?: boolean }) {
+  const { W, H, BOX } = DIMS[compact ? "compact" : "normal"];
+  const axisText = compact ? "text-[13px]" : "text-[10px]"; // viewBox units: the compact chart is drawn wider, so its labels need more units
   const { t } = useT(); const tag = intlTag();
   const [view, setView] = useState<"chart" | "table">("chart");
   const [hover, setHover] = useState<number | null>(null);
@@ -81,9 +87,9 @@ export function RevenueChart({ series, previous, currency, days }: { series: Day
             className="h-auto w-full touch-none select-none outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40" onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={() => setHover(null)} onKeyDown={onKey} onBlur={() => setHover(null)}>
             {yTicks(top).map((v) => {
               const y = BOX.yBottom - (v / top) * (BOX.yBottom - BOX.yTop);
-              return <g key={v}><line x1={BOX.x0} x2={BOX.x1} y1={y} y2={y} strokeWidth="1" className="stroke-line" /><text x={BOX.x0 - 8} y={y + 3.5} textAnchor="end" className="fill-muted text-[10px] tabular-nums">{axisMoney(v)}</text></g>;
+              return <g key={v}><line x1={BOX.x0} x2={BOX.x1} y1={y} y2={y} strokeWidth="1" className="stroke-line" /><text x={BOX.x0 - 8} y={y + 3.5} textAnchor="end" className={`fill-muted tabular-nums ${axisText}`}>{axisMoney(v)}</text></g>;
             })}
-            {labelIdx(series.length).map((i) => <text key={i} x={curPts[i]![0]} y={H - 8} textAnchor={i === 0 ? "start" : i === series.length - 1 ? "end" : "middle"} className="fill-muted text-[10px]">{fmtDay(series[i]!.date)}</text>)}
+            {labelIdx(series.length).map((i) => <text key={i} x={curPts[i]![0]} y={H - 8} textAnchor={i === 0 ? "start" : i === series.length - 1 ? "end" : "middle"} className={`fill-muted ${axisText}`}>{fmtDay(series[i]!.date)}</text>)}
             <path d={pathOf(prevPts)} fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="stroke-data-muted" />
             <path d={`${pathOf(curPts)} L${BOX.x1} ${BOX.yBottom} L${BOX.x0} ${BOX.yBottom} Z`} className="fill-brand-600" opacity=".1" />
             <path d={pathOf(curPts)} fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="stroke-brand-600" />

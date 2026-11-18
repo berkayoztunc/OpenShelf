@@ -128,6 +128,8 @@ export interface CheckoutResponse {
 
 export interface OrderItemView {
   variantId: string; title: string; variantTitle?: string; quantity: number; unitPrice: number; imageUrl?: string | null; category?: string;
+  /** product page slug while the product is still on sale */
+  productSlug?: string | null; sku?: string;
 }
 export interface OrderView {
   orderNumber: string;
@@ -135,9 +137,10 @@ export interface OrderView {
   currency: string;
   items: OrderItemView[];
   subtotal?: number; shipping?: number; discount?: number; tax?: number; total: number;
-  createdAt?: string;
+  createdAt?: string; email?: string; couponCode?: string | null;
   shippingAddress?: Partial<Address>;
-  shipment?: { carrier?: string; trackingNumber?: string; trackingUrl?: string; status?: string } | null;
+  /** `hand`: the store handed the order over in person (no carrier, no tracking). */
+  shipment?: { carrier?: string; trackingNumber?: string; trackingUrl?: string; status?: string; hand?: boolean } | null;
   /** ASSUMED beyond contract: UUID the server uses for CAPI/MP purchase; browser reuses for dedup. */
   purchaseEventId?: string | null;
 }

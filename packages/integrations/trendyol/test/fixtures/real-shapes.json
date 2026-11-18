@@ -1,0 +1,14 @@
+{
+  "approved": { "totalElements": 2, "totalPages": 1, "page": 0, "size": 100, "content": [
+    { "contentId": 1000001, "productMainId": "MAIN-1", "brand": { "id": 1041874, "name": "Genel Markalar" }, "category": { "id": 971, "name": "Omuz Çantası" }, "title": "Neon Pop", "images": [{ "url": "https://cdn.example.com/1.jpg" }],
+      "attributes": [{ "attributeId": 348, "attributeName": "Renk", "attributeValueId": 7008, "attributeValue": "Sarı" }, { "attributeId": 47, "attributeName": "Renk", "attributeValue": "Sarı" }],
+      "variants": [{ "variantId": 1, "barcode": "B-100", "stockCode": "", "stock": { "quantity": 2 }, "price": { "salePrice": 3790, "listPrice": 3790 }, "onSale": true }, { "variantId": 2, "barcode": "B-101", "stockCode": "S-101", "stock": { "quantity": 5 }, "price": { "salePrice": 3790, "listPrice": 3790 }, "onSale": true }] } ] },
+  "unapproved": { "totalElements": 2, "content": [
+    { "productMainId": "MAIN-2", "status": "pendingApproval", "barcode": "B-200", "title": "Inbox Zero", "stockCode": "", "rejectReasonDetails": [], "cargoProviders": [] },
+    { "productMainId": "MAIN-3", "status": "rejected", "barcode": "B-300", "title": "Monster Bag", "stockCode": "S-300", "rejectReasonDetails": [{ "rejectReason": "Görselde Yasaklı Kelime", "rejectReasonDetail": "…" }] } ] },
+  "categoryTree": { "categories": [{ "id": 368, "name": "Aksesuar", "parentId": null, "subCategories": [{ "id": 971, "name": "Omuz Çantası", "parentId": 368, "subCategories": null }, { "id": 5, "name": "Şapka", "parentId": 368, "subCategories": [] }] }] },
+  "categoryAttributes": { "id": 971, "name": "Omuz Çantası", "categoryAttributes": [
+    { "allowCustom": true, "attribute": { "id": 1216, "name": "Birincil İthalatçı Adı" }, "categoryId": 971, "required": false, "varianter": false, "slicer": false, "allowMultipleAttributeValues": false },
+    { "allowCustom": false, "attribute": { "id": 33, "name": "Desen" }, "attributeValues": [{ "id": 261977, "name": "Düz" }, { "id": 999, "name": "Çizgili" }], "categoryId": 971, "required": false, "varianter": false, "slicer": false, "allowMultipleAttributeValues": false } ] },
+  "attributeValues": { "content": [{ "attributeValueId": 144271, "attributeValue": "Standart" }, { "attributeValueId": 6821, "attributeValue": "Tek Ebat" }], "page": 0, "size": 20, "totalElements": 2, "totalPages": 1 }
+}

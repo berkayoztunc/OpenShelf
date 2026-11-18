@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Orders from "../pages/Orders";
 import OrderDetail from "../pages/OrderDetail";
@@ -14,6 +14,7 @@ const DETAIL = { id: "o1", number: "DEMO-1001", source: "website", status: "paid
 beforeEach(() => { asRole("owner"); setLocale("tr"); });
 afterEach(() => vi.restoreAllMocks());
 
+const GOOD_ADDR = { name: "Ayşe", surname: "Kaya", phone: "+905411234567", line1: "Atatürk Cad. No 1", city: "Mersin", district: "Yenişehir", zip: "33140", country: "TR" };
 describe("orders in Turkish", () => {
   it("list shows human status and Turkish labels, no raw codes", async () => {
     mockApi({ "GET /api/admin/orders": () => LIST });
@@ -96,6 +97,117 @@ describe("orders in Turkish", () => {
     expect(await screen.findByText(/1 sipariş güncellendi, 1 sipariş başarısız oldu/)).toBeInTheDocument();
     expect(calls).toEqual(['/api/admin/orders/a/shipment {"serviceId":"svc-1"}']);
     expect(within(screen.getByRole("dialog")).getByText("#B-2")).toBeInTheDocument();
+  });
+  it("detail: create shipment offers Geliver quotes as a select (cheapest preselected); manual field only when quotes fail", async () => {
+    const posted: unknown[] = [];
+    mockApi({
+      "GET /api/admin/orders/o1/notifications": () => ({ items: [] }), "GET /api/admin/orders/o1$": () => ({ ...DETAIL, shippingAddress: GOOD_ADDR }),
+      "GET /api/admin/orders/o1/shipment/quotes": () => ({ provider: "geliver", weightKg: 0.5, items: [{ carrier: "SURAT", serviceId: "SURAT_STANDART", price: 6990, currency: "TRY" }, { carrier: "MNG", serviceId: "MNG_STANDART", price: 8250, currency: "TRY" }] }),
+      "POST /api/admin/orders/o1/shipment": (_p, b) => { posted.push(b); return {}; },
+    });
+    const u = userEvent.setup(); renderRoutes({ "/orders/:id": <OrderDetail /> }, "/orders/o1");
+    await u.click(await screen.findByRole("button", { name: "Kargo oluştur" }));
+    const dlg = await screen.findByRole("dialog");
+    const sel = await within(dlg).findByLabelText("Kargo hizmeti") as HTMLSelectElement;
+    expect(within(dlg).queryByLabelText("Kargo hizmet kimliği")).not.toBeInTheDocument();
+    expect([...sel.options].map((o) => o.value)).toEqual(["SURAT_STANDART", "MNG_STANDART"]);
+    await waitFor(() => expect(sel.value).toBe("SURAT_STANDART"));
+    await u.selectOptions(sel, "MNG_STANDART");
+    await u.click(within(dlg).getByRole("button", { name: "Oluştur" }));
+    await waitFor(() => expect(posted).toEqual([{ serviceId: "MNG_STANDART" }]));
+  });
+  it("detail: hand delivery sends note + notify choice, then hides itself and the carrier button", async () => {
+    const posted: unknown[] = []; let handed = false;
+    mockApi({
+      "GET /api/admin/orders/o1/notifications": () => ({ items: [] }),
+      "GET /api/admin/orders/o1$": () => (handed ? { ...DETAIL, status: "delivered", shipments: [{ id: "s1", provider: "hand", carrier: "Elden teslimat", status: "delivered" }] } : DETAIL),
+      "POST /api/admin/orders/o1/hand-delivery": (_p, b) => { posted.push(b); handed = true; return { id: "o1", status: "delivered" }; },
+    });
+    const u = userEvent.setup(); renderRoutes({ "/orders/:id": <OrderDetail /> }, "/orders/o1");
+    await u.click(await screen.findByRole("button", { name: /Elden teslim et/ }));
+    const dlg = await screen.findByRole("dialog");
+    await u.type(within(dlg).getByLabelText("Not (isteğe bağlı)"), "Mağazada");
+    await u.click(within(dlg).getByRole("switch", { name: /teslim edildi” bildirimi/ }));
+    await u.click(within(dlg).getByRole("button", { name: /Teslim edildi olarak işaretle/ }));
+    await waitFor(() => expect(posted).toEqual([{ note: "Mağazada", notify: false }]));
+    await waitFor(() => expect(screen.queryByRole("button", { name: /Elden teslim et/ })).toBeNull());
+    expect(screen.queryByRole("button", { name: "Kargo oluştur" })).toBeNull();
+    expect(screen.getByText("Elden teslimat")).toBeInTheDocument();
+  });
+
+  it("detail: create invoice shows what will be issued (KDV-inclusive basis, per-line KDV, total = amount paid) and refuses a mismatch", async () => {
+    const posted: string[] = [];
+    let preview: Record<string, unknown> = {
+      pricesIncludeTax: true, currency: "TRY", orderTotal: 34900, net: 29083, tax: 5817, total: 34900, matchesOrder: true,
+      lines: [{ name: "Vazo", quantity: 1, net: 16583, tax: 3317, rate: 20, total: 19900 }, { name: "Kargo", quantity: 1, net: 12500, tax: 2500, rate: 20, total: 15000 }], byRate: [{ rate: 20, net: 29083, tax: 5817 }],
+    };
+    mockApi({
+      "GET /api/admin/orders/o1/notifications": () => ({ items: [] }), "GET /api/admin/orders/o1/invoice/preview": () => preview,
+      "GET /api/admin/orders/o1$": () => DETAIL, "POST /api/admin/orders/o1/invoice": (p) => { posted.push(p); return { queued: true }; },
+    });
+    const u = userEvent.setup(); renderRoutes({ "/orders/:id": <OrderDetail /> }, "/orders/o1");
+    await u.click(await screen.findByRole("button", { name: "Fatura kes" }));
+    const box = await screen.findByTestId("invoice-preview");
+    expect(await within(box).findByText(/ürün fiyatları KDV dahil/)).toBeInTheDocument();
+    expect(within(box).getByText("Kargo")).toBeInTheDocument();
+    expect(within(box).getByTestId("invoice-preview-total").textContent).toContain("349");
+    expect(within(box).getByText(/Sipariş tutarıyla aynı/)).toBeInTheDocument();
+    const dlg = screen.getByRole("dialog");
+    expect(within(dlg).getByRole("button", { name: "Fatura kes" })).toBeEnabled();
+    await u.click(within(dlg).getByRole("button", { name: "Fatura kes" }));
+    await waitFor(() => expect(posted).toEqual(["/api/admin/orders/o1/invoice"]));
+  });
+  it("detail: an invoice that would not equal the order total cannot be issued", async () => {
+    mockApi({
+      "GET /api/admin/orders/o1/notifications": () => ({ items: [] }), "GET /api/admin/orders/o1/invoice/preview": () => ({ pricesIncludeTax: false, currency: "TRY", orderTotal: 41000, net: 34000, tax: 6800, total: 40800, matchesOrder: false, lines: [], byRate: [{ rate: 20, net: 34000, tax: 6800 }] }),
+      "GET /api/admin/orders/o1$": () => DETAIL,
+    });
+    const u = userEvent.setup(); renderRoutes({ "/orders/:id": <OrderDetail /> }, "/orders/o1");
+    await u.click(await screen.findByRole("button", { name: "Fatura kes" }));
+    const dlg = await screen.findByRole("dialog");
+    expect(await within(dlg).findByRole("alert")).toHaveTextContent(/farklı/);
+    expect(within(dlg).getByText(/KDV hariç girilmişti/)).toBeInTheDocument();
+    expect(within(dlg).getByRole("button", { name: "Fatura kes" })).toBeDisabled();
+  });
+  it("detail: an address the carrier would reject is flagged, blocks the shipment, and can be corrected with province/district lists", async () => {
+    const saved: unknown[] = [];
+    let addr: Record<string, string> = { ...GOOD_ADDR, district: "Yeni" };
+    mockApi({
+      "GET /api/admin/orders/o1/notifications": () => ({ items: [] }), "GET /api/admin/orders/o1$": () => ({ ...DETAIL, shippingAddress: addr }),
+      "GET /api/admin/orders/o1/shipment/quotes": () => ({ provider: "geliver", weightKg: 0.5, items: [{ carrier: "SURAT", serviceId: "SURAT_STANDART", price: 6990, currency: "TRY" }] }),
+      "PUT /api/admin/orders/o1/shipping-address": (_p, b) => { saved.push(b); addr = { ...addr, ...(b as Record<string, string>) }; return {}; },
+    });
+    const u = userEvent.setup(); renderRoutes({ "/orders/:id": <OrderDetail /> }, "/orders/o1");
+    const card = await screen.findByTestId("order-address-card");
+    expect(within(card).getByRole("alert")).toHaveTextContent("İlçe “Yeni” seçilen ilin ilçeleri arasında yok");
+    await u.click(screen.getByRole("button", { name: "Kargo oluştur" }));
+    const ship = await screen.findByRole("dialog");
+    await within(ship).findByLabelText("Kargo hizmeti");
+    expect(within(ship).getByRole("button", { name: "Oluştur" })).toBeDisabled();
+    await u.click(within(ship).getByRole("button", { name: "Düzenle" }));
+    const form = await screen.findByTestId("order-address-form");
+    expect((within(form).getByLabelText("İl") as HTMLSelectElement).value).toBe("Mersin");
+    const district = within(form).getByLabelText("İlçe") as HTMLSelectElement;
+    expect(district.value).toBe(""); expect(within(form).getByText("Müşterinin yazdığı: “Yeni”")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Kaydet" })).toBeDisabled();
+    await u.selectOptions(district, "Yenişehir");
+    await u.click(screen.getByRole("button", { name: "Kaydet" }));
+    await waitFor(() => expect(saved).toEqual([{ name: "Ayşe", surname: "Kaya", phone: "+905411234567", line1: "Atatürk Cad. No 1", line2: "", city: "Mersin", district: "Yenişehir", zip: "33140" }]));
+    // back in the shipment dialog with the corrected address
+    await waitFor(() => expect(within(screen.getByRole("dialog")).getByRole("button", { name: "Oluştur" })).toBeEnabled());
+    expect(within(screen.getByTestId("order-address-card")).queryByRole("alert")).not.toBeInTheDocument();
+  });
+  it("detail: when quotes cannot be loaded the reason is shown and the code can be typed", async () => {
+    mockApi({
+      "GET /api/admin/orders/o1/notifications": () => ({ items: [] }), "GET /api/admin/orders/o1$": () => DETAIL,
+      "GET /api/admin/orders/o1/shipment/quotes": () => new Error("geliver HTTP 401"),
+    });
+    const u = userEvent.setup(); renderRoutes({ "/orders/:id": <OrderDetail /> }, "/orders/o1");
+    await u.click(await screen.findByRole("button", { name: "Kargo oluştur" }));
+    const dlg = await screen.findByRole("dialog");
+    expect(await within(dlg).findByText(/Kargo teklifleri alınamadı: geliver HTTP 401/)).toBeInTheDocument();
+    expect(within(dlg).getByLabelText("Kargo hizmet kimliği")).toBeInTheDocument();
+    expect(within(dlg).getByRole("button", { name: "Teklifleri yeniden al" })).toBeInTheDocument();
   });
   it("detail: Turkish buttons, human statuses, cancel confirmation explains consequences", async () => {
     mockApi({ "GET /api/admin/orders/o1/notifications": () => ({ items: [] }), "GET /api/admin/orders/o1": () => DETAIL });

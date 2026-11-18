@@ -21,6 +21,8 @@ function VariantLine({ v }: { v: SyncVariant }) {
         <div className="shrink-0 text-right">
           {!v.linked ? <Badge tone="neutral">{t("trendyolsync.variant.notLinked")}</Badge>
             : !v.enabled ? <Badge tone="neutral">{t("trendyolsync.variant.off")}</Badge>
+            : v.state === "not_listed" ? <Badge tone="warning">{t("trendyolsync.variant.notListed")}</Badge>
+            : v.state === "pending" ? <Badge tone="info">{t("trendyolsync.variant.pendingApproval")}</Badge>
             : v.lastError ? <Badge tone="danger">{t("trendyolsync.variant.error")}</Badge>
             : inSync ? <Badge tone="success">{t("trendyolsync.variant.ok")}</Badge>
             : <Badge tone="info">{t("trendyolsync.variant.pending")}</Badge>}
@@ -39,7 +41,7 @@ function VariantLine({ v }: { v: SyncVariant }) {
 export function TrendyolSyncCard({ productId }: { productId: string }) {
   const { t } = useT();
   const q = useQuery({ queryKey: [...SYNC_KEY, "product", productId], queryFn: () => api.get<SyncDetail>(`/api/admin/trendyol/sync/${productId}`), retry: false });
-  const { update, push, pull } = useSyncActions();
+  const { update, push, pull, verify } = useSyncActions();
   const [askStock, setAskStock] = useState(false);
   if (q.isPending) return <Skeleton className="h-40" />;
   if (q.error || !q.data) return null; // staff role (403) or product gone
@@ -57,11 +59,26 @@ export function TrendyolSyncCard({ productId }: { productId: string }) {
   );
   return (
     <Card testId="product-trendyol-card" title={t("trendyolsync.card.title")}
-      actions={<Badge tone={synced ? (d.errors ? "danger" : "success") : "neutral"}>{t(synced ? (d.errors ? "trendyolsync.mode.error" : "trendyolsync.mode.synced") : "trendyolsync.mode.website_only")}</Badge>}>
+      actions={<Badge tone={!synced ? "neutral" : d.errors ? "danger" : d.notListed ? "warning" : d.pending ? "info" : "success"}>{t(!synced ? "trendyolsync.mode.website_only" : d.errors ? "trendyolsync.mode.error" : d.notListed ? "trendyolsync.mode.notListed" : d.pending ? "trendyolsync.mode.pending" : "trendyolsync.mode.synced")}</Badge>}>
       <div className="space-y-4">
         {!d.available && <p className="rounded-lg bg-warn-soft p-2.5 text-xs text-warn">{t("trendyolsync.card.unavailable")}</p>}
         <Toggle checked={synced} onChange={(v) => update.mutate({ productIds: ids, enabled: v })} label={t("trendyolsync.card.toggle")}
           hint={t(synced ? "trendyolsync.card.toggle.on" : "trendyolsync.card.toggle.off")} />
+        {synced && d.notListed > 0 && (
+          <div role="alert" data-testid="trendyol-not-listed" className="space-y-2 rounded-lg border border-warn-line bg-warn-soft p-3 text-sm text-warn">
+            <p>{t("trendyolsync.card.notListed", { n: d.notListed })}</p>
+            <div className="flex flex-wrap gap-2">
+              <Link to={`/trendyol/products?create=${encodeURIComponent(productId)}`} className="inline-flex h-8 items-center rounded-lg bg-brand-600 px-3 text-[13px] font-medium text-white hover:bg-brand-700">{t("trendyolsync.action.create")}</Link>
+              <Button size="sm" variant="secondary" loading={verify.isPending} disabled={!d.available} onClick={() => verify.mutate(ids)}>{t("trendyolsync.action.verify")}</Button>
+            </div>
+          </div>
+        )}
+        {synced && d.notListed === 0 && d.pending > 0 && (
+          <div role="status" data-testid="trendyol-pending" className="space-y-2 rounded-lg border border-line bg-canvas p-3 text-sm text-muted">
+            <p>{t("trendyolsync.card.pending", { n: d.pending })}</p>
+            <Button size="sm" variant="secondary" loading={verify.isPending} disabled={!d.available} onClick={() => verify.mutate(ids)}>{t("trendyolsync.action.verify")}</Button>
+          </div>
+        )}
         {!synced && d.withBarcode === 0 && <p className="text-xs text-warn">{t("trendyolsync.card.needBarcode")}</p>}
         {synced && (
           <>

@@ -8,6 +8,7 @@ import { InlineError, TableSkeleton, TyErrorBox } from "../../../../components/t
 import { api, errMsg, qs } from "../../../../lib/api";
 import { money } from "../../../../lib/format";
 import { useT } from "../../../../i18n";
+import { SuggestionsCard } from "./Suggestions";
 
 export interface Mapping { variantId: string; sku: string; productName: string; variantTitle?: string; barcode: string; externalId?: string | null }
 export interface LookupItem { variantId: string; sku: string; productName: string; variantTitle: string; unitPrice: number; taxRate: number; stock: number }
@@ -60,7 +61,7 @@ export function MappingsTab() {
   const [adding, setAdding] = useState(false);
   const [bc, setBc] = useState("");
   const items = q.data?.items ?? [];
-  return (<div className="space-y-5"><ImportCard />
+  return (<div className="space-y-5"><ImportCard /><SuggestionsCard />
     <Card title={<>{t("trendyolviews.mappings.title")}</>} actions={<Button size="sm" onClick={() => setAdding(true)}>{t("trendyolviews.mappings.add")}</Button>}>
       <p className="mb-3 text-sm text-muted">{t("trendyolviews.mappings.body")}</p>
       {q.isPending ? <TableSkeleton rows={3} /> : q.error ? <TyErrorBox error={q.error} retry={() => void q.refetch()} />

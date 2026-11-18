@@ -46,6 +46,41 @@ export function computeInvoiceTotals(lines: ManualInvoiceLine[], pricesIncludeTa
   return { lines: out, net, tax, total: net + tax };
 }
 
+/**
+ * Were the item prices of this order KDV-INCLUSIVE? Orders do not store the store setting that applied when they were placed, but the
+ * totals give it away: inclusive orders total exactly `subtotal - discount + shipping`; exclusive ones add the item KDV on top.
+ * Reading it from the order keeps old orders right even after the store setting is changed.
+ */
+export function orderPricesIncludeTax(o: { subtotal: number; discountTotal: number; shippingTotal: number; total: number }): boolean {
+  return Math.abs(o.total - (o.subtotal - o.discountTotal + o.shippingTotal)) <= 1;
+}
+
+export interface OrderInvoiceLine { name: string; quantity: number; unitPrice: number; taxRate: number }
+/**
+ * The lines an invoice provider needs for an order, as KDV-INCLUSIVE minor units that add up to EXACTLY what the customer paid:
+ *  - items: inclusive prices as they are, or (exclusive orders) price x (1 + KDV) per line
+ *  - shipping: its own line, always inclusive (the order charges it as a final amount), at the first item's KDV rate
+ *  - discount: a negative line equal to whatever makes items + shipping equal the order total, so no kuruş is lost to rounding
+ */
+export function orderInvoiceLines(
+  o: { subtotal: number; discountTotal: number; shippingTotal: number; total: number },
+  items: { name: string; quantity: number; unitPrice: number; taxRate: number }[],
+  labels: { shipping: string; discount: string } = { shipping: "Kargo", discount: "İndirim" },
+): OrderInvoiceLine[] {
+  const incl = orderPricesIncludeTax(o);
+  const lines: OrderInvoiceLine[] = items.map((i) => {
+    const gross = incl ? i.unitPrice * i.quantity : Math.round(i.unitPrice * i.quantity * (1 + i.taxRate / 100));
+    if (incl || (Number.isInteger(i.quantity) && i.quantity > 0 && gross % i.quantity === 0)) return { name: i.name, quantity: i.quantity, unitPrice: incl ? i.unitPrice : gross / i.quantity, taxRate: i.taxRate };
+    return { name: i.quantity === 1 ? i.name : `${i.name} (${i.quantity} x)`.slice(0, 200), quantity: 1, unitPrice: gross, taxRate: i.taxRate };
+  });
+  const itemsGross = lines.reduce((s, l) => s + l.unitPrice * l.quantity, 0);
+  const rate = items[0]?.taxRate ?? 20;
+  if (o.shippingTotal > 0) lines.push({ name: labels.shipping, quantity: 1, unitPrice: o.shippingTotal, taxRate: rate });
+  const discount = itemsGross + Math.max(0, o.shippingTotal) - o.total;
+  if (discount > 0) lines.push({ name: labels.discount, quantity: 1, unitPrice: -discount, taxRate: rate });
+  return lines;
+}
+
 const emailAddr = z.string().email().max(254).refine((v) => !/[\r\n<>",;]/.test(v), "invalid address");
 export const ComposeEmailBody = z.object({
   to: emailAddr,

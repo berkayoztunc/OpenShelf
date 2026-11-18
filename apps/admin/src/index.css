@@ -1,6 +1,11 @@
 @import "tailwindcss";
 @import "@openshelf/ui/theme.css";
 
+/* Admin: one modern sans everywhere (the storefront keeps its serif display face). */
+@theme {
+  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
 @layer base {
   html { -webkit-text-size-adjust: 100%; }
   body { -webkit-font-smoothing: antialiased; font-size: 14px; font-feature-settings: "cv11", "ss01"; }

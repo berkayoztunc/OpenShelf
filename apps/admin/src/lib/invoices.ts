@@ -60,6 +60,17 @@ export function invoiceToForm(inv: InvoiceFull): InvoiceForm {
   };
 }
 
+/**
+ * Two-way unit price. A line stores ONE price (`price`) in the invoice's basis (KDV-inclusive by default). The other figure is derived:
+ * final sale price (KDV incl.) = net unit price + KDV, so editing either one back-computes the stored price.
+ */
+const rate = (l: LineForm) => Math.min(100, Math.max(0, num(l.taxRate))) / 100;
+const fix2 = (v: number) => (Math.round(v * 100) / 100).toFixed(2);
+export const finalUnit = (l: LineForm, incl: boolean): string => fix2(incl ? num(l.price) : num(l.price) * (1 + rate(l)));
+export const netUnit = (l: LineForm, incl: boolean): string => fix2(incl ? num(l.price) / (1 + rate(l)) : num(l.price));
+export const fromFinalUnit = (v: number, l: LineForm, incl: boolean): string => fix2(incl ? v : v / (1 + rate(l)));
+export const fromNetUnit = (v: number, l: LineForm, incl: boolean): string => fix2(incl ? v * (1 + rate(l)) : v);
+
 /** Live totals — same function the server uses, so UI == server. */
 export function totalsOf(f: InvoiceForm) {
   const lines = f.lines.map(lineToApi);

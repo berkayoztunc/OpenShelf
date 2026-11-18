@@ -9,19 +9,22 @@ export type SyncSource = "local" | "remote";
 export interface SyncRow {
   productId: string; name: string; status: string; imageUrl: string | null; mode: SyncMode;
   variants: number; withBarcode: number; linked: number; enabled: number; errors: number; available: number;
+  /** synced variants whose product was never created on Trendyol / waits for Trendyol's approval */
+  notListed: number; pending: number;
   contentSource: SyncSource; priceSource: SyncSource; lastSyncedAt: string | null; lastPulledAt: string | null;
 }
 export interface SyncVariant {
   variantId: string; sku: string; title: string | null; barcode: string | null; linked: boolean; enabled: boolean;
   available: number; lastSyncedStock: number | null; lastSyncedAt: string | null; lastError: string | null;
+  state: "listed" | "not_listed" | "pending" | "off";
 }
 export interface SyncDetail extends Omit<SyncRow, "available"> { available: boolean; stock: number; variantRows: SyncVariant[] }
 export interface SyncList {
   items: SyncRow[]; total: number; page: number; pageSize: number; available: boolean;
-  summary: { total: number; synced: number; websiteOnly: number; errors: number; following: number };
+  summary: { total: number; synced: number; websiteOnly: number; errors: number; notListed: number; following: number };
 }
 export interface SyncPatch { productIds: string[]; enabled?: boolean; contentSource?: SyncSource; priceSource?: SyncSource }
-interface SyncResult { updated: number; linked: number; skippedNoBarcode: number; barcodeTaken: number }
+interface SyncResult { updated: number; linked: number; skippedNoBarcode: number; barcodeTaken: number; notOnTrendyol?: number; pendingApproval?: number }
 
 export const SYNC_KEY = ["trendyol", "sync"] as const;
 
@@ -36,7 +39,8 @@ export function useSyncActions() {
       done();
       // prices/content may have changed underneath an open product form
       if (b.contentSource === "remote" || b.priceSource === "remote") void qc.invalidateQueries({ queryKey: ["product"] });
-      if (b.enabled && (r.skippedNoBarcode > 0 || r.barcodeTaken > 0)) toast.info(t("trendyolsync.toast.partial", { linked: r.linked, noBarcode: r.skippedNoBarcode, taken: r.barcodeTaken }));
+      if (b.enabled && (r.notOnTrendyol ?? 0) > 0) toast.info(t("trendyolsync.toast.notListed", { n: r.notOnTrendyol ?? 0 }));
+      else if (b.enabled && (r.skippedNoBarcode > 0 || r.barcodeTaken > 0)) toast.info(t("trendyolsync.toast.partial", { linked: r.linked, noBarcode: r.skippedNoBarcode, taken: r.barcodeTaken }));
       else toast.success(t(b.enabled === true ? "trendyolsync.toast.on" : b.enabled === false ? "trendyolsync.toast.off" : "trendyolsync.toast.saved"));
     },
     onError,
@@ -49,5 +53,15 @@ export function useSyncActions() {
     mutationFn: (b: { productIds: string[]; stock?: boolean }) => api.post("/api/admin/trendyol/sync/pull", b),
     onSuccess: () => { done(); void qc.invalidateQueries({ queryKey: ["product"] }); toast.success(t("trendyolsync.toast.pull")); }, onError,
   });
-  return { update, push, pull };
+  const verify = useMutation({
+    mutationFn: (productIds: string[]) => api.post<{ queued?: boolean; approved?: number; pending?: number; notListed?: number }>("/api/admin/trendyol/sync/verify", { productIds }),
+    onSuccess: (r) => {
+      done();
+      if (r.queued) toast.info(t("trendyolsync.toast.verifyQueued"));
+      else if (r.notListed) toast.info(t("trendyolsync.toast.notListed", { n: r.notListed }));
+      else if (r.pending) toast.info(t("trendyolsync.toast.pending", { n: r.pending }));
+      else toast.success(t("trendyolsync.toast.listed"));
+    }, onError,
+  });
+  return { update, push, pull, verify };
 }

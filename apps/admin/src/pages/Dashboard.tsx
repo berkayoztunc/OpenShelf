@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
@@ -12,7 +12,7 @@ import { AlertTriangle, ArrowUpRight, Banknote, Check, CheckCircle2, Package, Pl
 import { Badge, Card, EmptyState, ErrorState, PageHeader, Skeleton, statusTone, Table, Td } from "../components/ui";
 import { mapPaged, orderRowFromApi } from "../lib/adapt";
 import type { Insights } from "../lib/insights";
-import { Delta, KpiCard, RankBars, RevenueChart, SplitBar } from "../components/dashboard/charts";
+import { Delta, RankBars, RevenueChart, Sparkline, SplitBar } from "../components/dashboard/charts";
 import { dateTime } from "../lib/format";
 import type { Paged } from "../lib/types";
 import { useSettings } from "../lib/settings";
@@ -25,18 +25,20 @@ interface DashboardData {
   stockDrift: { variantId?: string; sku?: string; reserved?: number; expectedReserved?: number; total?: number }[];
 }
 
-/** Orders by status as one stacked bar + legend. */
+const STATUS_COLOR: Record<string, string> = { paid: "bg-data-ok", delivered: "bg-data-ok", shipped: "bg-data-info", fulfilling: "bg-data-info", pending: "bg-data-warn", awaiting_payment: "bg-data-warn", cancelled: "bg-data-bad", refunded: "bg-data-bad" };
+
+/** Orders by status: one thin stacked bar and a dense two-column legend linking to the filtered list. */
 function StatusBar({ statuses }: { statuses: (readonly [string, number])[] }) {
   const { t } = useT();
   const total = statuses.reduce((n, [, c]) => n + c, 0) || 1;
-  const color: Record<string, string> = { paid: "bg-data-ok", delivered: "bg-data-ok", shipped: "bg-data-info", fulfilling: "bg-data-info", pending: "bg-data-warn", awaiting_payment: "bg-data-warn", cancelled: "bg-data-bad", refunded: "bg-data-bad" };
   return (
     <div>
-      <div className="flex h-2.5 overflow-hidden rounded-full bg-hover" role="img" aria-label={t("dashboard.byStatus.aria")}>
-        {statuses.map(([s, c]) => <span key={s} className={`${color[s] ?? "bg-faint"} transition-all`} style={{ width: `${(c / total) * 100}%` }} />)}
+      <div className="flex h-1.5 overflow-hidden rounded-full bg-hover" role="img" aria-label={t("dashboard.byStatus.aria")}>
+        {statuses.map(([s, c]) => <span key={s} className={STATUS_COLOR[s] ?? "bg-faint"} style={{ width: `${(c / total) * 100}%` }} />)}
       </div>
-      <ul className="mt-4 space-y-1">{statuses.map(([s, c]) => (
-        <li key={s}><Link to={`/orders?status=${s}`} className="-mx-2 flex items-center justify-between rounded-lg px-2 py-1.5 transition hover:bg-hover"><span className="flex items-center gap-2.5"><span aria-hidden className={`size-2.5 rounded-full ${color[s] ?? "bg-faint"}`} /><Badge tone={statusTone(s)}>{statusLabel(s)}</Badge></span><span className="font-medium tabular-nums">{c}</span></Link></li>
+      <ul className="mt-3 grid grid-cols-2 gap-x-4 gap-y-0.5">{statuses.map(([s, c]) => (
+        <li key={s}><Link to={`/orders?status=${s}`} className="-mx-1.5 flex items-center justify-between gap-2 rounded-md px-1.5 py-1 text-[13px] transition hover:bg-hover">
+          <span className="flex min-w-0 items-center gap-2"><span aria-hidden className={`size-2 shrink-0 rounded-full ${STATUS_COLOR[s] ?? "bg-faint"}`} /><span className="truncate">{statusLabel(s)}</span></span><span className="tabular-nums text-muted">{c}</span></Link></li>
       ))}</ul>
     </div>
   );
@@ -45,13 +47,33 @@ function StatusBar({ statuses }: { statuses: (readonly [string, number])[] }) {
 function DashboardSkeleton() {
   const { t } = useT();
   return (
-    <div aria-busy role="status" aria-label={t("dashboard.skeleton")}>
-      <Skeleton className="mb-6 h-8 w-48" />
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div>
-      <div className="mt-6 grid gap-6 lg:grid-cols-3"><Skeleton className="h-64 rounded-xl lg:col-span-2" /><Skeleton className="h-64 rounded-xl" /></div>
+    <div aria-busy role="status" aria-label={t("dashboard.skeleton")} className="space-y-4">
+      <Skeleton className="h-8 w-64" />
+      <Skeleton className="h-24 rounded-xl" />
+      <div className="grid gap-4 lg:grid-cols-12"><Skeleton className="h-64 rounded-xl lg:col-span-8" /><Skeleton className="h-64 rounded-xl lg:col-span-4" /></div>
     </div>
   );
 }
+
+/** Flat panel: thin border, compact header with optional right-side control. */
+function Panel({ title, actions, children, className = "", bodyClass = "p-4" }: { title: ReactNode; actions?: ReactNode; children: ReactNode; className?: string; bodyClass?: string }) {
+  return (
+    <section className={`flex flex-col rounded-xl border border-line bg-surface ${className}`}>
+      <header className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-line px-4"><h2 className="text-[13px] font-semibold">{title}</h2>{actions}</header>
+      <div className={`min-h-0 flex-1 ${bodyClass}`}>{children}</div>
+    </section>
+  );
+}
+/** Small segmented control for switching a panel's content. */
+function Seg<T extends string>({ value, options, onChange, label }: { value: T; options: { id: T; label: string }[]; onChange: (v: T) => void; label: string }) {
+  return (
+    <div role="tablist" aria-label={label} className="inline-flex rounded-md bg-hover p-0.5">
+      {options.map((o) => <button key={o.id} type="button" role="tab" aria-selected={o.id === value} onClick={() => onChange(o.id)}
+        className={`h-6 rounded px-2 text-xs font-medium transition ${o.id === value ? "bg-surface text-ink shadow-sm" : "text-muted hover:text-ink"}`}>{o.label}</button>)}
+    </div>
+  );
+}
+const viewAll = (to: string, label: string) => <Link className="inline-flex items-center gap-0.5 text-xs font-medium text-muted hover:text-ink" to={to}>{label}<ArrowUpRight size={12} /></Link>;
 
 function Onboarding({ originNotice, mockMode, storeName, logoMediaId, adminEmail }: { originNotice?: string | null; mockMode: boolean; storeName?: string; logoMediaId?: string | null; adminEmail?: string }) {
   const { t } = useT();
@@ -106,163 +128,176 @@ const ATTENTION: { key: AttentionKey; to: string; tone: "warn" | "bad" | "info" 
   { key: "noImage", to: "/products?image=none&status=active", tone: "info" },
   { key: "drafts", to: "/products?status=draft", tone: "info" },
 ];
-const TONE = { warn: "bg-warn-soft text-warn ring-warn-line", bad: "bg-danger-soft text-danger ring-danger-line", info: "bg-brand-50 text-brand-ink ring-line" } as const;
+const DOT = { warn: "bg-data-warn", bad: "bg-data-bad", info: "bg-data-info" } as const;
+type InsightTab = "products" | "cities" | "stock" | "activity";
 
 export default function Dashboard() {
   const { t } = useT();
   const admin = useAdmin();
   const [sp, setSp] = useSearchParams();
+  const [tab, setTab] = useState<InsightTab>("products");
   const days = (RANGES as readonly number[]).includes(Number(sp.get("days"))) ? (Number(sp.get("days")) as 7 | 30 | 90) : 30;
   const q = useQuery({ queryKey: ["dashboard"], queryFn: () => api.get<DashboardData>("/api/admin/dashboard") });
   const ins = useQuery({ queryKey: ["dashboard", "insights", days], queryFn: () => api.get<Insights>(`/api/admin/dashboard/insights?days=${days}`) });
-  const recent = useQuery({ queryKey: ["orders", "dashboard-recent"], queryFn: async () => mapPaged(await api.get<Paged<unknown>>("/api/admin/orders?pageSize=8"), orderRowFromApi) });
+  const recent = useQuery({ queryKey: ["orders", "dashboard-recent"], queryFn: async () => mapPaged(await api.get<Paged<unknown>>("/api/admin/orders?pageSize=6"), orderRowFromApi) });
   const settings = useSettings().data;
   const cur = settings?.general?.currency ?? "TRY";
   if (q.isPending) return <DashboardSkeleton />;
   if (q.isError) return <ErrorState error={q.error} retry={() => q.refetch()} />;
   const d = q.data;
-  const statuses = Array.isArray(d.ordersByStatus) ? d.ordersByStatus.map((x) => [x.status, x.count] as const) : Object.entries(d.ordersByStatus ?? {});
+  const statuses = (Array.isArray(d.ordersByStatus) ? d.ordersByStatus.map((x) => [x.status, x.count] as const) : Object.entries(d.ordersByStatus ?? {})).filter(([, c]) => c > 0);
   const enabledHealth = d.integrationHealth?.filter((h) => h.enabled) ?? [];
+  const healthBad = enabledHealth.filter((h) => !h.ok);
   const orders = recent.data?.items ?? [];
   const i = ins.data;
   const todaySales = d.salesToday && typeof d.salesToday === "object" ? (d.salesToday as { total?: number; count?: number }) : null;
   const mockCount = (d.mockSalesWeek as { count?: number } | undefined)?.count ?? 0;
   const queue = i ? ATTENTION.filter((a) => i.attention[a.key] > 0) : [];
   const first = admin?.name?.split(" ")[0];
+  const kpis = i ? [
+    { key: "revenue", title: t("dashboard.kpi.revenue"), value: money(i.kpis.revenue.cur, cur), k: i.kpis.revenue, spark: i.series.map((x) => x.revenue), sub: mockCount > 0 ? t("dashboard.stat.exclMock", { n: mockCount }) : undefined },
+    { key: "orders", title: t("dashboard.kpi.orders"), value: String(i.kpis.orders.cur), k: i.kpis.orders, spark: i.series.map((x) => x.orders) },
+    { key: "aov", title: t("dashboard.kpi.aov"), value: money(i.kpis.aov.cur, cur), k: i.kpis.aov },
+    { key: "units", title: t("dashboard.kpi.units"), value: String(i.kpis.units.cur), k: i.kpis.units },
+    { key: "customers", title: t("dashboard.kpi.customers"), value: String(i.kpis.customers.cur), k: i.kpis.customers },
+  ] : [];
+  const statusPanel = statuses.length === 0 ? <p className="text-sm text-muted">{t("dashboard.empty.body")}</p> : <StatusBar statuses={statuses} />;
 
   return (
-    <>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-display text-[1.65rem] font-semibold leading-tight tracking-tight">{first ? t("dashboard.greeting", { name: first }) : t("dashboard.title")}</h1>
-          <p className="mt-1 text-sm text-muted">{new Date().toLocaleDateString(intlTag(), { weekday: "long", day: "numeric", month: "long" })}{todaySales && <> · {t("dashboard.today", { amount: money(pickAmount(todaySales), cur), n: todaySales.count ?? 0 })}</>}</p>
+    <div className="space-y-4">
+      {/* header: one line */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold tracking-tight">{first ? t("dashboard.greeting", { name: first }) : t("dashboard.title")}</h1>
+          <p className="text-[13px] text-muted">{new Date().toLocaleDateString(intlTag(), { weekday: "long", day: "numeric", month: "long" })}{todaySales && <> · {t("dashboard.today", { amount: money(pickAmount(todaySales), cur), n: todaySales.count ?? 0 })}</>}</p>
         </div>
         <div className="flex items-center gap-3">
-          <div role="group" aria-label={t("dashboard.range.label")} className="inline-flex rounded-lg border border-line bg-surface p-0.5">
+          <div role="group" aria-label={t("dashboard.range.label")} className="inline-flex rounded-lg bg-hover p-0.5">
             {RANGES.map((r) => <button key={r} type="button" aria-pressed={r === days} onClick={() => setSp((p) => { const n = new URLSearchParams(p); r === 30 ? n.delete("days") : n.set("days", String(r)); return n; }, { replace: true })}
-              className={`h-8 rounded-md px-3 text-[13px] font-medium transition-colors ${r === days ? "bg-brand-600 text-white" : "text-muted hover:text-ink"}`}>{t("dashboard.range.days", { n: r })}</button>)}
+              className={`h-7 rounded-md px-3 text-xs font-medium transition ${r === days ? "bg-surface text-ink shadow-sm" : "text-muted hover:text-ink"}`}>{t("dashboard.range.days", { n: r })}</button>)}
           </div>
           <GuideLink guide="getting-started#ilk-10-adim">{t("dashboard.onboarding.guide")}</GuideLink>
         </div>
       </div>
       <Onboarding originNotice={d.originNotice} mockMode={!!settings?.system?.mockMode} storeName={settings?.general?.storeName} logoMediaId={settings?.branding?.logoMediaId} adminEmail={settings?.notifications?.adminEmail} />
       {d.originNotice === "derived_origins_workers_dev" && (
-        <div role="alert" className="mb-6 flex gap-3 rounded-xl border border-warn-line bg-warn-soft p-4 text-sm text-warn">
-          <AlertTriangle size={18} className="mt-0.5 shrink-0" />
-          <p><strong>{t("dashboard.origin.title")}</strong> {t("dashboard.origin.body")}</p>
+        <div role="alert" className="flex gap-3 rounded-xl border border-warn-line bg-warn-soft p-3 text-sm text-warn">
+          <AlertTriangle size={18} className="mt-0.5 shrink-0" /><p><strong>{t("dashboard.origin.title")}</strong> {t("dashboard.origin.body")}</p>
         </div>
       )}
 
       {ins.isError ? (
-        <div className="mb-6 grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2"><ErrorState error={ins.error} retry={() => ins.refetch()} /></div>
-          <Card title={t("dashboard.byStatus.title")}>
-            {statuses.every(([, c]) => c === 0) ? <EmptyState title={t("dashboard.empty.title")} description={t("dashboard.empty.body")} /> : <StatusBar statuses={statuses.filter(([, c]) => c > 0)} />}
-          </Card>
-        </div>
+        <ErrorState error={ins.error} retry={() => ins.refetch()} />
       ) : (
         <>
-          <section aria-label={t("dashboard.attention.title")} className="mb-6 rounded-xl border border-line bg-surface p-4 shadow-soft">
-            <h2 className="mb-3 text-sm font-semibold">{t("dashboard.attention.title")}</h2>
-            {ins.isPending ? <Skeleton className="h-12" /> : queue.length === 0 ? (
-              <p className="flex items-center gap-2 text-sm text-muted"><CheckCircle2 size={18} className="text-success" aria-hidden />{t("dashboard.attention.clear")}</p>
-            ) : (
-              <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{queue.map((a) => (
-                <li key={a.key}><Link to={a.to} className={`flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 ring-1 ring-inset transition hover:brightness-95 ${TONE[a.tone]}`}>
-                  <span className="text-[13px] font-medium">{t(`dashboard.attention.${a.key}` as "dashboard.attention.toShip")}</span><span className="font-display text-xl font-semibold tabular-nums">{i!.attention[a.key]}</span></Link></li>
-              ))}</ul>
-            )}
+          {/* KPI strip: one surface, hairline dividers */}
+          <section aria-label={t("dashboard.vsPrev", { days })} title={t("dashboard.vsPrev", { days })} className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-3 xl:grid-cols-5">
+            {ins.isPending ? [0, 1, 2, 3, 4].map((n) => <div key={n} className="bg-surface p-4"><Skeleton className="h-14" /></div>) : kpis.map((k) => (
+              <div key={k.key} className="flex items-end justify-between gap-3 bg-surface px-4 py-3.5">
+                <div className="min-w-0">
+                  <div><p className="text-xs text-muted">{k.title}</p></div>
+                  <p className="mt-1 truncate text-[1.375rem] font-semibold leading-tight tracking-tight tabular-nums">{k.value}</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted"><Delta {...k.k} />{k.sub}</div>
+                </div>
+                {k.spark && k.spark.length > 1 && <div className="hidden w-20 shrink-0 sm:block"><Sparkline values={k.spark} /></div>}
+              </div>
+            ))}
           </section>
 
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-5">
-            {ins.isPending ? [0, 1, 2, 3, 4].map((n) => <Skeleton key={n} className="h-36 rounded-xl" />) : i && <>
-              <KpiCard title={t("dashboard.kpi.revenue")} icon={<Banknote size={16} />} value={money(i.kpis.revenue.cur, cur)} delta={<Delta {...i.kpis.revenue} />} spark={i.series.map((x) => x.revenue)} sub={mockCount > 0 ? t("dashboard.stat.exclMock", { n: mockCount }) : undefined} />
-              <KpiCard title={t("dashboard.kpi.orders")} icon={<ShoppingBag size={16} />} value={String(i.kpis.orders.cur)} delta={<Delta {...i.kpis.orders} />} spark={i.series.map((x) => x.orders)} />
-              <KpiCard title={t("dashboard.kpi.aov")} icon={<Receipt size={16} />} value={money(i.kpis.aov.cur, cur)} delta={<Delta {...i.kpis.aov} />} />
-              <KpiCard title={t("dashboard.kpi.units")} icon={<Package size={16} />} value={String(i.kpis.units.cur)} delta={<Delta {...i.kpis.units} />} />
-              <KpiCard title={t("dashboard.kpi.customers")} icon={<UserPlus size={16} />} value={String(i.kpis.customers.cur)} delta={<Delta {...i.kpis.customers} />} />
-            </>}
-          </div>
-          <p className="mt-2 text-xs text-muted">{t("dashboard.vsPrev", { days })}</p>
-
-          <div className="mt-6 grid items-start gap-6 lg:grid-cols-3">
-            <Card title={t("dashboard.revenue.title")} className="lg:col-span-2">{ins.isPending ? <Skeleton className="h-64" /> : i && <RevenueChart series={i.series} previous={i.previous} currency={cur} days={days} />}</Card>
-            <div className="space-y-6">
-              <Card title={t("dashboard.channels.title")}>
-                {ins.isPending ? <Skeleton className="h-24" /> : i && (
-                  <SplitBar parts={(["website", "trendyol"] as const).map((k) => ({ key: k, label: enumLabel("source", k), value: i.channels[k].revenue, valueText: money(i.channels[k].revenue, cur), sub: t("dashboard.channels.orders", { n: i.channels[k].orders }), className: k === "website" ? "bg-brand-600" : "bg-accent-500" }))} />
+          {/* trend + work queue */}
+          <div className="grid items-stretch gap-4 lg:grid-cols-12">
+            <section className="rounded-xl border border-line bg-surface p-4 lg:col-span-8" aria-label={t("dashboard.revenue.title")}>
+              {ins.isPending ? <Skeleton className="h-56" /> : i && <RevenueChart compact series={i.series} previous={i.previous} currency={cur} days={days} />}
+            </section>
+            <Panel title={t("dashboard.attention.title")} className="lg:col-span-4" bodyClass="flex flex-col"
+              actions={queue.length > 0 ? <span className="rounded-full bg-hover px-2 py-0.5 text-xs font-semibold tabular-nums">{queue.reduce((n, a) => n + i!.attention[a.key], 0)}</span> : undefined}>
+              <div className="flex-1 px-2 py-1.5" aria-label={t("dashboard.attention.title")}>
+                {ins.isPending ? <Skeleton className="m-2 h-40" /> : queue.length === 0 ? (
+                  <p className="flex items-center gap-2 px-2 py-3 text-sm text-muted"><CheckCircle2 size={16} className="text-success" aria-hidden />{t("dashboard.attention.clear")}</p>
+                ) : (
+                  <ul>{queue.map((a) => (
+                    <li key={a.key}><Link to={a.to} className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 transition hover:bg-hover">
+                      <span className="flex items-center gap-2.5 text-[13px]"><span aria-hidden className={`size-2 rounded-full ${DOT[a.tone]}`} />{t(`dashboard.attention.${a.key}` as "dashboard.attention.toShip")}</span>
+                      <span className="text-sm font-semibold tabular-nums">{i!.attention[a.key]}</span></Link></li>
+                  ))}</ul>
                 )}
-              </Card>
-              <Card title={t("dashboard.byStatus.title")}>
-                {statuses.every(([, c]) => c === 0) ? <EmptyState title={t("dashboard.empty.title")} description={t("dashboard.empty.body")} /> : <StatusBar statuses={statuses.filter(([, c]) => c > 0)} />}
-              </Card>
-            </div>
-          </div>
-
-          <div className="mt-6 grid gap-6 lg:grid-cols-3">
-            <Card title={t("dashboard.top.products")}>
-              {ins.isPending ? <Skeleton className="h-40" /> : !i || i.topProducts.length === 0 ? <EmptyState icon={<Package size={22} />} title={t("dashboard.top.empty")} /> : (
-                <RankBars rows={i.topProducts.map((p, n) => ({ key: p.productId ?? String(n), label: p.name, value: p.revenue, valueText: money(p.revenue, cur), sub: t("dashboard.top.units", { n: p.units }) }))} />
-              )}
-            </Card>
-            <Card title={t("dashboard.cities.title")}>
-              {ins.isPending ? <Skeleton className="h-40" /> : !i || i.topCities.length === 0 ? <EmptyState icon={<ShoppingBag size={22} />} title={t("dashboard.top.empty")} /> : (
-                <RankBars rows={i.topCities.map((c) => ({ key: c.city ?? "?", label: c.city ?? "-", value: c.orders, valueText: t("dashboard.channels.orders", { n: c.orders }), sub: money(c.revenue, cur) }))} />
-              )}
-            </Card>
-            <Card title={t("dashboard.activity.title")} actions={<Link className="text-[13px] font-medium text-brand-ink hover:underline" to="/audit">{t("dashboard.recent.viewAll")}</Link>}>
-              {ins.isPending ? <Skeleton className="h-40" /> : !i || i.activity.length === 0 ? <EmptyState title={t("dashboard.activity.empty")} /> : (
-                <ol className="space-y-3 border-l border-line pl-4">{i.activity.map((a) => (
-                  <li key={a.id} className="relative text-sm"><span aria-hidden className="absolute -left-[21px] top-1.5 size-2.5 rounded-full bg-brand-600" /><p className="truncate">{prettify(a.action.replace(/[._]/g, " "))}{a.entity ? <span className="text-muted"> · {a.entity}</span> : null}</p><p className="text-xs text-muted">{a.admin ?? t("dashboard.activity.system")} · {timeAgo(a.at)}</p></li>
-                ))}</ol>
-              )}
-            </Card>
+              </div>
+              <footer className="border-t border-line px-4 py-2.5 text-xs">
+                {!enabledHealth.length ? (
+                  <Link to="/integrations" className="inline-flex items-center gap-1.5 text-muted hover:text-ink"><Plug size={13} aria-hidden />{t("dashboard.health.emptyTitle")}</Link>
+                ) : (
+                  <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted" data-testid="health-summary">
+                    <span aria-hidden className={`size-2 rounded-full ${healthBad.length ? "bg-data-bad" : "bg-data-ok"}`} />
+                    <Link to="/integrations" className="hover:text-ink">{t("dashboard.health.summary", { ok: enabledHealth.length - healthBad.length, n: enabledHealth.length })}</Link>
+                    {healthBad.map((h) => <span key={h.provider} className="font-medium text-danger">{enumLabel("provider", h.provider)}</span>)}
+                    {healthBad.length > 0 && <Link to="/integrations" className="font-medium text-danger hover:underline">{t("dashboard.health.fix")}</Link>}
+                  </p>
+                )}
+              </footer>
+            </Panel>
           </div>
         </>
       )}
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        <Card title={t("dashboard.recent.title")} className="lg:col-span-2" actions={<Link className="inline-flex items-center gap-1 text-[13px] font-medium text-brand-ink hover:underline" to="/orders">{t("dashboard.recent.viewAll")}<ArrowUpRight size={14} /></Link>}>
-          {recent.isPending ? <Skeleton className="h-40" /> : orders.length === 0 ? <EmptyState icon={<ShoppingBag size={22} />} title={t("dashboard.empty.title")} description={t("dashboard.recent.empty")} /> : (
-            <Table head={[t("dashboard.recent.order"), t("common.date"), t("common.status"), t("common.total")]} caption={t("dashboard.recent.caption")}>{orders.slice(0, 8).map((o) => (
-              <tr key={o.id}>
-                <Td><Link className="font-medium text-brand-ink hover:underline" to={`/orders/${o.id}`}>#{o.number}</Link>{o.isMock && <span className="ml-2"><Badge tone="danger">{t("dashboard.mockBadge")}</Badge></span>}</Td>
-                <Td className="text-muted">{dateTime(o.createdAt)}</Td>
-                <Td><Badge tone={statusTone(o.status)}>{statusLabel(o.status)}</Badge></Td>
-                <Td className="font-medium tabular-nums">{money(o.total, o.currency)}</Td>
-              </tr>
-            ))}</Table>
+      {/* orders · sales mix · insights */}
+      <div className="grid items-stretch gap-4 lg:grid-cols-12">
+        <Panel title={t("dashboard.recent.title")} className="lg:col-span-12 xl:col-span-5" bodyClass="px-2 py-1.5" actions={viewAll("/orders", t("dashboard.recent.viewAll"))}>
+          {recent.isPending ? <Skeleton className="m-2 h-48" /> : orders.length === 0 ? <p className="px-2 py-3 text-sm text-muted">{t("dashboard.recent.empty")}</p> : (
+            <ul aria-label={t("dashboard.recent.caption")}>{orders.slice(0, 6).map((o) => (
+              <li key={o.id}><Link to={`/orders/${o.id}`} className="flex items-center gap-3 rounded-md px-2 py-1.5 transition hover:bg-hover">
+                <span aria-hidden className={`size-2 shrink-0 rounded-full ${STATUS_COLOR[o.status] ?? "bg-faint"}`} />
+                <span className="min-w-0 flex-1"><span className="block truncate text-[13px] font-medium">{o.customerName ?? o.email ?? `#${o.number}`}{o.isMock && <span className="ml-2 text-xs font-normal text-danger">{t("dashboard.mockBadge")}</span>}</span>
+                  <span className="block truncate text-xs text-muted">#{o.number} · {enumLabel("source", o.source)} · {timeAgo(o.createdAt)}</span></span>
+                <span className="text-right"><span className="block text-[13px] font-medium tabular-nums">{money(o.total, o.currency)}</span><span className="block text-xs text-muted">{statusLabel(o.status)}</span></span>
+              </Link></li>
+            ))}</ul>
           )}
-        </Card>
-        <div className="space-y-6">
-          <Card title={t("dashboard.health.title")} actions={<Link className="text-[13px] font-medium text-brand-ink hover:underline" to="/integrations">{t("dashboard.health.manage")}</Link>}>
-{!enabledHealth.length ? <EmptyState icon={<Plug size={22} />} title={t("dashboard.health.emptyTitle")} description={t("dashboard.health.emptyBody")} action={<Link to="/integrations" className="inline-flex h-8 items-center rounded-lg bg-brand-600 px-3 text-[13px] font-medium text-white hover:bg-brand-700">{t("dashboard.health.open")}</Link>} /> : (
-              <><p className="mb-3 text-xs text-muted" data-testid="health-summary">{t("dashboard.health.summary", { ok: enabledHealth.filter((h) => h.ok).length, n: enabledHealth.length })}{enabledHealth.some((h) => !h.ok) && <> · <Link to="/integrations" className="font-medium text-danger hover:underline">{t("dashboard.health.fix")}</Link></>}</p>
-              <ul className="space-y-3">{enabledHealth.map((h) => (
-                <li key={h.provider} className="flex items-center justify-between gap-3"><span className="flex items-center gap-2.5"><span aria-hidden className="grid size-7 place-items-center rounded-md bg-brand-50 text-xs font-bold text-brand-ink">{enumLabel("provider", h.provider).charAt(0).toUpperCase()}</span>{enumLabel("provider", h.provider)}</span>
-                  <Badge tone={h.ok ? "success" : "danger"}>{h.ok ? t("dashboard.health.ok") : t("dashboard.health.bad")}</Badge></li>
-              ))}</ul></>
-            )}
+        </Panel>
 
-          </Card>
-          <Card title={t("dashboard.lowStock.title")}>
-{!d.lowStock?.length ? <EmptyState icon={<CheckCircle2 size={22} />} title={t("dashboard.lowStock.empty")} /> : (
-              <ul className="space-y-2.5">{d.lowStock.slice(0, 6).map((l, i) => (
-                <li key={l.variantId ?? i} className="flex items-center justify-between gap-3 text-sm"><span className="min-w-0 truncate">{l.productName ?? l.name ?? l.title ?? l.sku}<span className="ml-2 text-xs text-muted">{l.sku}</span></span><Badge tone="warning">{l.available ?? (l.total ?? 0) - (l.reserved ?? 0)}</Badge></li>
+        <Panel title={t("dashboard.mix.title")} className="lg:col-span-6 xl:col-span-3" bodyClass="space-y-5 p-4">
+          {!ins.isError && (ins.isPending ? <Skeleton className="h-16" /> : i && (<div><h3 className="mb-2 text-xs font-medium text-muted">{t("dashboard.channels.title")}</h3>
+            <SplitBar parts={(["website", "trendyol"] as const).map((k) => ({ key: k, label: enumLabel("source", k), value: i.channels[k].revenue, valueText: money(i.channels[k].revenue, cur), sub: t("dashboard.channels.orders", { n: i.channels[k].orders }), className: k === "website" ? "bg-brand-600" : "bg-accent-500" }))} /></div>
+          ))}
+          <div>
+            <h3 className="mb-2 text-xs font-medium text-muted">{t("dashboard.byStatus.title")}</h3>
+            {statusPanel}
+          </div>
+        </Panel>
+
+        <Panel className="lg:col-span-6 xl:col-span-4" bodyClass="px-4 py-3"
+          title={<Seg<InsightTab> label={t("dashboard.insights.label")} value={tab} onChange={setTab} options={[
+            { id: "products", label: t("dashboard.insights.products") }, { id: "cities", label: t("dashboard.insights.cities") },
+            { id: "stock", label: t("dashboard.insights.stock") }, { id: "activity", label: t("dashboard.insights.activity") },
+          ]} />}
+          actions={viewAll(tab === "activity" ? "/audit" : tab === "stock" ? "/products?stock=low&status=active" : tab === "cities" ? "/orders" : "/products", t("dashboard.recent.viewAll"))}>
+          <div role="tabpanel">
+            {tab === "products" && (ins.isPending ? <Skeleton className="h-40" /> : !i || i.topProducts.length === 0 ? <p className="text-sm text-muted">{t("dashboard.top.empty")}</p> : (
+              <RankBars rows={i.topProducts.slice(0, 5).map((p, n) => ({ key: p.productId ?? String(n), label: p.name, value: p.revenue, valueText: money(p.revenue, cur), sub: t("dashboard.top.units", { n: p.units }) }))} />
+            ))}
+            {tab === "cities" && (ins.isPending ? <Skeleton className="h-40" /> : !i || i.topCities.length === 0 ? <p className="text-sm text-muted">{t("dashboard.top.empty")}</p> : (
+              <RankBars rows={i.topCities.slice(0, 5).map((c) => ({ key: c.city ?? "?", label: c.city ?? "-", value: c.orders, valueText: t("dashboard.channels.orders", { n: c.orders }), sub: money(c.revenue, cur) }))} />
+            ))}
+            {tab === "stock" && (!d.lowStock?.length ? <p className="flex items-center gap-2 text-sm text-muted"><CheckCircle2 size={16} className="text-success" aria-hidden />{t("dashboard.lowStock.empty")}</p> : (
+              <ul className="space-y-1.5">{d.lowStock.slice(0, 6).map((l, n) => (
+                <li key={l.variantId ?? n} className="flex items-center justify-between gap-3 text-[13px]"><span className="min-w-0 truncate">{l.productName ?? l.name ?? l.title ?? l.sku}<span className="ml-2 text-xs text-muted">{l.sku}</span></span><span className="font-semibold tabular-nums text-warn">{l.available ?? (l.total ?? 0) - (l.reserved ?? 0)}</span></li>
               ))}</ul>
-            )}
-
-          </Card>
-        </div>
+            ))}
+            {tab === "activity" && (ins.isPending ? <Skeleton className="h-40" /> : !i || i.activity.length === 0 ? <p className="text-sm text-muted">{t("dashboard.activity.empty")}</p> : (
+              <ul className="space-y-2">{i.activity.slice(0, 6).map((a) => (
+                <li key={a.id} className="flex items-baseline justify-between gap-3 text-[13px]"><span className="min-w-0 truncate">{prettify(a.action.replace(/[._]/g, " "))}<span className="text-muted"> · {a.admin ?? t("dashboard.activity.system")}</span></span><span className="shrink-0 text-xs text-muted">{timeAgo(a.at)}</span></li>
+              ))}</ul>
+            ))}
+          </div>
+        </Panel>
       </div>
+
       {!!d.stockDrift?.length && (
-        <Card title={t("dashboard.drift.title")} className="mt-6">
-          <Table head={[t("dashboard.drift.sku"), t("dashboard.drift.total"), t("dashboard.drift.reserved"), t("dashboard.drift.expected")]} caption={t("dashboard.drift.caption")}>{d.stockDrift.map((l, i) => (
-            <tr key={l.variantId ?? i}><Td>{l.sku}</Td><Td>{l.total}</Td><Td>{l.reserved}</Td><Td>{l.expectedReserved}</Td></tr>
+        <Card title={t("dashboard.drift.title")}>
+          <Table head={[t("dashboard.drift.sku"), t("dashboard.drift.total"), t("dashboard.drift.reserved"), t("dashboard.drift.expected")]} caption={t("dashboard.drift.caption")}>{d.stockDrift.map((l, n) => (
+            <tr key={l.variantId ?? n}><Td>{l.sku}</Td><Td>{l.total}</Td><Td>{l.reserved}</Td><Td>{l.expectedReserved}</Td></tr>
           ))}</Table>
         </Card>
       )}
-
-    </>
+    </div>
   );
 }

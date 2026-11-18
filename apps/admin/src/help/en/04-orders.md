@@ -77,7 +77,7 @@ If there are no buttons on the Status card, it says "Final state."
 
 ### Reservation time and automatic cancellation {#rezervasyon-suresi-ve-otomatik-iptal}
 
-When a customer goes to payment, stock is held for the number of minutes set in **Settings → Checkout → Stock reservation (minutes)** (15 by default). If the time runs out and no payment has arrived, the system (with a check that runs every minute) sets the order to **Cancelled** on its own and releases the stock. You do not have to do anything.
+When a customer goes to payment, stock is held for the number of minutes set in **Settings → Checkout → Stock reservation (minutes)** (15 by default). If the time runs out and no payment has arrived, the system (with a check that runs every 15 minutes) sets the order to **Cancelled** on its own and releases the stock. You do not have to do anything.
 
 ### Common mistakes {#sik-yapilan-hatalar}
 
@@ -141,7 +141,7 @@ An order becomes **Paid** only after these checks pass:
 | **Payment failed** | The payment becomes "Failed"; the order stays in **Awaiting payment** and is cancelled when the time runs out. | Nothing needed; the customer can try again. |
 
 > [!NOTE]
-> Keeping the reservation time very short raises the chance of a "late payment". 15–30 minutes is a sensible range.
+> Keeping the reservation time very short raises the chance of a "late payment". 15–30 minutes is a sensible range. Expired reservations are released in a sweep every 15 minutes, so an unpaid order can hold stock for up to 15 minutes after its time runs out.
 
 For payment problems, see the [Troubleshooting](/help/troubleshooting#odeme-sorunlari) section.
 
@@ -191,7 +191,7 @@ After you pack the order, you create a shipment from the order page. For this, t
 ### Creating a shipment (step by step) {#kargo-olusturma-adim-adim}
 
 1. On the order page, click **Create shipment**.
-2. In the **Carrier service ID** field, enter the service ID from the quote Geliver gave you (hint: "the service/quote ID from your shipping integration (Geliver)"). In this version the quote list is not shown in this window; you need to get the code from your Geliver panel or from the price list in Geliver's documentation.
+2. Pick an offer from the **Shipping service** list. The list is fetched from Geliver at that moment for this order's parcel; each row shows the carrier, the service code and the price. The cheapest offer is preselected. If the offers cannot be loaded the window shows why; use **Load offers again** to retry, or type the service code by hand in the **Carrier service ID** field.
 3. Press **Create**.
 4. The system gets the shipment and label from Geliver; the carrier, tracking number and label link appear on the **Shipments** card. If the order is **Paid**, it moves to **Fulfilling** automatically.
 5. Print the label and hand the parcel to the carrier (see [Printing](/help/orders#yazdirma)).
@@ -201,6 +201,18 @@ After you pack the order, you create a shipment from the order page. For this, t
 ### If you shipped outside Geliver {#kargoyu-geliver-disinda-yaptiysaniz}
 
 If you made the shipment another way (for example at a carrier branch), you do not have to use **Create shipment**. However, an order in the **Paid** status cannot go directly to **Shipped**: first move it to **Fulfilling**, then to **Shipped**. In this case, since the system has no tracking number, the customer notification cannot include one; you can pass the tracking number on by hand with **Email customer**.
+
+### Hand delivery {#elden-teslimat}
+
+If you gave the order to the customer yourself without a carrier (pick-up at the shop, your own courier, …) no tracking code is needed. Website orders only; Trendyol orders are delivered through Trendyol.
+
+1. On the order page press **Hand over in person** (the handshake icon on the order board does the same).
+2. Optionally write a note (e.g. who received it). It is only shown in the order history.
+3. With **Send the customer the "delivered" message** on, the customer gets only the "delivered" e-mail/SMS; no "shipped" message without a tracking link is sent.
+4. Confirm with **Mark as delivered**. The order becomes **Delivered** and the shipments list shows "Elden teslimat".
+
+- If the order has an active carrier shipment, cancel it in Geliver first. A handed-over order cannot get a carrier label later, and the automatic Geliver shipment skips it.
+- This cannot be undone. Invoicing is unaffected; issue the invoice with **Issue invoice** as usual.
 
 ### Parcel weight and dimensions {#paket-agirligi-ve-olculeri}
 
@@ -273,7 +285,7 @@ The **Print** menu on the order page, or the bulk bar on the order list, opens d
 
 If you have turned on the **Trendyol** integration, your orders on Trendyol also land in the **Orders** list. You can separate them with the **Source: Trendyol** filter. For setup, see the [Trendyol](/help/integrations#trendyol) section.
 
-- Orders are fetched automatically **about every 5 minutes** (they also arrive instantly if you use the webhook). The order number starts with `TY-`.
+- Orders are fetched automatically **about every 15 minutes** (they also arrive instantly if you use the webhook). The order number starts with `TY-`.
 - Each Trendyol order is imported only once; fetching it again does not duplicate it, it only updates its status.
 - Product lines are matched to variants in your store by SKU/barcode. The stock of a matching variant is automatically **deducted** ("Trendyol sale"). A line that does not match is saved without deducting stock, and a warning is logged; keep SKUs the same as on Trendyol.
 - Trendyol statuses are translated into OpenShelf statuses (for example "Created" → **Paid**, "Shipped" → **Shipped**, "Delivered" → **Delivered**, "Cancelled" → **Cancelled**). This mapping has not been verified against Trendyol's current status dictionary; compare the results with your own panel.

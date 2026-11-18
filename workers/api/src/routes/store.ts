@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { cartItems, carts, categories, coupons, customerConsents, customers, marketingEvents, orderItems, orders, payments, products, productVariants, shipments, utmAttributions } from "@openshelf/db";
+import { cartItems, carts, categories, coupons, customerConsents, customers, marketingEvents, orderItems, orders, payments, productImages, products, productVariants, shipments, utmAttributions } from "@openshelf/db";
 import { attachReservations, CouponError, evaluateCoupon, InsufficientStockError, InvalidTransitionError, priceItems, releaseReservationIds, reserveStock, transitionOrder, type PricedCart } from "@openshelf/core";
 import type { ServerEventSink } from "@openshelf/integration-sdk";
 import { CartCouponBody, CartItemBody, CheckoutBody, ConsentBody, EVENT_NAMES, META_EVENT_MAP, SORT_KEYS, TrackBody, type SortKey } from "@openshelf/shared";
@@ -12,6 +12,7 @@ import { enforceRateLimit, verifyTurnstile } from "../middleware/security";
 import { getAllSettings, getSettings, publicConfig } from "../lib/settings";
 import { getAdapter, isMockModeFresh, logIntegrationEvent } from "../lib/integrations";
 import { activePaymentProvider } from "../lib/payments";
+import { buildPaymentBasket } from "../lib/basket";
 import { purchaseEventId } from "../lib/eventId";
 import { hydrateProducts, availableOf } from "../lib/catalog";
 import { randomToken, timingSafeEqual } from "../lib/crypto";
@@ -233,6 +234,7 @@ store.post("/checkout", async (c) => {
     throw e;
   }
   let couponClaimed = false;
+  let settled = false; // failure already fully compensated (stock, coupon, cart): the outer handler must not compensate again
 
   try {
     if (priced.couponCode) {
@@ -274,18 +276,29 @@ store.post("/checkout", async (c) => {
       session = await provider.adapter.createCheckout({
         orderId, orderNumber: number, amount: priced.total, currency: priced.currency,
         buyer: { id: cust!.id, name: first, surname: surname || first, email: b.email, phone: addr.phone, ip, address: [addr.line1, addr.line2].filter(Boolean).join(" "), city: addr.city, country: addr.country === "TR" ? "Turkey" : addr.country, zip: addr.zip, identityNumber: addr.identityNumber },
-        items: priced.lines.map((l) => ({ id: l.variantId, name: l.name, category: "General", price: l.lineTotal / l.quantity, quantity: l.quantity })),
+        // must add up to the amount charged: shipping is its own line, discounts are spread over the product lines
+        items: buildPaymentBasket(priced.lines, priced.total, priced.shipping),
         callbackUrl: `${env.API_ORIGIN}/api/store/payment/callback/${provider.id}`,
       });
     } catch (e) {
-      log("error", "createCheckout failed", { provider: provider.id, error: e instanceof Error ? e.message : String(e) });
-      await logIntegrationEvent(db, provider.id, "error", "createCheckout failed").catch(() => {});
-      await transitionOrder(db, orderId, "cancelled").catch(() => {});
+      const detail = e instanceof Error ? e.message : String(e);
+      log("error", "createCheckout failed", { provider: provider.id, error: detail });
+      await logIntegrationEvent(db, provider.id, "error", `createCheckout failed: ${detail}`.slice(0, 500), { orderNumber: number, amount: priced.total }).catch(() => {});
+      await transitionOrder(db, orderId, "cancelled").catch(() => {}); // releases stock + coupon use
+      // The customer never reached the payment page: remove the attempt, otherwise every retry leaves another cancelled order behind.
+      await db.batch([
+        db.delete(utmAttributions).where(eq(utmAttributions.orderId, orderId)),
+        db.delete(orderItems).where(eq(orderItems.orderId, orderId)),
+        db.delete(orders).where(and(eq(orders.id, orderId), eq(orders.status, "cancelled"))),
+      ]).catch(() => {});
+      await unclaimCart();
+      settled = true;
       throw new ApiError(502, "payment_provider_error", "Could not start payment, please try again");
     }
     await db.insert(payments).values({ id: crypto.randomUUID(), orderId, provider: provider.id, providerToken: session.providerToken, status: "pending", amount: priced.total, currency: priced.currency, isMock: mock });
     return c.json({ orderNumber: number, trackingToken, payment: { redirectUrl: session.redirectUrl, htmlContent: session.htmlContent } }, 201);
   } catch (e) {
+    if (settled) throw e;
     // compensation if we failed before an order row existed (after it exists, cancellation path above releases stock)
     const [o] = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, orderId)).limit(1);
     if (!o) {
@@ -307,12 +320,30 @@ store.get("/orders/:number", async (c) => {
   if (!o || !t || !timingSafeEqual(t, o.trackingToken)) throw notFound("Order");
   const items = await db.select().from(orderItems).where(eq(orderItems.orderId, o.id));
   const ships = await db.select().from(shipments).where(eq(shipments.orderId, o.id));
+  // product photo, name, variant and link per line (the product may have been deleted since: then only the stored name remains)
+  const vids = [...new Set(items.map((i) => i.variantId).filter((v): v is string => !!v))];
+  const vrows = vids.length ? await db.select({ id: productVariants.id, variantTitle: productVariants.title, productId: products.id, slug: products.slug, productName: products.nameTr, status: products.status })
+    .from(productVariants).innerJoin(products, eq(products.id, productVariants.productId)).where(inArray(productVariants.id, vids)) : [];
+  const vBy = new Map(vrows.map((v) => [v.id, v]));
+  const pids = [...new Set(vrows.map((v) => v.productId))];
+  const firstImg = new Map<string, string>();
+  if (pids.length) for (const im of await db.select().from(productImages).where(inArray(productImages.productId, pids)).orderBy(asc(productImages.position))) {
+    if (!firstImg.has(im.productId)) firstImg.set(im.productId, im.mediaId ? `/media/${im.mediaId}` : im.url ?? "");
+  }
   const paid = !["pending", "awaiting_payment", "cancelled"].includes(o.status);
   return c.json({
     number: o.number, status: o.status, currency: o.currency, createdAt: o.createdAt, email: o.email, shippingAddress: o.shippingAddress,
     subtotal: o.subtotal, discountTotal: o.discountTotal, shippingTotal: o.shippingTotal, taxTotal: o.taxTotal, total: o.total, consent: o.consent,
-    items: items.map((i) => ({ variantId: i.variantId, sku: i.sku, name: i.name, quantity: i.quantity, unitPrice: i.unitPrice })),
-    shipments: ships.map((s) => ({ carrier: s.carrier, trackingNumber: s.trackingNumber, status: s.status })),
+    couponCode: o.couponCode,
+    items: items.map((i) => {
+      const v = i.variantId ? vBy.get(i.variantId) : undefined;
+      return {
+        variantId: i.variantId, sku: i.sku, name: i.name, quantity: i.quantity, unitPrice: i.unitPrice,
+        productName: v?.productName ?? null, variantTitle: v?.variantTitle ?? null, imageUrl: (v && firstImg.get(v.productId)) || null,
+        slug: v && v.status === "active" ? v.slug : null,
+      };
+    }),
+    shipments: ships.map((s) => ({ carrier: s.carrier, trackingNumber: s.trackingNumber, trackingUrl: s.trackingUrl, status: s.status, method: s.provider === "hand" ? "hand" : "carrier" })),
     purchaseEventId: paid ? purchaseEventId(o.id) : null,
   });
 });

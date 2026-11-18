@@ -1,17 +1,21 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { addresses, auditLogs, customerConsents, customers, integrationConfigs, inventory, invoices, orderItems, orders, paymentEvents, payments, productVariants, products, refunds, shipments, utmAttributions } from "@openshelf/db";
+import { addresses, auditLogs, customerConsents, customers, integrationConfigs, inventory, invoices, orderItems, orders, paymentEvents, payments, productVariants, products, refunds, shipmentEvents, shipments, utmAttributions } from "@openshelf/db";
 import { InvalidTransitionError, enqueueJob, transitionOrder } from "@openshelf/core";
-import type { PaymentProvider, ShippingProvider } from "@openshelf/integration-sdk";
-import { ORDER_STATUSES, OrderStatusBody, RefundBody, ShipmentBody, type OrderStatus } from "@openshelf/shared";
+import type { PaymentProvider, ShipmentInput, ShippingProvider } from "@openshelf/integration-sdk";
+import { HAND_DELIVERY_PROVIDER, HandDeliveryBody, ORDER_STATUSES, OrderAddressBody, orderPricesIncludeTax, OrderStatusBody, RefundBody, ShipmentBody, type OrderStatus } from "@openshelf/shared";
+import { stepsTo } from "../lib/shipmentTracking";
 import type { AppEnv } from "../env";
 import { ApiError, body, likeEscape, notFound, paged, paging } from "../lib/http";
 import { audit } from "../lib/audit";
 import { requireRole } from "../middleware/auth";
-import { getAdapter, isIntegrationEnabled, isMockModeFresh } from "../lib/integrations";
+import { getAdapter, isIntegrationEnabled, isMockModeFresh, logIntegrationEvent } from "../lib/integrations";
+import { recheckPayment } from "../lib/payments";
 import { getSettings } from "../lib/settings";
 import { INVOICING_PROVIDER_IDS, SHIPPING_PROVIDER_IDS } from "../integrations/registry";
 import { availableOf } from "../lib/catalog";
+import { buildAmounts, drizzleInvoiceRepo } from "@openshelf/integration-efaturam";
 
 export const adminOrders = new Hono<AppEnv>();
 
@@ -98,7 +102,7 @@ adminOrders.get("/orders", requireRole("staff"), async (c) => {
       itemCount: its.reduce((n, i) => n + i.quantity, 0), lineCount: its.length,
       lines: its.slice(0, 3).map((i) => ({ name: i.name, sku: i.sku, quantity: i.quantity })),
       payment: pay ? { status: pay.status, provider: pay.provider } : null,
-      shipment: sh ? { status: sh.status, carrier: sh.carrier ?? null, trackingNumber: sh.trackingNumber ?? null, trackingUrl: sh.trackingUrl ?? null } : null,
+      shipment: sh ? { status: sh.status, provider: sh.provider ?? null, carrier: sh.carrier ?? null, trackingNumber: sh.trackingNumber ?? null, trackingUrl: sh.trackingUrl ?? null } : null,
       invoice: inv ? { status: inv.status, number: inv.number ?? null } : null,
     };
   }), t?.n ?? 0, p));
@@ -150,6 +154,21 @@ adminOrders.post("/orders/:id/status", requireRole("staff"), async (c) => {
   }
 });
 
+/** Ask the payment provider again whether this order was paid; completes the order when the money was taken (lost callback). */
+adminOrders.post("/orders/:id/payment/recheck", requireRole("staff"), async (c) => {
+  const id = c.req.param("id");
+  let r;
+  try { r = await recheckPayment(c.env, c.get("db"), id); }
+  catch (e) {
+    const reason = e instanceof Error ? e.message : String(e);
+    if (reason === "order_not_found") throw notFound("Order");
+    await logIntegrationEvent(c.get("db"), "iyzico", "warn", `Payment re-check failed: ${reason}`.slice(0, 500)).catch(() => {});
+    throw new ApiError(502, "payment_provider_error", `Could not check the payment: ${reason}`.slice(0, 300));
+  }
+  await audit(c, "order.payment_recheck", "order", id, { result: r.result, providerStatus: r.providerStatus });
+  return c.json({ id, ...r });
+});
+
 adminOrders.post("/orders/:id/refund", requireRole("admin"), async (c) => {
   const id = c.req.param("id"); const b = await body(c, RefundBody); const db = c.get("db");
   const [o] = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
@@ -185,24 +204,124 @@ adminOrders.post("/orders/:id/refund", requireRole("admin"), async (c) => {
   return c.json({ id: refundId, ok: true, full });
 });
 
-adminOrders.post("/orders/:id/shipment", requireRole("staff"), async (c) => {
-  const id = c.req.param("id"); const b = await body(c, ShipmentBody); const db = c.get("db");
+/** Correct the delivery address of a website order that has not shipped yet (typo, wrong district the carrier rejects...). */
+adminOrders.put("/orders/:id/shipping-address", requireRole("staff"), async (c) => {
+  const id = c.req.param("id"); const b = await body(c, OrderAddressBody); const db = c.get("db");
+  const [o] = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
+  if (!o) throw notFound("Order");
+  if (o.source !== "website") throw new ApiError(409, "channel_managed", `The address of ${o.source} orders is managed by the marketplace`);
+  if (!["pending", "awaiting_payment", "paid", "fulfilling"].includes(o.status)) throw new ApiError(409, "invalid_order_state", "The address can only be changed before the order ships");
+  const prev = (o.shippingAddress ?? {}) as Record<string, unknown>;
+  const clean = (v: string | undefined) => { const t = v?.trim(); return t ? t : undefined; };
+  const next: Record<string, unknown> = { ...prev, name: b.name.trim(), phone: b.phone.trim(), line1: b.line1.trim(), city: b.city.trim() };
+  for (const k of ["surname", "line2", "district", "zip"] as const) { const v = clean(b[k]); if (v === undefined) delete next[k]; else next[k] = v; }
+  const changed = Object.keys(next).concat(Object.keys(prev)).filter((k, i, a) => a.indexOf(k) === i && prev[k] !== next[k]);
+  if (changed.length) {
+    await db.update(orders).set({ shippingAddress: next as typeof o.shippingAddress, updatedAt: new Date() }).where(eq(orders.id, id));
+    await audit(c, "order.address", "order", id, { changed }); // field names only: no personal data in the audit log
+  }
+  return c.json({ id, shippingAddress: next, changed });
+});
+
+/** Order + enabled shipping provider + the parcel/recipient data both the quote list and the shipment creation use. */
+async function shipmentContext(c: Context<AppEnv>, id: string) {
+  const db = c.get("db");
   const [o] = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
   if (!o) throw notFound("Order");
   if (o.source !== "website") throw new ApiError(409, "channel_managed", `Shipping for ${o.source} orders is managed by the marketplace`);
   if (!["paid", "fulfilling"].includes(o.status)) throw new ApiError(409, "invalid_order_state", "Order must be paid before shipping");
+  const [hand] = await db.select({ id: shipments.id }).from(shipments).where(and(eq(shipments.orderId, id), eq(shipments.provider, HAND_DELIVERY_PROVIDER))).limit(1);
+  if (hand) throw new ApiError(409, "hand_delivered", "This order was handed over in person; no carrier shipment is needed");
   let a = null; let pid = "geliver";
   for (const p of SHIPPING_PROVIDER_IDS) { a = await getAdapter<ShippingProvider>(c.env, db, p); if (a) { pid = p; break; } }
   if (!a) throw new ApiError(503, "shipping_unavailable", "No shipping provider enabled");
   const addr = o.shippingAddress as { name: string; surname?: string; phone: string; line1: string; line2?: string; city: string; district?: string; zip?: string };
   const items = await db.select({ q: orderItems.quantity, w: productVariants.weightGrams }).from(orderItems).leftJoin(productVariants, eq(productVariants.id, orderItems.variantId)).where(eq(orderItems.orderId, id));
   const grams = items.reduce((s, i) => s + (i.w ?? 500) * i.q, 0);
-  const res = await a.adapter.createShipment({ orderId: id, recipient: { name: [addr.name, addr.surname].filter(Boolean).join(" "), phone: addr.phone, email: o.email, address: [addr.line1, addr.line2].filter(Boolean).join(" "), city: addr.city, district: addr.district, zip: addr.zip }, parcels: [{ weightKg: Math.max(0.1, grams / 1000) }] }, b.serviceId);
+  const input: ShipmentInput = { orderId: id, recipient: { name: [addr.name, addr.surname].filter(Boolean).join(" "), phone: addr.phone, email: o.email, address: [addr.line1, addr.line2].filter(Boolean).join(" "), city: addr.city, district: addr.district, zip: addr.zip }, parcels: [{ weightKg: Math.max(0.1, grams / 1000) }] };
+  return { db, o, adapter: a.adapter, pid, input };
+}
+
+/** Carrier offers for this order's parcel, cheapest first: the choices of the "create shipment" dialog. */
+adminOrders.get("/orders/:id/shipment/quotes", requireRole("staff"), async (c) => {
+  const { adapter, pid, input } = await shipmentContext(c, c.req.param("id"));
+  let quotes;
+  try { quotes = await adapter.quote(input); }
+  catch (e) {
+    const reason = e instanceof Error ? e.message : String(e);
+    await logIntegrationEvent(c.get("db"), pid, "warn", `Shipping quotes failed: ${reason}`.slice(0, 500)).catch(() => {});
+    throw new ApiError(502, "shipping_provider_error", `Could not load shipping offers: ${reason}`.slice(0, 300));
+  }
+  const seen = new Set<string>();
+  const items = quotes.filter((q) => q.serviceId && !seen.has(q.serviceId) && seen.add(q.serviceId)).sort((x, y) => x.price - y.price);
+  // Geliver test mode: labels are free test labels, no real carrier pick-up
+  const testMode = (adapter as { testMode?: boolean }).testMode === true;
+  return c.json({ provider: pid, weightKg: input.parcels[0]!.weightKg, testMode, items });
+});
+
+adminOrders.post("/orders/:id/shipment", requireRole("staff"), async (c) => {
+  const id = c.req.param("id"); const b = await body(c, ShipmentBody);
+  const { db, o, adapter, pid, input } = await shipmentContext(c, id);
+  let res;
+  try { res = await adapter.createShipment(input, b.serviceId); }
+  catch (e) {
+    // show the carrier's own reason (bad address, phone, service code, balance...) instead of a blank server error
+    const reason = e instanceof Error ? e.message : String(e);
+    await logIntegrationEvent(db, pid, "error", `Shipment for order ${o.number} failed: ${reason}`.slice(0, 500), { serviceId: b.serviceId }).catch(() => {});
+    throw new ApiError(502, "shipping_provider_error", `Could not create the shipment: ${reason}`.slice(0, 300));
+  }
   const sid = crypto.randomUUID();
   await db.insert(shipments).values({ id: sid, orderId: id, provider: pid, providerShipmentId: res.providerShipmentId, carrier: res.carrier ?? null, trackingNumber: res.trackingNumber ?? null, labelUrl: res.labelUrl ?? null, status: "created" });
   if (o.status === "paid") await transitionOrder(db, id, "fulfilling").catch(() => {});
   await audit(c, "order.shipment", "order", id, { shipmentId: sid, serviceId: b.serviceId });
   return c.json({ id: sid, ...res }, 201);
+});
+
+/**
+ * Hand delivery (website orders only): the store gave the parcel to the customer itself — no carrier, no tracking code.
+ * Records a delivered "hand" shipment and walks the order to delivered. Intermediate steps stay silent (no "shipped, here is your
+ * tracking link" mail without a link); the customer gets only the "delivered" message, and only when `notify` is on.
+ */
+adminOrders.post("/orders/:id/hand-delivery", requireRole("staff"), async (c) => {
+  const id = c.req.param("id"); const b = await body(c, HandDeliveryBody); const db = c.get("db");
+  const [o] = await db.select({ id: orders.id, number: orders.number, source: orders.source, status: orders.status }).from(orders).where(eq(orders.id, id)).limit(1);
+  if (!o) throw notFound("Order");
+  if (o.source !== "website") throw new ApiError(409, "channel_managed", `Delivery of ${o.source} orders is managed by the marketplace`);
+  if (!["paid", "fulfilling", "shipped"].includes(o.status)) throw new ApiError(409, "invalid_order_state", "Only paid orders that are not delivered yet can be handed over");
+  const existing = await db.select({ provider: shipments.provider, status: shipments.status }).from(shipments).where(eq(shipments.orderId, id));
+  if (existing.some((s) => s.provider === HAND_DELIVERY_PROVIDER)) throw new ApiError(409, "hand_delivered", "This order is already marked as handed over");
+  if (existing.some((s) => !["cancelled", "returned"].includes(s.status))) throw new ApiError(409, "carrier_shipment_exists", "A carrier shipment exists for this order; cancel it first");
+  const steps = stepsTo(o.status as OrderStatus, "delivered");
+  try {
+    for (const next of steps) await transitionOrder(db, id, next, new Date(), { notify: next === "delivered" && b.notify });
+  } catch (e) {
+    if (e instanceof InvalidTransitionError) throw new ApiError(409, "invalid_transition", e.message, { from: e.from, to: e.to });
+    throw e;
+  }
+  const sid = crypto.randomUUID();
+  await db.insert(shipments).values({ id: sid, orderId: id, provider: HAND_DELIVERY_PROVIDER, carrier: "Elden teslimat", trackingNumber: null, status: "delivered" });
+  await db.insert(shipmentEvents).values({ shipmentId: sid, status: "delivered", detail: (b.note || "Elden teslim edildi").slice(0, 300) });
+  await audit(c, "order.hand_delivery", "order", id, { from: o.status, notify: b.notify, ...(b.note ? { note: b.note } : {}) });
+  return c.json({ id, status: "delivered", shipmentId: sid }, 201);
+});
+
+/** What the automatic invoice for this order will contain: KDV-inclusive basis, lines, KDV per rate and the total (must equal what was paid). */
+adminOrders.get("/orders/:id/invoice/preview", requireRole("staff"), async (c) => {
+  const id = c.req.param("id"); const db = c.get("db");
+  const [o] = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
+  if (!o) throw notFound("Order");
+  if (o.source !== "website") throw new ApiError(409, "channel_managed", `Invoicing for ${o.source} orders is managed by the marketplace`);
+  const input = await drizzleInvoiceRepo(db).loadOrder(id);
+  if (!input) throw notFound("Order");
+  let amounts;
+  try { amounts = buildAmounts(input.lines); } catch (e) { throw new ApiError(409, "invoice_not_possible", e instanceof Error ? e.message : "Invoice cannot be built"); }
+  const total = amounts.invoiceTotal.payableAmount;
+  return c.json({
+    pricesIncludeTax: orderPricesIncludeTax(o), currency: o.currency, orderTotal: o.total,
+    lines: amounts.invoiceLines.map((l) => ({ name: l.itemName, quantity: l.quantity, net: l.taxableAmount, tax: l.taxAmount, rate: l.taxPercent, total: l.taxableAmount + l.taxAmount })),
+    byRate: amounts.totalTax.subTotalTaxes.map((s) => ({ rate: s.percent, net: s.taxableAmount, tax: s.taxAmount })),
+    net: amounts.invoiceTotal.taxExclusiveAmount, tax: amounts.totalTax.totalTaxAmount, total, matchesOrder: total === o.total,
+  });
 });
 
 adminOrders.post("/orders/:id/invoice", requireRole("staff"), async (c) => {

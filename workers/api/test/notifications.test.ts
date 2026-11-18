@@ -4,7 +4,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
 import * as schema from "@openshelf/db";
 import type { AdapterFactory, EmailProvider, SmsProvider } from "@openshelf/integration-sdk";
-import { escapeHtml, renderEmailHtml, renderSubject, DEFAULT_TEMPLATES, isE164, toE164, smsInfo, NOTIFICATION_EVENTS } from "@openshelf/shared";
+import { SAMPLE_SUMMARY_INPUT, escapeHtml, renderEmailHtml, renderSubject, DEFAULT_TEMPLATES, isE164, toE164, smsInfo, NOTIFICATION_EVENTS } from "@openshelf/shared";
 import { planMessages } from "@openshelf/core";
 import { registerFactory } from "../src/integrations/registry";
 import { getAdapter } from "../src/lib/integrations";
@@ -136,6 +136,18 @@ describe("templates", () => {
       settings: { fromName: "", fromEmail: "", smsSenderId: "", adminEmail: "", adminPhone: "", events: { order_paid: { sms: true, email: true } }, templates: { tr: {}, en: {} } } as never,
       storeName: "S", defaultLocale: "tr", storefrontOrigin: "https://s.test" });
     expect(p.email.text).toContain("A&B"); expect(p.email.html).toContain("A&amp;B"); expect(p.sms.to).toBe("+905551112233");
+  });
+  it("e-mail carries the order summary: items, discount, shipping, VAT, total, payment, address; CTA replaces the link line", () => {
+    const p = planMessages({ event: "order_paid", order: { id: "1", number: "OS-9", email: "a@b.co", currency: "TRY", total: 76980, trackingToken: "t", shippingAddress: { name: "Ayşe", surname: "<b>Y</b>", city: "İstanbul" } },
+      settings: { fromName: "", fromEmail: "", smsSenderId: "", adminEmail: "", adminPhone: "", events: { order_paid: { sms: false, email: true } }, templates: { tr: {}, en: {} } } as never,
+      storeName: "S", defaultLocale: "tr", storefrontOrigin: "https://s.test",
+      summary: { ...SAMPLE_SUMMARY_INPUT, shippingAddress: { name: "Ayşe", surname: "<b>Y</b>", city: "İstanbul" } }, branding: { primaryColor: "#112233" } });
+    const h = p.email.html;
+    for (const s of ["Seramik Vazo", "Keten Masa Örtüsü", "Ara toplam", "İndirim (Kupon: HOSGELDIN)", "Kargo", "KDV (fiyatlara dahil)", "Genel toplam", "iyzico", "Teslimat adresi", "Siparişi görüntüle", "#112233"]) expect(h, s).toContain(s);
+    expect(h).not.toContain("<b>Y</b>"); expect(h).toContain("&lt;b&gt;Y&lt;/b&gt;");
+    expect(h.match(/https:\/\/s\.test\/order\//g)).toHaveLength(1); // only the button, not the "Sipariş durumu:" line
+    expect(p.email.text).toContain("Genel toplam"); expect(p.email.text).toContain("https://s.test/order/");
+    expect(p.sms.text).not.toContain("Genel toplam");
   });
   it("E.164 validation and normalisation", () => {
     for (const ok of ["+905551112233", "+14155552671"]) expect(isE164(ok)).toBe(true);

@@ -7,6 +7,8 @@ export const nav = {
   "nav.group.administration": "Administration",
   "nav.dashboard": "Dashboard",
   "nav.orders": "Orders",
+  "nav.orderBoard": "Order board",
+  "nav.profit": "Profit matrix",
   "nav.invoices": "Invoices",
   "nav.emails": "Emails",
   "nav.products": "Products",

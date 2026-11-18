@@ -3,7 +3,9 @@ import { Link } from "react-router-dom";
 import { api, ApiError } from "../api/client";
 import type { Address, CheckoutResponse } from "../api/types";
 import { useCart } from "../cart/CartContext";
+import { TR_GEO } from "@openshelf/shared/src/trGeo";
 import { CheckoutSteps } from "../components/CheckoutSteps";
+import { Select } from "../components/Select";
 import { IyzicoLogo } from "../components/IyzicoLogo";
 import { useMoney } from "../components/Money";
 import { ProductImage } from "../components/ProductImage";
@@ -15,6 +17,18 @@ import { pageTitle } from "../lib/seo";
 import { legalTitle, useConfig } from "../store/ConfigContext";
 import { getAttribution, getConsent, track } from "../tracking";
 
+const isTurkey = (country?: string) => /^(tr|türkiye|turkiye|turkey)$/i.test((country ?? "").trim());
+const TR_CITIES = TR_GEO.map((c) => c[1]);
+/** Missing required address fields. In Turkey the province and district must be ones from the list. */
+export function addressProblems(a: Address): (keyof Address)[] {
+  const bad = (["fullName", "phone", "line1", "city", "country"] as const).filter((k) => !a[k]?.trim()) as (keyof Address)[];
+  if (isTurkey(a.country)) {
+    const city = TR_GEO.find((c) => c[1] === a.city);
+    if (!city && !bad.includes("city")) bad.push("city");
+    if (!city?.[2].includes(a.district ?? "")) bad.push("district");
+  }
+  return bad;
+}
 const emptyAddr = (): Address => ({ fullName: "", phone: "", line1: "", line2: "", city: "", district: "", postalCode: "", country: "TR" });
 
 function AddressFields({ prefix, value, onChange, errors }: { prefix: string; value: Address; onChange: (a: Address) => void; errors: Set<string> }) {
@@ -31,15 +45,32 @@ function AddressFields({ prefix, value, onChange, errors }: { prefix: string; va
     );
   };
   const p = prefix === "ship" ? "shipping" : "billing";
+  // Turkey: province and district are picked from the list the carrier accepts (free text caused undeliverable districts).
+  const turkey = isTurkey(value.country);
+  const districts = turkey ? TR_GEO.find((c) => c[1] === value.city)?.[2] ?? [] : [];
+  const pick = (k: "city" | "district", label: string, options: readonly string[], auto: string, disabled = false) => {
+    const id = `${prefix}-${k}`; const bad = errors.has(`${prefix}.${k}`);
+    return (
+      <div>
+        <label className="label" htmlFor={id}>{label}<span aria-hidden> *</span></label>
+        <Select id={id} name={id} wrapperClassName="block w-full" className="w-full" autoComplete={auto} required disabled={disabled} aria-invalid={bad} aria-describedby={bad ? `${id}-e` : undefined}
+          value={options.includes(value[k] ?? "") ? value[k] : ""} onChange={(e) => onChange(k === "city" ? { ...value, city: e.target.value, district: "" } : { ...value, district: e.target.value })}>
+          <option value="">{t("checkout.choose")}</option>
+          {options.map((o) => <option key={o} value={o}>{o}</option>)}
+        </Select>
+        {bad && <p id={`${id}-e`} className="mt-1 text-xs text-danger">{t("checkout.required")}</p>}
+      </div>
+    );
+  };
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       {f("fullName", t("checkout.fullName"), { required: true, auto: `${p} name`, span: true })}
       {f("phone", t("checkout.phone"), { required: true, auto: "tel", type: "tel" })}
       {f("country", t("checkout.country"), { required: true, auto: `${p} country` })}
+      {turkey ? pick("city", t("checkout.city"), TR_CITIES, `${p} address-level1`) : f("city", t("checkout.city"), { required: true, auto: `${p} address-level1` })}
+      {turkey ? pick("district", t("checkout.district"), districts, `${p} address-level2`, !districts.length) : f("district", t("checkout.district"), { auto: `${p} address-level2` })}
       {f("line1", t("checkout.line1"), { required: true, auto: `${p} address-line1`, span: true })}
       {f("line2", t("checkout.line2"), { auto: `${p} address-line2`, span: true })}
-      {f("city", t("checkout.city"), { required: true, auto: `${p} address-level1` })}
-      {f("district", t("checkout.district"), { auto: `${p} address-level2` })}
       {f("postalCode", t("checkout.postalCode"), { auto: `${p} postal-code` })}
     </div>
   );
@@ -95,10 +126,10 @@ export default function Checkout() {
     );
   }
 
-  const required: (keyof Address)[] = ["fullName", "phone", "line1", "city", "country"];
   const validate = () => {
     const e = new Set<string>();
-    for (const k of required) { if (!ship[k]?.trim()) e.add(`ship.${k}`); if (!same && !bill[k]?.trim()) e.add(`bill.${k}`); }
+    for (const k of addressProblems(ship)) e.add(`ship.${k}`);
+    if (!same) for (const k of addressProblems(bill)) e.add(`bill.${k}`);
     if (!/^\S+@\S+\.\S+$/.test(email)) e.add("email");
     if (!terms) e.add("terms");
     if (turnstileEnabled() && !token) e.add("captcha");

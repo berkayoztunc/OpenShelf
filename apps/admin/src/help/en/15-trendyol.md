@@ -50,7 +50,7 @@ The **Sync control** tab manages every product's relationship with Trendyol on o
 
 **Website only or synced?** Every product has a switch:
 
-* **Synced:** The product's stock is one shared pool and is sent to Trendyol. When a sale happens on the website or on Trendyol, when a Trendyol order is cancelled or when you change stock by hand, the new quantity reaches Trendyol within a few minutes. In addition, every 10 minutes the quantity last sent is compared with the quantity here and any difference is corrected.
+* **Synced:** The product's stock is one shared pool and is sent to Trendyol. When a sale happens on the website or on Trendyol, when a Trendyol order is cancelled or when you change stock by hand, the new quantity reaches Trendyol within a few minutes. In addition, every 15 minutes the quantity last sent is compared with the quantity here and any difference is corrected.
 * **Website only:** No stock or price is sent to Trendyol. Even if the same barcode sells on Trendyol, that sale does not take stock here.
 
 The first time you turn the switch on, variants are linked to Trendyol by their [barcode](term:barcode). A variant without a barcode cannot be linked; enter the barcode on the product page first. You can tick several products in the list and switch them in bulk.
@@ -59,7 +59,7 @@ The first time you turn the switch on, variants are linked to Trendyol by their 
 
 | Preference | This store | Trendyol |
 | --- | --- | --- |
-| **Content source** (name, description, brand, photos) | You edit it here; Trendyol's content is never written over it. | Taken from Trendyol every 30 minutes; content edits made here are overwritten. |
+| **Content source** (name, description, brand, photos) | You edit it here; Trendyol's content is never written over it. | Taken from Trendyol every hour; content edits made here are overwritten. |
 | **Price source** | The Trendyol price you enter is sent to Trendyol together with stock. | Website and Trendyol prices are taken from Trendyol's sale price; no price is sent from here. |
 
 > [!NOTE]
@@ -69,6 +69,11 @@ The first time you turn the switch on, variants are linked to Trendyol by their 
 
 > [!WARNING]
 > **Take stock from Trendyol** **replaces** the sellable stock here with Trendyol's quantity. Use it only as a one-off correction when the numbers have drifted apart. The change is written to the [stock ledger](term:ledger).
+
+**When the product is not on Trendyol.** Sync only updates the stock and price of a product that **already exists** on Trendyol; it does not open a new listing. When you turn the switch on, the barcodes are looked up on Trendyol:
+
+* *Not on Trendyol*: the product was not found in your Trendyol catalog. The **Create on Trendyol** button on the product card opens the [create-product wizard](#urun-olusturma-sihirbazi) with this product.
+* *Awaiting approval*: the product was sent to Trendyol and waits for approval. Sync starts by itself once it is approved; the state is checked every hour, or right away with **Check on Trendyol again**.
 
 **Status badges:** *In sync* means the quantity last sent equals the quantity here. *Pending* means a change is waiting in the queue. *Error* means Trendyol rejected the last push; the reason is shown under the variant on the product card (most often the barcode was not found on Trendyol).
 
@@ -95,7 +100,25 @@ Each row has small action icons on the right (the name appears on hover):
 
 The **Mappings** sub-tab (**Local variant mappings**) links a Trendyol barcode to a variant in your store. A mapped variant can have its stock and price sent to Trendyol and its Trendyol listing is switched on. Add one with **Add mapping** or with the link icon on a product row. Deleting a mapping switches the Trendyol listing off; the product on Trendyol is not deleted.
 
+**Match suggestions.** The **Find matches** button on the Mappings sub-tab compares your Trendyol listings (approved, pending approval and rejected) with the local variants that are not linked yet: first by barcode, then by stock code = SKU. Each suggestion shows how it matched and the listing's status; nothing is linked until you press **Link** (or **Link all**). A barcode wanted by several local variants and mappings that point to a barcode no longer on Trendyol are listed separately for you to resolve by hand. Matching never uses the model code (`productMainId`): sellers' own data is often inconsistent there. Rejected products show Trendyol's reason (for example a forbidden word in an image) in the **Pending approval** tab.
+
+If you create a product whose barcode already exists on Trendyol, the variant is linked to it and nothing is created again.
+
 ## Create-product wizard {#urun-olusturma-sihirbazi}
+
+> [!NOTE]
+> If you open the wizard from the Trendyol card on the product page (**Create on Trendyol**) the product is already chosen. For a product with several variants, all variants are sent in one request: each variant's barcode, stock and price is shown in a table, and the attribute that tells the variants apart (colour, size...) is picked per variant. After sending, the variants are linked to their Trendyol barcodes automatically.
+
+> [!TIP]
+> **The system fills the fields by itself.** Once a product is chosen the wizard finds these on its own and lists them in the "The system filled these in by itself" box; you can change all of them:
+>
+> * **Brand:** the product's brand (or the store name) is looked up on Trendyol; the brand with exactly the same name is chosen, otherwise suggestions are shown.
+> * **Category:** the store category's name is matched against Trendyol's leaf categories (categories imported from Trendyol are found directly). The one category with the same name is chosen; if it cannot be sure it shows the five closest as suggestions.
+> * **Attributes:** attributes that tell variants apart, such as colour or size, are picked automatically from the variant's name ("Pink") and options. A required attribute with only one possible value is taken. Desi is computed from the variant weight.
+> * **Cargo:** no carrier is chosen for you; leave it empty to use your default agreement with Trendyol.
+> * **Memory:** when you send the product your choices (Trendyol category, brand, shared attributes such as material, cargo, delivery time, origin) are stored for the store category. The next products in that category come with everything ready.
+>
+> The system never chooses by guessing: with several matches it leaves the field empty and offers suggestions.
 
 The **Add a product to Trendyol** button opens a four-step wizard:
 

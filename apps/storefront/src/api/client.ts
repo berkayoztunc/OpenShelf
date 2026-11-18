@@ -56,10 +56,13 @@ const cartOf = (c: Wire): Cart => ({
 });
 const orderOf = (o: Wire): OrderView => ({
   orderNumber: o.number, status: o.status, currency: o.currency, subtotal: o.subtotal, shipping: o.shippingTotal, discount: o.discountTotal, tax: o.taxTotal, total: o.total,
-  createdAt: o.createdAt, purchaseEventId: o.purchaseEventId ?? null,
-  items: (o.items ?? []).map((i: Wire) => ({ variantId: i.variantId, title: i.name, quantity: i.quantity, unitPrice: i.unitPrice })),
+  createdAt: o.createdAt, purchaseEventId: o.purchaseEventId ?? null, email: o.email ?? undefined, couponCode: o.couponCode ?? null,
+  items: (o.items ?? []).map((i: Wire, n: number) => ({
+    variantId: i.variantId ?? `line-${n}`, title: i.productName ?? i.name, variantTitle: i.variantTitle ?? undefined, quantity: i.quantity, unitPrice: i.unitPrice,
+    imageUrl: i.imageUrl ?? null, productSlug: i.slug ?? null, sku: i.sku ?? undefined,
+  })),
   shippingAddress: o.shippingAddress ? addressFromWire(o.shippingAddress) : undefined,
-  shipment: o.shipments?.[0] ? { carrier: o.shipments[0].carrier ?? undefined, trackingNumber: o.shipments[0].trackingNumber ?? undefined, status: o.shipments[0].status } : null,
+  shipment: o.shipments?.[0] ? { carrier: o.shipments[0].carrier ?? undefined, trackingNumber: o.shipments[0].trackingNumber ?? undefined, trackingUrl: o.shipments[0].trackingUrl ?? undefined, status: o.shipments[0].status, hand: o.shipments[0].method === "hand" } : null,
 });
 const addressFromWire = (a: Wire): Partial<Address> => ({
   fullName: [a.name, a.surname].filter(Boolean).join(" "), phone: a.phone, line1: a.line1, line2: a.line2, city: a.city, district: a.district, postalCode: a.zip, country: a.country,

@@ -1,3 +1,4 @@
+import { orderPricesIncludeTax } from "@openshelf/shared";
 import { toMajor } from "./format";
 import { tNow } from "../i18n";
 import { emptyLine } from "./invoices";
@@ -18,7 +19,7 @@ export interface RawOrder {
 export const fullName = (a?: RawAddress | null) => [a?.name, a?.surname].filter(Boolean).join(" ");
 export const streetOf = (a?: RawAddress | null) => [a?.line1, a?.line2].filter(Boolean).join(" ");
 
-/** Spread the order-level discount over item lines proportionally (remainder on the last item); shipping is not discounted. */
+/** Spread the order-level discount over item lines proportionally (remainder on the last item); shipping is not discounted. Prices are in the order's own basis (KDV-inclusive or exclusive, see `orderPricesIncludeTax`). */
 export interface OrderLine { name: string; sku?: string | undefined; variantId?: string | undefined; quantity: number; unitPrice: number; taxRate: number; discount: number }
 export function orderInvoiceLines(o: RawOrder, defaultRate: number): OrderLine[] {
   const rate = (r?: number) => (r && r > 0 ? r : defaultRate);
@@ -29,7 +30,12 @@ export function orderInvoiceLines(o: RawOrder, defaultRate: number): OrderLine[]
     let left = Math.min(o.discountTotal, sum);
     lines.forEach((l, i) => { const d = i === lines.length - 1 ? left : Math.min(left, Math.round((o.discountTotal * gross[i]!) / sum)); l.discount = d; left -= d; });
   }
-  if (o.shippingTotal > 0) lines.push({ name: tNow("print.shippingLine"), sku: undefined, variantId: undefined, quantity: 1, unitPrice: o.shippingTotal, taxRate: defaultRate, discount: 0 });
+  // Shipping is charged as a final (KDV-inclusive) amount. On an order whose items are KDV-exclusive the invoice lines are exclusive too,
+  // so the shipping line carries its net price and the KDV added on top gives back exactly what was charged.
+  if (o.shippingTotal > 0) {
+    const net = orderPricesIncludeTax(o) ? o.shippingTotal : Math.round(o.shippingTotal / (1 + (lines[0]?.taxRate ?? defaultRate) / 100));
+    lines.push({ name: tNow("print.shippingLine"), sku: undefined, variantId: undefined, quantity: 1, unitPrice: net, taxRate: lines[0]?.taxRate ?? defaultRate, discount: 0 });
+  }
   return lines;
 }
 
@@ -44,6 +50,7 @@ export function orderToForm(o: RawOrder, defaultRate: number): InvoiceForm {
       name: a.isCompany && a.name && !a.surname ? a.name : fullName(a) || o.email || "", email: o.email ?? "", phone: a.phone, address: [a.line1, a.line2, a.district].filter(Boolean).join(" "), city: a.city ?? "",
       taxId: a.taxId ?? "", taxOffice: a.taxOffice ?? "", isCompany: !!a.isCompany,
     },
-    lines, pricesIncludeTax: true, currency: o.currency, issueDate: "", notes: tNow("invoices.fromOrderNote", { number: o.number }), orderId: o.id,
+    // the invoice follows how the order was priced: a KDV-inclusive order (the usual case) is invoiced KDV-inclusive
+    lines, pricesIncludeTax: orderPricesIncludeTax(o), currency: o.currency, issueDate: "", notes: tNow("invoices.fromOrderNote", { number: o.number }), orderId: o.id,
   };
 }

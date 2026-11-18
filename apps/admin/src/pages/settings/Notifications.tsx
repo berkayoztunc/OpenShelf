@@ -1,11 +1,12 @@
 import { useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import {
-  DEFAULT_TEMPLATES, NOTIFICATION_EVENTS, SAMPLE_VARS, TEMPLATE_VARS, pickTemplate, renderEmailHtml, renderSms, renderSubject, smsInfo, unknownTemplateVars,
+  DEFAULT_TEMPLATES, NOTIFICATION_EVENTS, SAMPLE_SUMMARY_INPUT, SAMPLE_VARS, TEMPLATE_VARS, buildOrderSummary, ctaLabel, pickTemplate, renderEmailHtml, renderSms, renderSubject, smsInfo, unknownTemplateVars,
   type NotificationEvent, type NotificationLang, type SettingsOf,
 } from "@openshelf/shared";
 import { api, errMsg } from "../../lib/api";
-import { useGroupForm } from "../../lib/settings";
+import { useGroupForm, useSettings } from "../../lib/settings";
+import { mediaUrl } from "../../lib/media";
 import { Badge, Button, Card, Field, inputClass, SelectField, TextField, useToast } from "../../components/ui";
 import { HelpTip } from "../../components/help/HelpTip";
 import { useT } from "../../i18n";
@@ -24,10 +25,19 @@ export default function Notifications() {
   const [event, setEvent] = useState<NotificationEvent>("order_paid");
   const [testChannel, setTestChannel] = useState<"sms" | "email">("email");
   const [testTo, setTestTo] = useState("");
+  const [testWhat, setTestWhat] = useState<"plain" | "event" | "all">("all");
+  const all = useSettings();
+  const brand = (all.data as { branding?: { primaryColor?: string; logoMediaId?: string | null } } | undefined)?.branding;
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const test = useMutation({
-    mutationFn: () => api.post<{ ok: boolean; provider: string }>("/api/admin/notifications/test", { channel: testChannel, to: testTo.trim(), lang }),
-    onSuccess: (r) => toast.success(t("settings.notif.test.sent", { provider: enumLabel("provider", r.provider) })),
+    mutationFn: () => api.post<{ ok: boolean; provider: string; results?: { event: string; ok: boolean }[] }>("/api/admin/notifications/test", {
+      channel: testChannel, to: testTo.trim(), lang, ...(testChannel === "email" && testWhat !== "plain" ? { event: testWhat === "all" ? "all" : event } : {}),
+    }),
+    onSuccess: (r) => {
+      const failed = (r.results ?? []).filter((x) => !x.ok);
+      if (failed.length) toast.error(t("settings.notif.test.partial", { failed: failed.map((x) => eventLabel(x.event as NotificationEvent)).join(", ") }));
+      else toast.success(r.results ? t("settings.notif.test.sentMany", { n: r.results.length, provider: enumLabel("provider", r.provider) }) : t("settings.notif.test.sent", { provider: enumLabel("provider", r.provider) }));
+    },
     onError: (e) => toast.error(errMsg(e)),
   });
 
@@ -44,6 +54,11 @@ export default function Notifications() {
     requestAnimationFrame(() => { el.focus(); el.setSelectionRange(s + tok.length, s + tok.length); });
   };
   const vars = SAMPLE_VARS[lang];
+  const sampleSummary = buildOrderSummary({ ...SAMPLE_SUMMARY_INPUT, refunded: event === "order_refunded" ? SAMPLE_SUMMARY_INPUT.total : null }, lang);
+  const emailHtml = renderEmailHtml(cur.body, vars, vars.storeName, {
+    lang, event, primaryColor: brand?.primaryColor, logoUrl: brand?.logoMediaId ? `${location.origin}${mediaUrl(brand.logoMediaId)}` : null, summary: sampleSummary,
+    cta: event === "admin_new_order" ? { label: ctaLabel(lang, "admin"), url: `${location.origin}/admin/orders` } : event === "order_shipped" ? { label: ctaLabel(lang, "track"), url: vars.trackingUrl } : { label: ctaLabel(lang, "order"), url: vars.orderUrl },
+  });
   const smsText = renderSms(cur.body, vars);
   const info = smsInfo(smsText);
   const bad = [...unknownTemplateVars(cur.subject), ...unknownTemplateVars(cur.body)];
@@ -119,14 +134,19 @@ export default function Notifications() {
             <div>
               <h3 className="mb-1 text-sm font-medium">{t("settings.notif.preview.email")}</h3>
               <p className="mb-1 text-sm"><strong>{t("settings.notif.preview.subject")}</strong> {renderSubject(cur.subject, vars)}</p>
-              <iframe title={t("settings.notif.preview.iframe")} sandbox="" className="h-64 w-full rounded-xl border border-line bg-white" srcDoc={renderEmailHtml(cur.body, vars, vars.storeName)} />
+              <iframe title={t("settings.notif.preview.iframe")} sandbox="" className="h-[36rem] w-full rounded-xl border border-line bg-white" srcDoc={emailHtml} />
             </div>
           </div>
         </Card>
 
         <Card title={<span className="inline-flex items-center gap-1">{t("settings.notif.card.test")}<HelpTip id="settings.testSend" /></span>}>
-          <div className="grid gap-4 sm:grid-cols-[10rem_1fr_auto] sm:items-end">
+          <div className="grid gap-4 sm:grid-cols-[10rem_14rem_1fr_auto] sm:items-end">
             <SelectField label={t("settings.notif.test.channel")} value={testChannel} onChange={(e) => setTestChannel(e.target.value as "sms" | "email")}><option value="email">{enumLabel("channel", "email")}</option><option value="sms">{enumLabel("channel", "sms")}</option></SelectField>
+            <SelectField label={t("settings.notif.test.what")} value={testChannel === "email" ? testWhat : "plain"} disabled={testChannel !== "email"} onChange={(e) => setTestWhat(e.target.value as "plain" | "event" | "all")}>
+              <option value="all">{t("settings.notif.test.what.all", { lang: t(`common.lang.${lang}`) })}</option>
+              <option value="event">{t("settings.notif.test.what.event", { event: eventLabel(event) })}</option>
+              <option value="plain">{t("settings.notif.test.what.plain")}</option>
+            </SelectField>
             <TextField label={testChannel === "sms" ? t("settings.notif.test.phone") : t("settings.notif.test.email")} value={testTo} placeholder={testChannel === "sms" ? t("settings.notif.adminPhone.placeholder") : t("settings.notif.test.emailPlaceholder")} onChange={(e) => setTestTo(e.target.value)} />
             <Button loading={test.isPending} disabled={!testTo.trim()} onClick={() => test.mutate()}>{t("settings.notif.test.send")}</Button>
           </div>

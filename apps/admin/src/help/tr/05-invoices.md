@@ -9,7 +9,7 @@ Faturalar iki şekilde oluşur:
 
 | Yol | Ne zaman | Nerede görürsünüz |
 |---|---|---|
-| **Otomatik fatura** | Müşteri ödeme yapınca, e-Faturam entegrasyonu açıksa sistem kendiliğinden keser. | Sipariş sayfası → **Faturalar** kartı |
+| **Otomatik fatura** (şu an KAPALI) | Ödeme sonrası kendiliğinden fatura kesilmez; siparişte **Fatura kes** düğmesine basın. | Sipariş sayfası → **Faturalar** kartı |
 | **Manuel fatura** | Siz **Faturalar** sayfasından (veya siparişten **Bu siparişten fatura oluştur** ile) hazırlar ve kesersiniz. | **Faturalar** sayfası |
 
 Deneme modunda fatura kesmek yalnızca bir taklit üretir; e-Faturam'a veya vergi idaresine hiçbir şey gitmez.
@@ -188,6 +188,10 @@ Bkz. sözlükte [VKN](term:vkn) ve [TCKN](term:tckn), ayrıca [vergi dairesi](te
 ## KDV hesabı
 
 Sistem para tutarlarını kuruş (tam sayı) olarak saklar ve her satırı ayrı yuvarlar (0,5 ve üstü yukarı). Ekrandaki hesap, sunucunun hesabıyla birebir aynıdır.
+
+**KDV dahil / KDV hariç seçimi.** Fatura satırları kartında **Fiyatlar** listesinden seçersiniz; birim fiyat sütununun başlığı da seçimi gösterir. *KDV dahil*: yazdığınız fiyat müşterinin ödediği tutardır, KDV bu tutarın içinden ayrılır (mağazanız KDV dahil fiyat kullanıyorsa doğru seçim budur). *KDV hariç*: KDV fiyatın üstüne eklenir ve toplam artar. Yeni faturada varsayılan, mağaza ayarındaki **Fiyatlara KDV dahil** seçimidir.
+
+**Siparişten kesilen fatura.** Siparişin **Fatura kes** düğmesi, kesilecek faturayı önce gösterir: kalemler, her kalemin KDV'si, KDV oranına göre toplamlar ve fatura toplamı. Fatura, siparişin **kendi fiyatlandırmasını** izler (bugünkü ayarı değil): KDV dahil sipariş KDV dahil kesilir ve fatura toplamı müşterinin ödediği tutara kuruşu kuruşuna eşittir. Kargo ayrı bir satırdır ve ürünlerle aynı KDV oranıyla faturalanır; kupon indirimi toplamı ödenen tutara eşitler. Fatura toplamı sipariş tutarına eşit çıkmazsa fatura kesilmez, ekranda uyarı görürsünüz.
 
 **Fiyatlara KDV dahil** anahtarı iki farklı mantık kurar:
 

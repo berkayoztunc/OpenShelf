@@ -38,6 +38,8 @@ Asistan ilk bağlandığında iki şeyi okur: **mağaza rehberi** (birimler, kan
 - **İleti ve kampanya:** e-posta/SMS gönderme ve kampanya taslakları (önce önizleme ve deneme gönderimi, onayla gönderme).
 - **Rehber:** `help_topics`, `help_search`, `help_read` ve `openshelf://help/<bölüm>` kaynakları.
 - **Entegrasyonlar:** Trendyol ve Geliver konsolları, entegrasyon olayları ve arka plan işleri.
+- **Trendyol ürünlerini eşleştirme:** `trendyol_match_suggestions`, Trendyol ürünlerinizi henüz bağlanmamış yerel varyantlarla karşılaştırır (önce barkod, sonra stok kodu = SKU); öneri, çakışma ve eskimiş eşleştirmeleri döner. Yalnızca okur; onayladıklarınızı eşleştirme uç noktasıyla bağlayın.
+- **Ürünü Trendyol'a ekleme:** `trendyol_prepare_product` ürün için gönderilecek veriyi hazırlar (yalnızca okur): marka, yaprak kategori ve özellik değerlerini ürünün bilgilerinden, varyant adlarından ve son seçimlerinizden bulur; karar veremediklerini öneriyle birlikte listeler. `trendyol_find` marka, kategori ve özellik değeri aramasıdır. Her şey hazır olunca `trendyol_create_product` ürünü gönderir ve varyantları bağlar; bu araç **tam yetki** ister ve gerçek Trendyol hesabınıza yazar.
 
 Ayarlar → MCP sayfasında her aracın ne yaptığı ve seviyesi listelenir.
 

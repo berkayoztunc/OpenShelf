@@ -1,5 +1,5 @@
-/** Pure helpers of the "add product to Trendyol" wizard: createProducts V2 body builder + validation derived from the catalog field hints. */
-
+/** createProducts V2 body builder and its validation. Pure functions, no network. */
+// ---------------------------------------------------------------- body builder + validation
 export interface AttrChoice { ids: number[]; custom: string }
 export interface WizardForm {
   barcode: string; stockCode: string; productMainId: string; title: string; description: string;
@@ -32,7 +32,25 @@ export function buildItem(f: WizardForm): Record<string, unknown> {
     images: f.images.filter(Boolean).map((url) => ({ url })), attributes,
   };
 }
-export const buildBody = (f: WizardForm): { items: Record<string, unknown>[] } => ({ items: [buildItem(f)] });
+/** One sellable variant of the local product in the wizard: its own barcode, stock, prices and variant-defining attributes. */
+export interface VariantRow {
+  variantId: string; label: string; include: boolean;
+  barcode: string; stockCode: string; quantity: string; listPrice: string; salePrice: string;
+  /** what the variant is called (title, option values): used to pick its attribute values (colour, size...) automatically */
+  hints?: string[];
+  /** values of the category's "varianter" attributes (colour, size...) for this variant; override the shared ones */
+  attrs: Record<number, AttrChoice>;
+}
+/**
+ * One item per included variant. Trendyol groups items that share productMainId into one product page, so every variant is
+ * sent with the same title/brand/category/description/images and differs only in barcode, stock, price and varianter attributes.
+ * Without rows (or with a single one) the shared form alone describes the item.
+ */
+export function buildBody(f: WizardForm, rows?: VariantRow[]): { items: Record<string, unknown>[] } {
+  const picked = (rows ?? []).filter((r) => r.include);
+  if (!rows || rows.length <= 1) return { items: [buildItem(f)] };
+  return { items: picked.map((r) => buildItem({ ...f, barcode: r.barcode, stockCode: r.stockCode, quantity: r.quantity, listPrice: r.listPrice, salePrice: r.salePrice, attrs: { ...f.attrs, ...r.attrs } })) };
+}
 
 export interface Problem { field: string; key: string; vars?: Record<string, string | number> }
 const VAT = [0, 1, 10, 20];
@@ -42,6 +60,8 @@ export function validateBody(body: unknown, requiredAttrs: number[] = []): Probl
   const out: Problem[] = [];
   const items = (body as { items?: unknown })?.items;
   if (!Array.isArray(items) || items.length === 0) return [{ field: "items", key: "trendyolviews.products.v.items" }];
+  const seen = new Set<string>();
+  for (const raw of items) { const bc = String((raw as { barcode?: unknown })?.barcode ?? ""); if (bc && seen.has(bc)) out.push({ field: "items", key: "trendyolviews.products.v.barcode.duplicate", vars: { barcode: bc } }); seen.add(bc); }
   items.forEach((raw, i) => {
     const it = (raw ?? {}) as Record<string, unknown>;
     const p = (field: string, key: string, vars?: Problem["vars"]) => out.push({ field: items.length > 1 ? `items[${i}].${field}` : field, key: `trendyolviews.products.v.${key}`, vars });
@@ -84,25 +104,16 @@ export const isPublicHttps = (url: string): boolean => {
   try { const u = new URL(url); return u.protocol === "https:" && !/^(localhost|127\.|0\.0\.0\.0)/.test(u.hostname); } catch { return false; }
 };
 
-/** Flatten the nested category tree into leaves with their path. */
-export interface Leaf { id: number; name: string; path: string }
-export function leaves(tree: unknown, trail: string[] = []): Leaf[] {
-  if (!Array.isArray(tree)) return [];
-  const out: Leaf[] = [];
-  for (const raw of tree) {
-    const c = raw as { id?: number; name?: string; subCategories?: unknown };
-    const here = [...trail, String(c.name ?? "")];
-    if (Array.isArray(c.subCategories) && c.subCategories.length) out.push(...leaves(c.subCategories, here));
-    else if (typeof c.id === "number") out.push({ id: c.id, name: String(c.name ?? ""), path: here.join(" › ") });
-  }
-  return out;
-}
 
-/** Batch finished? (`status: COMPLETED`, or every item has SUCCESS/FAILED when the batch carries no status — stock/price updates). */
-export function batchFinished(body: unknown): boolean {
-  const b = (body ?? {}) as { status?: string; items?: { status?: string }[] };
-  if (b.status === "COMPLETED") return true;
-  if (b.status === "IN_PROGRESS") return false;
-  const items = Array.isArray(b.items) ? b.items : [];
-  return items.length > 0 && items.every((x) => x.status === "SUCCESS" || x.status === "FAILED");
-}
+/** English texts of the validation keys (`trendyolviews.products.v.*` in the admin i18n), for the MCP / API answers. */
+const MESSAGES: Record<string, string> = {
+  items: "no items", "barcode.required": "barcode is missing", "barcode.format": "barcode must be at most 40 characters of letters, digits . _ -", "barcode.duplicate": "barcode {barcode} is used by two variants",
+  "title.required": "title is missing", "title.long": "title is longer than {max} characters", "main.required": "productMainId is missing", "main.long": "productMainId is longer than {max} characters",
+  "brand.required": "brand is not chosen", "category.required": "category is not chosen", "quantity.range": "stock must be a whole number from 0 to {max}", "stockCode.long": "stock code is too long",
+  "description.required": "description is missing", "description.long": "description is too long", "price.list": "list price must be above 0", "price.sale": "sale price must be above 0",
+  "price.order": "sale price is above the list price", "vat.value": "KDV must be 0, 1, 10 or 20", "images.required": "at least one image is needed", "images.max": "at most {max} images",
+  "images.https": "every image must be a public https URL", "attr.required": "required attribute {id} has no value",
+};
+export const problemText = (p: { key: string; vars?: Record<string, string | number> }) =>
+  (MESSAGES[p.key.replace("trendyolviews.products.v.", "")] ?? p.key).replace(/\{(\w+)\}/g, (_, k: string) => String(p.vars?.[k] ?? `{${k}}`));
+

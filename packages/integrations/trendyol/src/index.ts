@@ -6,14 +6,15 @@ export {
 } from "./console";
 export { hostFor, RATE_LIMIT as TRENDYOL_RATE_LIMIT, MAX_INVENTORY_BATCH, MAX_QUANTITY } from "./endpoints";
 export { computeStockDrift, type DriftInput, type DriftItem } from "./drift";
-export { stockDriftReport, importTrendyolOrder, upsertTrendyolShipment, ORDERS_CURSOR_KEY, applyTrendyolProducts, loadImportStatus, PRODUCTS_STATUS_KEY, slugify, applyFollowedProducts, hasFollowedProducts, type PullTotals, type ImportStatus, type ImportTotals, type JobHandler } from "./handlers";
+export { stockDriftReport, importTrendyolOrder, upsertTrendyolShipment, ORDERS_CURSOR_KEY, applyTrendyolProducts, loadImportStatus, PRODUCTS_STATUS_KEY, slugify, applyFollowedProducts, hasFollowedProducts, verifyListings, NOT_LISTED, PENDING_APPROVAL, type VerifyTotals, type PullTotals, type ImportStatus, type ImportTotals, type JobHandler } from "./handlers";
 
-import { importProducts, pullProducts, reconcileOrders, stockPush, type JobHandler } from "./handlers";
+import { importProducts, pullProducts, reconcileOrders, stockPush, verifyListingsJob, type JobHandler } from "./handlers";
 export const jobHandlers: Record<string, JobHandler> = {
   "trendyol.stock_push": stockPush,
   "trendyol.reconcile_orders": reconcileOrders,
   "trendyol.import_products": importProducts,
   "trendyol.pull_products": pullProducts,
+  "trendyol.verify_listings": verifyListingsJob,
 };
 export { TRENDYOL_OPERATIONS, TRENDYOL_MOCKS, getOperation, loadProducts, saveProducts, loadList, saveList, pageOf, seedProducts, type MockProduct } from "./catalog";
 export { htmlToText, decodeEntities, looksLikeHtml } from "./html";

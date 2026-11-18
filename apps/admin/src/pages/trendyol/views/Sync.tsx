@@ -9,7 +9,7 @@ import { timeAgo } from "../../../lib/format";
 import { SYNC_KEY, useSyncActions, type SyncList, type SyncRow, type SyncSource } from "../../../lib/trendyolSync";
 import { useT } from "../../../i18n";
 
-const FILTERS = ["all", "synced", "website_only", "errors"] as const;
+const FILTERS = ["all", "synced", "website_only", "not_listed", "errors"] as const;
 type Filter = (typeof FILTERS)[number];
 
 function SourceSelect({ value, label, disabled, onChange }: { value: SyncSource; label: string; disabled?: boolean; onChange: (v: SyncSource) => void }) {
@@ -47,6 +47,8 @@ export default function Sync() {
   const rowBadge = (r: SyncRow) =>
     r.mode === "website_only" ? <Badge tone="neutral">{t(r.linked ? "trendyolsync.mode.website_only" : "trendyolsync.mode.notLinked")}</Badge>
       : r.errors ? <Badge tone="danger">{t("trendyolsync.mode.error")}</Badge>
+      : r.notListed ? <Badge tone="warning">{t("trendyolsync.mode.notListed")}</Badge>
+      : r.pending ? <Badge tone="info">{t("trendyolsync.mode.pending")}</Badge>
       : r.enabled < r.variants ? <Badge tone="warning">{t("trendyolsync.mode.partial", { on: r.enabled, all: r.variants })}</Badge>
       : <Badge tone="success">{t("trendyolsync.mode.synced")}</Badge>;
   return (
@@ -62,7 +64,7 @@ export default function Sync() {
       <Card title={t("trendyolsync.table.title")} description={t("trendyolsync.table.body")}>
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <Tabs<Filter> label={t("trendyolsync.filter.label")} value={filter} onChange={(f) => { setFilter(f); setPage(1); }}
-            tabs={FILTERS.map((id) => ({ id, label: t(`trendyolsync.filter.${id}`), count: id === "all" ? s.total : id === "synced" ? s.synced : id === "website_only" ? s.websiteOnly : s.errors }))} />
+            tabs={FILTERS.map((id) => ({ id, label: t(`trendyolsync.filter.${id}`), count: id === "all" ? s.total : id === "synced" ? s.synced : id === "website_only" ? s.websiteOnly : id === "not_listed" ? s.notListed : s.errors }))} />
           <div className="w-full sm:w-64"><TextField label={t("trendyolsync.search.label")} placeholder={t("trendyolsync.search.placeholder")} value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} /></div>
         </div>
         {ids.length > 0 && (
@@ -105,7 +107,8 @@ export default function Sync() {
                   <Td><SourceSelect value={r.contentSource} label={`${t("trendyolsync.contentSource.label")}: ${r.name}`} disabled={!on || busy} onChange={(v) => update.mutate({ productIds: [r.productId], contentSource: v })} /></Td>
                   <Td><SourceSelect value={r.priceSource} label={`${t("trendyolsync.priceSource.label")}: ${r.name}`} disabled={!on || busy} onChange={(v) => update.mutate({ productIds: [r.productId], priceSource: v })} /></Td>
                   <Td className="tabular-nums">{r.available}</Td>
-                  <Td>{rowBadge(r)}{on && <span className="mt-1 block text-xs text-muted">{r.lastSyncedAt ? timeAgo(r.lastSyncedAt) : t("trendyolsync.never")}</span>}</Td>
+                  <Td>{rowBadge(r)}{on && r.notListed > 0 ? <Link to={`/trendyol/products?create=${encodeURIComponent(r.productId)}`} className="mt-1 block text-xs font-medium text-brand-ink hover:underline">{t("trendyolsync.action.create")}</Link>
+                    : on && <span className="mt-1 block text-xs text-muted">{r.lastSyncedAt ? timeAgo(r.lastSyncedAt) : t("trendyolsync.never")}</span>}</Td>
                 </tr>
               );
             })}

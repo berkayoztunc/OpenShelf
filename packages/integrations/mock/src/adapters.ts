@@ -68,7 +68,8 @@ class MockGeliver implements ShippingProvider {
     await recordMock(this.d.db, { channel: "shipment", to: input.recipient.name, subject: `Mock shipment label ${r.trackingNumber}`, body: `${input.recipient.address}, ${input.recipient.city}`, meta: { provider: "geliver", orderId: input.orderId, serviceId, ...r } });
     return r;
   }
-  async track(_id: string): Promise<TrackingStatus> { return { status: "in_transit", events: [{ at: new Date(0).toISOString(), detail: "Mock: in transit" }] }; }
+  async track(_id: string): Promise<TrackingStatus> { return { status: "in_transit", events: [{ at: new Date(0).toISOString(), detail: "Mock: in transit" }], trackingUrl: `${this.d.apiOrigin}/mock/track/${encodeURIComponent(_id)}` }; }
+  async webhookToken(): Promise<string> { return "mock"; }
   async cancel(id: string) { await recordMock(this.d.db, { channel: "shipment", subject: "Mock shipment cancelled", meta: { providerShipmentId: id } }); return { ok: true }; }
 }
 
@@ -99,6 +100,12 @@ class MockTrendyol implements MarketplaceProvider {
     const batchId = `mock_batch_${h32(JSON.stringify(updates))}`;
     await recordMock(this.d.db, { channel: "event", to: "trendyol", subject: "trendyol.stock_push", body: `${updates.length} item(s)`, meta: { provider: "trendyol", batchId, updates: updates.slice(0, 50) } });
     return { ok: true, batchId };
+  }
+  /** Mock catalog = the two demo barcodes of fetchProducts; everything else "was never created on Trendyol". */
+  async lookupProducts(barcodes: string[]) {
+    const out: Record<string, { state: "approved" | "pending"; externalId?: string }> = {};
+    for (const b of barcodes) if (/^MOCKTY-1-/.test(b)) out[b] = { state: "approved", externalId: "900001" }; else if (/^MOCKTY-PENDING/.test(b)) out[b] = { state: "pending" };
+    return out;
   }
   async fetchCategories(): Promise<MarketplaceCategory[]> {
     return [{ externalId: "1", parentId: null, name: "Giyim" }, { externalId: "2", parentId: "1", name: "Erkek Giyim" }, { externalId: "411", parentId: "2", name: "Tişört" }];

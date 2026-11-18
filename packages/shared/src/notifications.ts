@@ -1,4 +1,6 @@
 import { TEMPLATE_VARS, type NotificationEvent } from "./settings";
+import { renderEmailLayout, renderSummaryText, type EmailChrome, type OrderSummary } from "./emailLayout";
+export * from "./emailLayout";
 
 export type TemplateVar = (typeof TEMPLATE_VARS)[number];
 export type TemplateVars = Partial<Record<TemplateVar, string>>;
@@ -58,13 +60,16 @@ export const unknownTemplateVars = (tpl: string): string[] =>
 export const renderSubject = (tpl: string, vars: TemplateVars): string => stripHeaderChars(substitute(tpl, vars)).slice(0, 200);
 export const renderSms = (tpl: string, vars: TemplateVars): string => cleanSmsText(substitute(tpl, vars));
 export const renderEmailText = (tpl: string, vars: TemplateVars): string => cleanSmsText(substitute(tpl, vars));
-/** HTML part: the WHOLE substituted text (template + values) is escaped, newlines become <br>. */
-export function renderEmailHtml(tpl: string, vars: TemplateVars, storeName = ""): string {
-  const body = escapeHtml(cleanSmsText(substitute(tpl, vars))).replace(/\n/g, "<br>");
-  return `<!doctype html><html><body style="margin:0;padding:24px;background:#f5f5f7;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1a1a1a">`
-    + `<div style="max-width:560px;margin:0 auto;background:#fff;border-radius:8px;padding:24px;line-height:1.5;font-size:15px">${body}</div>`
-    + (storeName ? `<p style="max-width:560px;margin:12px auto 0;font-size:12px;color:#888;text-align:center">${escapeHtml(storeName)}</p>` : "")
-    + `</body></html>`;
+/**
+ * HTML part: the WHOLE substituted template text is escaped (see renderEmailLayout), wrapped in the branded layout.
+ * `chrome` adds the heading, progress tracker, CTA button, order summary (items, totals, VAT, payment, address) and footer.
+ */
+export function renderEmailHtml(tpl: string, vars: TemplateVars, storeName = "", chrome?: Partial<Omit<EmailChrome, "storeName">>): string {
+  return renderEmailLayout(cleanSmsText(substitute(tpl, vars)), { lang: "tr", ...chrome, storeName });
+}
+/** Plain-text part: substituted template + the order summary as text. */
+export function renderEmailTextFull(tpl: string, vars: TemplateVars, summary: OrderSummary | null | undefined, lang: NotificationLang): string {
+  return cleanSmsText(substitute(tpl, vars) + "\n" + renderSummaryText(summary, lang));
 }
 
 const GSM7 = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
@@ -93,20 +98,20 @@ export const SAMPLE_VARS: Record<NotificationLang, Required<TemplateVars>> = {
 /** Transactional only. No marketing content. */
 export const DEFAULT_TEMPLATES: Record<NotificationLang, Record<NotificationEvent, NotificationTemplate>> = {
   tr: {
-    order_paid: { subject: "Siparişiniz alındı: {{orderNumber}}", body: "Merhaba {{customerName}},\n{{orderNumber}} numaralı siparişiniz için ödemeniz alındı. Toplam: {{total}}.\nSipariş durumu: {{orderUrl}}\n{{storeName}}" },
-    order_shipped: { subject: "Siparişiniz kargoya verildi: {{orderNumber}}", body: "Merhaba {{customerName}},\n{{orderNumber}} numaralı siparişiniz kargoya verildi. Takip no: {{trackingNumber}}\nTakip: {{trackingUrl}}\n{{storeName}}" },
-    order_delivered: { subject: "Siparişiniz teslim edildi: {{orderNumber}}", body: "Merhaba {{customerName}},\n{{orderNumber}} numaralı siparişiniz teslim edildi. Bizi tercih ettiğiniz için teşekkürler.\n{{storeName}}" },
-    order_cancelled: { subject: "Siparişiniz iptal edildi: {{orderNumber}}", body: "Merhaba {{customerName}},\n{{orderNumber}} numaralı siparişiniz iptal edildi. Ödeme yaptıysanız iade süreci başlatılacaktır.\n{{storeName}}" },
-    order_refunded: { subject: "İadeniz yapıldı: {{orderNumber}}", body: "Merhaba {{customerName}},\n{{orderNumber}} numaralı siparişinizin {{total}} tutarındaki ödemesi iade edildi. Bankanıza bağlı olarak hesabınıza yansıması birkaç gün sürebilir.\n{{storeName}}" },
-    admin_new_order: { subject: "Yeni sipariş: {{orderNumber}}", body: "{{storeName}}: yeni sipariş {{orderNumber}} ({{customerName}}), toplam {{total}}." },
+    order_paid: { subject: "Siparişiniz alındı: {{orderNumber}}", body: "Merhaba {{customerName}},\nSiparişiniz için teşekkür ederiz! {{orderNumber}} numaralı siparişinizin ödemesi alındı, ekibimiz hazırlamaya başlıyor. Ödenen tutar: {{total}}.\nSipariş durumu: {{orderUrl}}\n{{storeName}}" },
+    order_shipped: { subject: "Siparişiniz kargoya verildi: {{orderNumber}}", body: "Merhaba {{customerName}},\nGüzel haber: {{orderNumber}} numaralı siparişiniz kargoya verildi. Kargo takip numaranız: {{trackingNumber}}.\nKargo takibi: {{trackingUrl}}\n{{storeName}}" },
+    order_delivered: { subject: "Siparişiniz teslim edildi: {{orderNumber}}", body: "Merhaba {{customerName}},\n{{orderNumber}} numaralı siparişiniz teslim edildi. Ürünlerinizi beğenmenizi dileriz; bizi tercih ettiğiniz için teşekkürler!\n{{storeName}}" },
+    order_cancelled: { subject: "Siparişiniz iptal edildi: {{orderNumber}}", body: "Merhaba {{customerName}},\n{{orderNumber}} numaralı siparişiniz iptal edildi. Ödeme yaptıysanız {{total}} tutarındaki iade süreci başlatılacaktır.\n{{storeName}}" },
+    order_refunded: { subject: "İadeniz yapıldı: {{orderNumber}}", body: "Merhaba {{customerName}},\n{{orderNumber}} numaralı siparişinizin {{total}} tutarındaki ödemesi iade edildi. Bankanıza bağlı olarak hesabınıza yansıması birkaç iş günü sürebilir.\n{{storeName}}" },
+    admin_new_order: { subject: "Yeni sipariş: {{orderNumber}} — {{total}}", body: "{{storeName}}: yeni sipariş {{orderNumber}} ({{customerName}}), toplam {{total}}." },
   },
   en: {
-    order_paid: { subject: "We received your order {{orderNumber}}", body: "Hi {{customerName}},\nWe received your payment for order {{orderNumber}}. Total: {{total}}.\nOrder status: {{orderUrl}}\n{{storeName}}" },
-    order_shipped: { subject: "Your order {{orderNumber}} has shipped", body: "Hi {{customerName}},\nYour order {{orderNumber}} has shipped. Tracking number: {{trackingNumber}}\nTrack it: {{trackingUrl}}\n{{storeName}}" },
-    order_delivered: { subject: "Your order {{orderNumber}} was delivered", body: "Hi {{customerName}},\nYour order {{orderNumber}} was delivered. Thank you for shopping with us.\n{{storeName}}" },
-    order_cancelled: { subject: "Your order {{orderNumber}} was cancelled", body: "Hi {{customerName}},\nYour order {{orderNumber}} was cancelled. If you already paid, a refund will be issued.\n{{storeName}}" },
-    order_refunded: { subject: "Refund issued for order {{orderNumber}}", body: "Hi {{customerName}},\nA refund of {{total}} for order {{orderNumber}} has been issued. It may take a few days to appear, depending on your bank.\n{{storeName}}" },
-    admin_new_order: { subject: "New order {{orderNumber}}", body: "{{storeName}}: new order {{orderNumber}} ({{customerName}}), total {{total}}." },
+    order_paid: { subject: "We received your order {{orderNumber}}", body: "Hi {{customerName}},\nThank you for your order! We received your payment for order {{orderNumber}} and our team is getting it ready. Amount paid: {{total}}.\nOrder status: {{orderUrl}}\n{{storeName}}" },
+    order_shipped: { subject: "Your order {{orderNumber}} has shipped", body: "Hi {{customerName}},\nGood news: your order {{orderNumber}} has shipped. Tracking number: {{trackingNumber}}.\nTrack it: {{trackingUrl}}\n{{storeName}}" },
+    order_delivered: { subject: "Your order {{orderNumber}} was delivered", body: "Hi {{customerName}},\nYour order {{orderNumber}} was delivered. We hope you love it — thank you for shopping with us!\n{{storeName}}" },
+    order_cancelled: { subject: "Your order {{orderNumber}} was cancelled", body: "Hi {{customerName}},\nYour order {{orderNumber}} was cancelled. If you already paid, a refund of {{total}} will be issued.\n{{storeName}}" },
+    order_refunded: { subject: "Refund issued for order {{orderNumber}}", body: "Hi {{customerName}},\nA refund of {{total}} for order {{orderNumber}} has been issued. It may take a few business days to appear, depending on your bank.\n{{storeName}}" },
+    admin_new_order: { subject: "New order {{orderNumber}} — {{total}}", body: "{{storeName}}: new order {{orderNumber}} ({{customerName}}), total {{total}}." },
   },
 };
 

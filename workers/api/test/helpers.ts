@@ -50,6 +50,8 @@ export const admin = (s: Session, path: string, method = "GET", json?: unknown) 
 // ---------- fakes ----------
 const fakeSchema = z.object({ config: z.record(z.unknown()), secrets: z.object({ apiKey: z.string().min(1), secretKey: z.string().min(1) }) });
 export const SIG = "valid-signature";
+/** Test seam for the fake payment provider: last checkout input, and an error message to fail the next checkouts with. */
+export const fakePay: { lastInput: import("@openshelf/integration-sdk").CheckoutInput | null; fail: string | null; retrieve: ((token: string) => import("@openshelf/integration-sdk").PaymentEvent) | null } = { lastInput: null, fail: null, retrieve: null };
 export const fakePaymentFactory: AdapterFactory<PaymentProvider> = {
   manifest: {
     id: "iyzico", name: "Fake Pay", description: "test", publicFields: [{ key: "sandbox", label: "Sandbox", type: "boolean" }],
@@ -59,13 +61,20 @@ export const fakePaymentFactory: AdapterFactory<PaymentProvider> = {
     id: "iyzico",
     async validateConfig() { if (!secrets.apiKey) throw new Error("missing"); },
     async healthCheck() { return { ok: secrets.apiKey !== "bad", detail: secrets.apiKey === "bad" ? `rejected key ${secrets.apiKey}` : "fake ok" }; },
-    async createCheckout(input) { return { providerToken: `tok_${input.orderId}`, redirectUrl: `https://pay.test/${input.orderId}` }; },
+    async createCheckout(input) {
+      fakePay.lastInput = input;
+      // like the real provider: the basket must add up to the amount charged
+      const sum = input.items.reduce((t, i) => t + i.price * i.quantity, 0);
+      if (sum !== input.amount) throw new Error(`basket sum ${sum} != amount ${input.amount}`);
+      if (fakePay.fail) throw new Error(fakePay.fail);
+      return { providerToken: `tok_${input.orderId}`, redirectUrl: `https://pay.test/${input.orderId}` };
+    },
     async verifyWebhook(req, raw) {
       if (req.headers.get("x-test-signature") !== SIG) throw new Error("bad signature");
       const b = JSON.parse(raw) as { eventId: string; orderId: string; status: "succeeded" | "failed"; amount: number; currency: string; providerTxId: string };
       return b;
     },
-    async retrieve() { throw new Error("n/a"); },
+    async retrieve(token) { if (!fakePay.retrieve) throw new Error("n/a"); return fakePay.retrieve(token); },
     async refund() { return { ok: true, refundId: "r1" }; },
   }),
 };

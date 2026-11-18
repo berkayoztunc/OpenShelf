@@ -37,6 +37,8 @@ export const inventoryUpdatePath = (sid: string) => `${INTEGRATION_PREFIX}/inven
 /** getBatchRequestResult: GET -> { status, items: [{ status: "SUCCESS"|"FAILED", failureReasons: string[], requestItem }] }.
  *  For stock/price batches the doc says the batch-level status is not returned: check item statuses. */
 export const approvedProductsPath = (sid: string) => `${INTEGRATION_PREFIX}/product/sellers/${sid}/products/approved`;
+/** filterUnapprovedProducts: products waiting for Trendyol's approval (same filters as the approved list, incl. `barcode`). */
+export const unapprovedProductsPath = (sid: string) => `${INTEGRATION_PREFIX}/product/sellers/${sid}/products/unapproved`;
 export const CATEGORY_TREE_PATH = `${INTEGRATION_PREFIX}/product/product-categories`;
 export const PRODUCT_PAGE_SIZE = 100;
 export const batchResultPath = (sid: string, batchId: string) => `${INTEGRATION_PREFIX}/product/sellers/${sid}/products/batch-requests/${encodeURIComponent(batchId)}`;

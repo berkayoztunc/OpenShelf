@@ -29,11 +29,20 @@ async function getProvider(ctx: Parameters<JobHandler>[1]): Promise<MarketplaceP
   try { return (await ctx.getAdapter("trendyol")) ?? null; } catch { return null; }
 }
 
+/**
+ * Listing states kept in channel_listings.last_error that are NOT push errors: the product does not exist on Trendyol yet, or it was
+ * created and waits for Trendyol's approval. Nothing can be pushed for such a listing, so the stock push leaves it alone.
+ */
+export const NOT_LISTED = "not_on_trendyol";
+export const PENDING_APPROVAL = "pending_approval";
+const isMarker = (e: unknown) => e === NOT_LISTED || e === PENDING_APPROVAL;
+
 /** Builds push rows (and drift view) for variants. variantIds undefined = all enabled trendyol listings. */
 async function loadStockRows(db: any, variantIds?: string[]) {
   const listings: any[] = await db.select().from(channelListings).where(
     variantIds ? and(eq(channelListings.channel, CHANNEL), eq(channelListings.enabled, true), inArray(channelListings.variantId, variantIds))
       : and(eq(channelListings.channel, CHANNEL), eq(channelListings.enabled, true)));
+  listings.splice(0, listings.length, ...listings.filter((l) => !isMarker(l.lastError)));
   const ids = listings.map((l) => l.variantId as string);
   if (!ids.length) return [];
   const [inv, prices, variants, maps] = (await Promise.all([
@@ -580,4 +589,62 @@ export const pullProducts: JobHandler = async (job, ctx) => {
     return;
   }
   await ctx.log("info", "trendyol.pull_products done", { ...totals, stock });
+};
+
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Is the product on Trendyol at all? (sync only updates stock/price of products that already exist there)
+// ---------------------------------------------------------------------------------------------------------------------
+
+export interface VerifyTotals { checked: number; approved: number; pending: number; notListed: number; noBarcode: number }
+
+/**
+ * Looks the variants' barcodes up on Trendyol and records the result on their listings:
+ *  - approved: Trendyol content id stored, marker cleared (stock push starts working)
+ *  - pending approval / not on Trendyol: marker in last_error, so the admin sees it and the stock push skips it
+ * `variantIds` undefined = the periodic re-check: enabled listings carrying a marker, or never confirmed on Trendyol (max 60 per run).
+ */
+export async function verifyListings(db: any, provider: MarketplaceProvider, variantIds?: string[]): Promise<VerifyTotals> {
+  const t: VerifyTotals = { checked: 0, approved: 0, pending: 0, notListed: 0, noBarcode: 0 };
+  if (!provider.lookupProducts) return t;
+  const where = variantIds
+    ? and(eq(channelListings.channel, CHANNEL), inArray(channelListings.variantId, variantIds.slice(0, CHUNK)))
+    // marked ones (created since? approved since?) plus listings never confirmed on Trendyol (linked by barcode only, no content id)
+    : and(eq(channelListings.channel, CHANNEL), eq(channelListings.enabled, true), sql`(${channelListings.lastError} IN (${NOT_LISTED}, ${PENDING_APPROVAL}) OR ${channelListings.externalId} IS NULL)`);
+  const listings: any[] = await db.select().from(channelListings).where(where).limit(60);
+  const ids = listings.map((l) => l.variantId as string);
+  if (!ids.length) return t;
+  const maps: any[] = await db.select().from(productMappings).where(and(eq(productMappings.provider, CHANNEL), inArray(productMappings.variantId, ids)));
+  const bcOf = new Map<string, string>(maps.filter((m) => m.externalBarcode).map((m) => [m.variantId as string, String(m.externalBarcode)]));
+  t.noBarcode = ids.filter((id) => !bcOf.has(id)).length;
+  const found = await provider.lookupProducts([...new Set(bcOf.values())]);
+  const stmts: unknown[] = [];
+  for (const [variantId, barcode] of bcOf) {
+    t.checked++;
+    const hit = found[barcode];
+    const at = and(eq(channelListings.variantId, variantId), eq(channelListings.channel, CHANNEL));
+    if (hit?.state === "approved") {
+      t.approved++;
+      // only clear OUR markers; a real push error stays until the next successful push
+      stmts.push(db.update(channelListings).set({ ...(hit.externalId ? { externalId: hit.externalId } : {}), lastError: sql`CASE WHEN ${channelListings.lastError} IN (${NOT_LISTED}, ${PENDING_APPROVAL}) THEN NULL ELSE ${channelListings.lastError} END` }).where(at));
+      if (hit.externalId) stmts.push(db.update(productMappings).set({ externalId: hit.externalId }).where(and(eq(productMappings.provider, CHANNEL), eq(productMappings.variantId, variantId))));
+    } else {
+      if (hit?.state === "pending") t.pending++; else t.notListed++;
+      stmts.push(db.update(channelListings).set({ lastError: hit?.state === "pending" ? PENDING_APPROVAL : NOT_LISTED, lastSyncedStock: null }).where(at));
+    }
+  }
+  for (const c of chunks(stmts, BATCH_SIZE)) await db.batch(c as [any, ...any[]]);
+  return t;
+}
+
+/** payload: { variantIds?: string[] }. Newly approved listings get their stock pushed right away. */
+export const verifyListingsJob: JobHandler = async (job, ctx) => {
+  const provider = await getProvider(ctx);
+  if (!provider) { await ctx.log("info", "trendyol.verify_listings: trendyol not enabled"); return; }
+  const variantIds: string[] | undefined = Array.isArray(job.payload?.variantIds) ? job.payload.variantIds : undefined;
+  const t = await verifyListings(ctx.db, provider, variantIds);
+  if (t.approved) {
+    await ctx.db.insert(outboxJobs).values({ id: crypto.randomUUID(), kind: "trendyol.stock_push", dedupeKey: `trendyol.stock_push:after-verify:${job.id}`, payload: { stockOnly: true } }).onConflictDoNothing();
+  }
+  if (t.checked) await ctx.log("info", "trendyol.verify_listings done", { ...t });
 };

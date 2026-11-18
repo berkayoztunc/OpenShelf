@@ -102,7 +102,7 @@ Arka plan işlerinin ([outbox](term:outbox)) durumları: **Sırada**, **Çalış
 
 ## Trendyol
 
-**Ne işe yarar:** Stok ve fiyatı Trendyol'a gönderir, Trendyol siparişlerini siparişler listenize alır (yaklaşık her 5 dakikada bir mutabakat), ürünleri SKU/barkod ile eşler ve stok düşümünü kaydeder.
+**Ne işe yarar:** Stok ve fiyatı Trendyol'a gönderir, Trendyol siparişlerini siparişler listenize alır (yaklaşık her 15 dakikada bir mutabakat), ürünleri SKU/barkod ile eşler ve stok düşümünü kaydeder.
 
 > [!WARNING]
 > Trendyol entegrasyonunun uç noktaları (gönderim adresleri, alan adları, sınırlar, durum sözlüğü) **doğrulanmamıştır**. Canlıya geçmeden önce Trendyol'un güncel entegrasyon belgesiyle ve satıcı destek ekibiyle teyit edin. **Trendyol Express veya Trendyol'a özel kargo varsayılmaz ve uygulanmaz.**

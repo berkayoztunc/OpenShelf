@@ -7,6 +7,8 @@ export const nav = {
   "nav.group.administration": "Yönetim",
   "nav.dashboard": "Genel bakış",
   "nav.orders": "Siparişler",
+  "nav.orderBoard": "Sipariş panosu",
+  "nav.profit": "Kârlılık matrisi",
   "nav.invoices": "Faturalar",
   "nav.emails": "E-postalar",
   "nav.products": "Ürünler",

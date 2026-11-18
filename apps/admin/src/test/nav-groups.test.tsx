@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Layout, NAV_GROUPS } from "../components/Layout";
@@ -14,10 +15,10 @@ describe("sidebar structure", () => {
   it("groups are in the intended order with the intended pages", () => {
     expect(NAV_GROUPS.map((g) => [g.id, g.items.map((i) => i.to)])).toEqual([
       ["home", ["/"]],
-      ["sales", ["/orders", "/customers", "/invoices", "/coupons"]],
+      ["sales", ["/orders", "/order-board", "/customers", "/invoices", "/coupons", "/profit"]],
       ["catalog", ["/products", "/categories", "/media", "/storefront"]],
       ["communication", ["/campaigns", "/emails", "/sms"]],
-      ["channels", ["/trendyol", "/geliver"]],
+      ["channels", ["/trendyol", "/geliver", "/efaturam"]],
       ["integrations", ["/integrations", "/integration-events", "/mock-inbox"]],
       ["administration", ["/settings", "/security", "/data", "/audit", "/help"]],
     ]);
@@ -53,6 +54,18 @@ describe("sidebar rendering", () => {
     expect(within(home as HTMLElement).getByRole("link")).toHaveAttribute("href", "/");
     expect(nav.querySelector('[data-nav-group="sales"] p')!.textContent).toMatch(/Sales|Satış/);
     expect(within(nav as HTMLElement).queryByRole("link", { name: /Mock inbox|Mock gelen/i })).toBeNull();
+  });
+  it("desktop side menu can be hidden for full width and is remembered", async () => {
+    try { localStorage.clear(); } catch { /* */ }
+    render(false);
+    const shell = () => document.querySelector("[data-sidebar]")!;
+    expect(shell().getAttribute("data-sidebar")).toBe("expanded");
+    await userEvent.click(screen.getByRole("button", { name: /Yan menüyü gizle|Hide side menu/ }));
+    expect(shell().getAttribute("data-sidebar")).toBe("collapsed");
+    expect(localStorage.getItem("os_admin_sidebar_collapsed")).toBe("1");
+    await userEvent.click(screen.getByRole("button", { name: /Yan menüyü göster|Show side menu/ }));
+    expect(shell().getAttribute("data-sidebar")).toBe("expanded");
+    expect(localStorage.getItem("os_admin_sidebar_collapsed")).toBe("0");
   });
   it("mock mode adds the mock inbox under integrations", () => {
     render(true);

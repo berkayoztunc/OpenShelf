@@ -50,7 +50,7 @@ Entegrasyon ekranındaki **Ortam** alanı iki değer alır: **Production** (vars
 
 **Yalnızca web sitesi mi, senkron mu?** Her ürünün bir anahtarı vardır:
 
-* **Senkron:** Ürünün stoğu tek havuzdur ve Trendyol'a gönderilir. Web sitesinde ya da Trendyol'da satış olduğunda, bir Trendyol siparişi iptal edildiğinde veya stoğu elle değiştirdiğinizde yeni adet birkaç dakika içinde Trendyol'a gider. Ayrıca her 10 dakikada bir, gönderilen adet ile buradaki adet karşılaştırılır ve fark varsa düzeltilir.
+* **Senkron:** Ürünün stoğu tek havuzdur ve Trendyol'a gönderilir. Web sitesinde ya da Trendyol'da satış olduğunda, bir Trendyol siparişi iptal edildiğinde veya stoğu elle değiştirdiğinizde yeni adet birkaç dakika içinde Trendyol'a gider. Ayrıca her 15 dakikada bir, gönderilen adet ile buradaki adet karşılaştırılır ve fark varsa düzeltilir.
 * **Yalnızca web sitesi:** Trendyol'a stok ya da fiyat gönderilmez. Aynı barkod Trendyol'da satılsa bile o satış buradaki stoğu düşürmez.
 
 Anahtarı ilk kez açtığınızda varyantlar [barkodlarıyla](term:barcode) Trendyol'a bağlanır. Barkodu olmayan varyant bağlanamaz; önce ürün sayfasında barkodu girin. Listede birden çok ürünü işaretleyip toplu olarak açıp kapatabilirsiniz.
@@ -59,7 +59,7 @@ Anahtarı ilk kez açtığınızda varyantlar [barkodlarıyla](term:barcode) Tre
 
 | Tercih | Bu mağaza | Trendyol |
 | --- | --- | --- |
-| **İçerik kaynağı** (ad, açıklama, marka, fotoğraflar) | Burada düzenlersiniz; Trendyol'daki içerik buraya yazılmaz. | 30 dakikada bir Trendyol'dan alınır; burada yaptığınız içerik değişikliklerinin üzerine yazılır. |
+| **İçerik kaynağı** (ad, açıklama, marka, fotoğraflar) | Burada düzenlersiniz; Trendyol'daki içerik buraya yazılmaz. | Saatte bir Trendyol'dan alınır; burada yaptığınız içerik değişikliklerinin üzerine yazılır. |
 | **Fiyat kaynağı** | Girdiğiniz Trendyol fiyatı stokla birlikte Trendyol'a gönderilir. | Web sitesi ve Trendyol fiyatı Trendyol'daki satış fiyatından alınır; buradan fiyat gönderilmez. |
 
 > [!NOTE]
@@ -69,6 +69,11 @@ Anahtarı ilk kez açtığınızda varyantlar [barkodlarıyla](term:barcode) Tre
 
 > [!WARNING]
 > **Stoku Trendyol'dan al** buradaki satılabilir stoğu Trendyol'daki adetle **değiştirir**. Yalnızca sayılar birbirinden koptuğunda, tek seferlik düzeltme olarak kullanın. Değişiklik [stok defterine](term:ledger) yazılır.
+
+**Ürün Trendyol'da yoksa.** Senkron yalnızca Trendyol'da **zaten var olan** ürünün stok ve fiyatını günceller; yeni ilan açmaz. Anahtarı açtığınızda barkodlar Trendyol'da aranır:
+
+* *Trendyol'da yok*: ürün Trendyol kataloğunuzda bulunamadı. Ürün kartındaki **Trendyol'da oluştur** düğmesi [ürün oluşturma sihirbazını](#urun-olusturma-sihirbazi) bu ürünle açar.
+* *Onay bekliyor*: ürün Trendyol'a gönderildi, onayı bekleniyor. Onaylanınca senkron kendiliğinden başlar; durum saatte bir denetlenir, **Trendyol'da yeniden kontrol et** ile hemen denetleyebilirsiniz.
 
 **Durum rozetleri:** *Güncel* son gönderilen adet buradaki adetle aynı demektir. *Gönderilecek* bir değişikliğin sırada beklediğini gösterir. *Hata* Trendyol'un son gönderimi reddettiğini gösterir; nedeni ürün kartında varyantın altında yazar (çoğu zaman barkod Trendyol'da bulunamamıştır).
 
@@ -95,7 +100,25 @@ Her satırın sağında küçük işlem simgeleri vardır (üzerine gelince adı
 
 **Eşleştirmeler** sekmesi (**Yerel varyant eşleştirmeleri**), bir Trendyol barkodunu mağazanızdaki bir varyanta bağlar. Eşleşen varyantın stoku ve fiyatı Trendyol'a gönderilebilir ve Trendyol listelemesi açılır. **Eşleştirme ekle** ile veya bir ürün satırındaki bağ simgesiyle ekleyebilirsiniz. Eşleştirmeyi silmek Trendyol listelemesini kapatır; Trendyol'daki ürün silinmez.
 
+**Eşleştirme önerileri.** Eşleştirmeler sekmesindeki **Eşleşmeleri bul** düğmesi Trendyol'daki ürünlerinizi (onaylı, onay bekleyen ve reddedilen) henüz bağlanmamış yerel varyantlarla karşılaştırır: önce barkod, sonra stok kodu = SKU. Her öneri nasıl eşleştiğini ve ürünün durumunu gösterir; **Bağla** (veya **Hepsini bağla**) demeden hiçbir şey bağlanmaz. Birden çok yerel varyantın istediği barkod ve artık Trendyol'da olmayan bir barkoda bağlı eşleştirmeler ayrıca listelenir, elle çözersiniz. Eşleştirme model kodunu (`productMainId`) kullanmaz: satıcı verisi çoğu zaman burada tutarsızdır. Reddedilen ürünlerin Trendyol'daki gerekçesi (örneğin görselde yasaklı kelime) **Onay bekleyenler** sekmesinde görünür.
+
+Barkodu Trendyol'da zaten olan bir ürünü oluşturursanız varyant ona bağlanır, yeniden oluşturulmaz.
+
 ## Ürün oluşturma sihirbazı {#urun-olusturma-sihirbazi}
+
+> [!NOTE]
+> Sihirbazı ürün sayfasındaki Trendyol kartından (**Trendyol'da oluştur**) açarsanız ürün seçili gelir. Birden çok varyantı olan üründe tüm varyantlar tek istekte gönderilir: her varyantın barkodu, stoku ve fiyatı tabloda ayrı ayrı görünür, varyantları ayıran özelliği (renk, beden gibi) her varyant için ayrı seçersiniz. Gönderimden sonra varyantlar Trendyol barkodlarına kendiliğinden bağlanır.
+
+> [!TIP]
+> **Sistem alanları kendisi doldurur.** Ürün seçilince sihirbaz şunları kendi bulur ve üstte "Sistem şunları kendi doldurdu" kutusunda gösterir; hepsini değiştirebilirsiniz:
+>
+> * **Marka:** ürünün markası (yoksa mağaza adı) Trendyol'da aranır; adı birebir aynı olan marka seçilir, aynı olan yoksa öneri olarak sunulur.
+> * **Kategori:** mağaza kategorisinin adı Trendyol'un kategori ağacındaki yaprak kategorilerle eşleştirilir (Trendyol'dan içe aktarılan kategoriler doğrudan bulunur). Adı aynı olan tek kategori seçilir; emin olamazsa en yakın beş kategoriyi öneri olarak gösterir.
+> * **Özellikler:** renk, beden gibi varyantı ayıran özellikler, varyant adından ("Pembe") ve seçeneklerinden otomatik seçilir. Tek seçeneği olan zorunlu özellik kendiliğinden seçilir. Varyant ağırlığından desi hesaplanır.
+> * **Kargo:** sizin yerinize kargo firması seçilmez; boş bırakırsanız Trendyol'daki varsayılan anlaşmanız kullanılır.
+> * **Hatırlama:** ürünü gönderdiğinizde seçimleriniz (Trendyol kategorisi, marka, malzeme gibi ortak özellikler, kargo, teslim süresi, menşei) mağaza kategorisi için saklanır. Aynı kategorideki sonraki ürünlerde hepsi hazır gelir.
+>
+> Sistem hiçbir zaman tahminle seçim yapmaz: birden çok eşleşme varsa boş bırakır ve öneri sunar.
 
 **Trendyol'a ürün ekle** düğmesi dört adımlı bir sihirbaz açar:
 

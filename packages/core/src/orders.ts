@@ -21,7 +21,7 @@ export const orderIs = (orderId: string, statuses: string[]) =>
  *  - cancel after payment (not shipped) -> restock
  * Concurrency-safe: every side effect is guarded on the order still being in `from`.
  */
-export async function transitionOrder(db: Db, orderId: string, to: OrderStatus, now = new Date()): Promise<{ from: OrderStatus }> {
+export async function transitionOrder(db: Db, orderId: string, to: OrderStatus, now = new Date(), opts: { notify?: boolean } = {}): Promise<{ from: OrderStatus }> {
   const [o] = await db.select({ status: orders.status, couponCode: orders.couponCode }).from(orders).where(eq(orders.id, orderId)).limit(1);
   if (!o) throw new Error("order_not_found");
   const from = o.status as OrderStatus;
@@ -51,7 +51,7 @@ export async function transitionOrder(db: Db, orderId: string, to: OrderStatus, 
   stmts.push(db.update(orders).set({ status: to, updatedAt: now }).where(and(eq(orders.id, orderId), eq(orders.status, from))).returning({ id: orders.id }));
   const updateIdx = stmts.length - 1;
   const ev = eventForTransition(from, to);
-  if (ev) stmts.push(notifyEnqueueStmt(db, ev, orderId, to, now)); // customer notification (idempotent dedupe key, same atomic batch)
+  if (ev && opts.notify !== false) stmts.push(notifyEnqueueStmt(db, ev, orderId, to, now)); // customer notification (idempotent dedupe key, same atomic batch)
   const res = await runBatch(db, stmts);
   const last = res[updateIdx] as { id: string }[];
   if (!last || last.length === 0) throw new InvalidTransitionError(from, to); // lost a race

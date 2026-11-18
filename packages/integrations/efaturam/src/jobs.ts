@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { orders, orderItems, invoices, invoiceEvents } from "@openshelf/db";
 import type { InvoiceInput, InvoicingProvider } from "@openshelf/integration-sdk";
+import { orderInvoiceLines } from "@openshelf/shared";
 
 export type JobHandler = (
   job: { id: string; kind: string; payload: any; attempts: number },
@@ -20,7 +21,7 @@ export interface InvoiceRepo {
 
 /**
  * Assumptions: order.billingAddress ?? shippingAddress JSON follows addresses columns (name,line1,line2,city,taxId,taxOffice,isCompany);
- * order_items.unitPrice is minor units, KDV-inclusive; taxRate is a percent (e.g. 20).
+ * order_items.unitPrice is minor units (KDV-inclusive or exclusive: derived from the order's totals); taxRate is a percent (e.g. 20).
  */
 export function drizzleInvoiceRepo(db: any): InvoiceRepo {
   return {
@@ -30,10 +31,8 @@ export function drizzleInvoiceRepo(db: any): InvoiceRepo {
       if (!o) return null;
       const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
       const a = ((o.billingAddress ?? o.shippingAddress) ?? {}) as Record<string, any>;
-      const lines: InvoiceInput["lines"] = items.map((i: any) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unitPrice, taxRate: i.taxRate }));
-      const rate = lines[0]?.taxRate ?? 20;
-      if (o.shippingTotal > 0) lines.push({ name: "Kargo", quantity: 1, unitPrice: o.shippingTotal, taxRate: rate });
-      if (o.discountTotal > 0) lines.push({ name: "İndirim", quantity: 1, unitPrice: -o.discountTotal, taxRate: rate });
+      // KDV-inclusive lines that add up to exactly what the customer paid, whether the store priced its items with or without KDV
+      const lines: InvoiceInput["lines"] = orderInvoiceLines(o, items.map((i: any) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unitPrice, taxRate: i.taxRate })));
       return {
         orderId, orderNumber: o.number, issuedAt: new Date().toISOString(), currency: o.currency, lines,
         customer: { name: a.name ?? "", email: o.email, taxId: a.taxId ?? undefined, taxOffice: a.taxOffice ?? undefined, address: [a.line1, a.line2].filter(Boolean).join(" "), city: a.city ?? "", isCompany: !!a.isCompany },

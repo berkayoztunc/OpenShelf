@@ -54,7 +54,7 @@ describe("createCheckout", () => {
   });
 });
 
-const retrieveOk = { status: "success", paymentStatus: "SUCCESS", fraudStatus: 1, paymentId: "999", price: "150.5", paidPrice: "150.5", currency: "TRY", basketId: "o1", conversationId: "o1" };
+const retrieveOk = { status: "success", paymentStatus: "SUCCESS", fraudStatus: 1, paymentId: "999", price: "150.5", paidPrice: "150.5", currency: "TRY", basketId: "o1", conversationId: "retrieve" }; // iyzico echoes the retrieve request's conversationId, not the order's
 
 describe("retrieve / webhook", () => {
   it("maps success, and rejects amount mismatch vs expected", async () => {
@@ -65,7 +65,17 @@ describe("retrieve / webhook", () => {
   });
   it("rejects paidPrice != price and basketId mismatch", async () => {
     await expect(mk(async () => json({ ...retrieveOk, paidPrice: "160" })).retrieve("T")).rejects.toBeInstanceOf(PaymentMismatchError);
-    await expect(mk(async () => json({ ...retrieveOk, basketId: "zzz" })).retrieve("T")).rejects.toBeInstanceOf(PaymentMismatchError);
+    await expect(mk(async () => json({ ...retrieveOk, basketId: "zzz" })).retrieve("T", { orderId: "o1", amount: 15050, currency: "TRY" })).rejects.toBeInstanceOf(PaymentMismatchError);
+    await expect(mk(async () => json({ ...retrieveOk, basketId: undefined })).retrieve("T")).rejects.toBeInstanceOf(PaymentMismatchError);
+  });
+  it("retrieve retries gateway errors (522 / dropped connection) and then succeeds; gives up after 3 tries", async () => {
+    let n = 0;
+    const a = mk(async () => { n++; if (n === 1) return new Response("<html>522</html>", { status: 522 }); if (n === 2) throw new Error("socket hang up"); return json(retrieveOk); });
+    a.retryDelayMs = 0;
+    expect((await a.retrieve("T")).status).toBe("succeeded"); expect(n).toBe(3);
+    n = 0;
+    const b = mk(async () => { n++; return new Response("<html>522</html>", { status: 522 }); }); b.retryDelayMs = 0;
+    await expect(b.retrieve("T")).rejects.toThrow("iyzico HTTP 522: non-JSON response"); expect(n).toBe(3);
   });
   it("fraud review => pending", async () => {
     expect((await mk(async () => json({ ...retrieveOk, fraudStatus: 0 })).retrieve("T")).status).toBe("pending");

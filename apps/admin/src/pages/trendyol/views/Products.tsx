@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Archive, ArchiveRestore, BarChart3, Braces, Link2, Pencil, Plus, RefreshCw, Search, Trash2, X, Check } from "lucide-react";
 import { Badge, Button, Card, ConfirmDialog, EmptyState, Modal, SelectField, Table, Tabs, Td, TextField } from "../../../components/ui";
 import { Term } from "../../../components/help/Term";
@@ -16,7 +17,7 @@ const OPS = ["filterApprovedProducts", "filterUnapprovedProducts", "updatePriceA
 
 interface ProdRow {
   key: string; image?: string; title: string; barcode: string; stockCode: string; quantity: number | null; listPrice: number | null; salePrice: number | null;
-  onSale?: boolean; approved: boolean; status?: string; brand: string; category: string; raw: unknown;
+  onSale?: boolean; approved: boolean; status?: string; rejectReason?: string; brand: string; category: string; raw: unknown;
 }
 
 /** Flatten Trendyol's approved (content → variants) and unapproved (flat) shapes into table rows. */
@@ -25,7 +26,7 @@ export function normalizeRows(tab: TabId, content: Record<string, unknown>[]): P
     return content.map((p) => ({
       key: str(p.barcode), image: str(arr(p.media ?? p.images)[0]?.url) || undefined, title: str(p.title), barcode: str(p.barcode), stockCode: str(p.stockCode),
       quantity: p.quantity === undefined ? null : num(p.quantity), listPrice: p.listPrice === undefined ? null : num(p.listPrice), salePrice: p.salePrice === undefined ? null : num(p.salePrice),
-      approved: false, status: str(p.status), brand: str(dig(p, "brand.name")), category: str(dig(p, "category.name")), raw: p,
+      approved: false, status: str(p.status), rejectReason: str(arr(p.rejectReasonDetails)[0]?.rejectReason) || undefined, brand: str(dig(p, "brand.name")), category: str(dig(p, "category.name")), raw: p,
     }));
   }
   return content.flatMap((c) => {
@@ -48,7 +49,10 @@ function ProductsBody() {
   const { ops } = useOps(OPS);
   const w = useTyWrite();
   const [tab, setTab] = useState<TabId>("approved");
-  const [wizard, setWizard] = useState(false);
+  // /trendyol/products?create=<productId> (from the product page): open the wizard on that product
+  const [sp, setSp] = useSearchParams();
+  const createFor = sp.get("create") || undefined;
+  const [wizard, setWizard] = useState(!!createFor);
   const [batches, setBatches] = useState<{ id: string; label: string }[]>([]);
   const addBatch = (id: string, label: string) => setBatches((b) => [{ id, label }, ...b.filter((x) => x.id !== id)].slice(0, 4));
 
@@ -61,7 +65,7 @@ function ProductsBody() {
         <Button onClick={() => setWizard(true)} className="-mt-6"><Plus size={14} />{t("trendyolviews.products.add")}</Button>
       </div>
       {batches.map((b) => <BatchPanel key={b.id} id={b.id} label={b.label} run={w.call.run} op={ops.getBatchRequestResult} onClose={() => setBatches((x) => x.filter((y) => y.id !== b.id))} />)}
-      {wizard && <Wizard w={w} ops={ops} onClose={() => { setWizard(false); setTab("unapproved"); }} />}
+      {wizard && <Wizard key={createFor ?? "new"} w={w} ops={ops} productId={createFor} onClose={() => { setWizard(false); setTab("unapproved"); if (createFor) setSp({}, { replace: true }); }} />}
       {!wizard && (tab === "mappings" ? <MappingsTab /> : <ProductList key={tab} tab={tab} ops={ops} w={w} addBatch={addBatch} />)}
       {w.call.confirmNode}
     </div>
@@ -132,7 +136,7 @@ function ProductList({ tab, ops, w, addBatch }: { tab: Exclude<TabId, "mappings"
                     <Td className="whitespace-nowrap text-right tabular-nums">{tryMoney(r.listPrice)}</Td>
                     <Td className="whitespace-nowrap text-right tabular-nums">{tryMoney(r.salePrice)}</Td>
                     <Td>{r.onSale === undefined ? "-" : <Badge tone={r.onSale ? "success" : "neutral"}>{t(r.onSale ? "trendyolviews.products.onSale.yes" : "trendyolviews.products.onSale.no")}</Badge>}</Td>
-                    <Td>{r.approved ? <Badge tone="success">{t("trendyolviews.products.approved.yes")}</Badge> : <StatusBadge group="product" value={r.status ?? "pendingApproval"} />}</Td>
+                    <Td>{r.approved ? <Badge tone="success">{t("trendyolviews.products.approved.yes")}</Badge> : <StatusBadge group="product" value={r.status ?? "pendingApproval"} />}{r.rejectReason && <span className="mt-1 block max-w-48 text-xs text-danger" data-testid="tdyv-reject-reason">{t("trendyolviews.reject.reason", { reason: r.rejectReason })}</span>}</Td>
                     <Td className="max-w-44"><span className="block truncate">{r.brand}</span><span className="block truncate text-xs text-muted">{r.category}</span></Td>
                     <Td><div className="flex gap-0.5">
                       {tab === "approved" && <IconBtn label={t("trendyolviews.products.act.edit", { barcode: r.barcode })} onClick={() => setEditing(r.barcode)}><Pencil size={14} /></IconBtn>}

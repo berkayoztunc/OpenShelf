@@ -94,16 +94,25 @@ export const ProductBulkBody = z.object({ ids: z.array(z.string().min(1)).min(1)
   z.object({ action: z.literal("price"), percent: z.number().min(-90).max(500).refine((n) => n !== 0, "percent must be non-zero") }),
 ]));
 export const InventoryAdjustBody = z.object({ delta: z.number().int().refine((n) => n !== 0, "delta must be non-zero"), reason: z.string().min(1).max(200) });
+/** percent: value 1-100 · fixed: value in minor units · free_shipping: value ignored (0), only the shipping fee is waived. */
+export const COUPON_TYPES = ["percent", "fixed", "free_shipping"] as const;
+export type CouponType = (typeof COUPON_TYPES)[number];
 export const CouponInput = z.object({
-  code: z.string().min(2).max(40).regex(/^[A-Za-z0-9_-]+$/), type: z.enum(["percent", "fixed"]), value: z.number().int().min(1),
+  code: z.string().min(2).max(40).regex(/^[A-Za-z0-9_-]+$/), type: z.enum(COUPON_TYPES), value: z.number().int().min(0),
   minSubtotal: minor.default(0), maxUses: z.number().int().min(1).nullable().optional(), maxUsesPerCustomer: z.number().int().min(1).nullable().optional(),
   expiresAt: z.string().datetime().nullable().optional(), active: z.boolean().default(true),
-}).refine((c) => c.type !== "percent" || c.value <= 100, { message: "percent must be <= 100", path: ["value"] });
+}).refine((c) => c.type !== "percent" || c.value <= 100, { message: "percent must be <= 100", path: ["value"] })
+  .refine((c) => c.type === "free_shipping" || c.value >= 1, { message: "value must be >= 1", path: ["value"] })
+  .transform((c) => (c.type === "free_shipping" ? { ...c, value: 0 } : c));
 
 // ---------- orders ----------
 export const OrderStatusBody = z.object({ status: z.enum(["pending", "awaiting_payment", "paid", "fulfilling", "shipped", "delivered", "cancelled", "refunded"]) });
 export const RefundBody = z.object({ amount: z.number().int().min(1), reason: z.string().max(300).optional() });
 export const ShipmentBody = z.object({ serviceId: z.string().min(1) });
+/** Shipment `provider` for orders the store hands over itself (no carrier, no tracking number). */
+export const HAND_DELIVERY_PROVIDER = "hand";
+/** Mark a website order as handed over in person: no carrier, no code. `notify` sends the customer the "delivered" message. */
+export const HandDeliveryBody = z.object({ note: z.string().trim().max(300).optional(), notify: z.boolean().default(true) });
 
 // ---------- storefront ----------
 export const ShippingAddress = z.object({
@@ -114,6 +123,9 @@ export const ShippingAddress = z.object({
   isCompany: z.boolean().optional(),
 });
 export type ShippingAddress = z.infer<typeof ShippingAddress>;
+/** Admin correction of an order's delivery address (before it ships). Other stored fields (tax id, identity number...) are kept. */
+export const OrderAddressBody = ShippingAddress.pick({ name: true, surname: true, phone: true, line1: true, line2: true, city: true, district: true, zip: true });
+export type OrderAddressBody = z.infer<typeof OrderAddressBody>;
 export const Attribution = z.object({
   utm_source: z.string().max(200).optional(), utm_medium: z.string().max(200).optional(), utm_campaign: z.string().max(200).optional(),
   utm_term: z.string().max(200).optional(), utm_content: z.string().max(200).optional(),

@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { FileText, Mail } from "lucide-react";
+import { FileText, Handshake, Mail } from "lucide-react";
 import { PrintMenu } from "../components/PrintMenu";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ORDER_TRANSITIONS } from "@openshelf/shared";
-import { api } from "../lib/api";
+import { api, errMsg } from "../lib/api";
 import { describeOrderError } from "../lib/orderErrors";
 import { useT } from "../i18n";
 import { Term } from "../components/help/Term";
@@ -13,7 +13,8 @@ import { typeLabel } from "./Invoices";
 import { dateTime, enumLabel, label, money, toMajor, toMinor } from "../lib/format";
 import { orderDetailFromApi } from "../lib/adapt";
 import { NotificationHistory } from "../components/NotificationHistory";
-import { Badge, Button, Card, ConfirmDialog, EmptyState, ErrorState, Loading, Modal, PageHeader, statusTone, Table, Td, TextField, useToast } from "../components/ui";
+import { AddressDialog, AddressSummary, addressIssue, type OrderAddr } from "../components/OrderAddress";
+import { Badge, Button, Card, ConfirmDialog, EmptyState, ErrorState, Loading, Modal, PageHeader, SelectField, Skeleton, statusTone, Table, Td, TextField, Toggle, useToast } from "../components/ui";
 
 export default function OrderDetail() {
   const { id } = useParams();
@@ -24,13 +25,37 @@ export default function OrderDetail() {
   const [transition, setTransition] = useState<string | null>(null);
   const [refund, setRefund] = useState<{ amount: string; reason: string } | null>(null);
   const [ship, setShip] = useState<string | null>(null);
+  const [editAddr, setEditAddr] = useState(false);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [hand, setHand] = useState<{ note: string; notify: boolean } | null>(null);
   const done = (msg: string) => () => { qc.invalidateQueries({ queryKey: ["order", id] }); qc.invalidateQueries({ queryKey: ["orders"] }); toast.success(msg); };
   const fail = (e: unknown) => toast.error(describeOrderError(e).message);
 
   const status = useMutation({ mutationFn: (s: string) => api.post(`/api/admin/orders/${id}/status`, { status: s }), onSuccess: () => { setTransition(null); done(t("orders.toast.statusUpdated"))(); }, onError: fail });
   const doRefund = useMutation({ mutationFn: () => api.post(`/api/admin/orders/${id}/refund`, { amount: toMinor(refund!.amount), reason: refund!.reason }), onSuccess: () => { setRefund(null); done(t("orders.toast.refundRequested"))(); }, onError: fail });
+  const doHand = useMutation({ mutationFn: () => api.post(`/api/admin/orders/${id}/hand-delivery`, { note: hand!.note.trim() || undefined, notify: hand!.notify }), onSuccess: () => { setHand(null); done(t("orders.toast.handDelivered"))(); }, onError: fail });
   const doShip = useMutation({ mutationFn: () => api.post(`/api/admin/orders/${id}/shipment`, { serviceId: ship }), onSuccess: () => { setShip(null); done(t("orders.toast.shipmentCreated"))(); }, onError: fail });
+  // carrier offers for the "create shipment" dialog, loaded when it opens; the cheapest is preselected
+  const quotes = useQuery({
+    queryKey: ["order", id, "shipment-quotes"], enabled: ship !== null, retry: false, staleTime: 60_000,
+    queryFn: () => api.get<{ provider: string; weightKg: number; testMode?: boolean; items: { carrier: string; serviceId: string; price: number; currency: string; etaDays?: number }[] }>(`/api/admin/orders/${id}/shipment/quotes`),
+  });
+  const firstQuote = quotes.data?.items[0]?.serviceId;
+  useEffect(() => { if (firstQuote) setShip((cur) => (cur === "" ? firstQuote : cur)); }, [firstQuote, ship]);
+  const recheck = useMutation({
+    mutationFn: () => api.post<{ result: "paid" | "already_paid" | "not_paid" | "pending" | "no_payment" | "out_of_stock" | "amount_mismatch" }>(`/api/admin/orders/${id}/payment/recheck`),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["order", id] }); qc.invalidateQueries({ queryKey: ["orders"] });
+      const msg = t(`orders.recheck.${r.result}`);
+      if (r.result === "paid" || r.result === "already_paid") toast.success(msg); else if (r.result === "out_of_stock" || r.result === "amount_mismatch") toast.error(msg); else toast.info(msg);
+    },
+    onError: fail,
+  });
+  const invoicePreview = useQuery({
+    queryKey: ["order", id, "invoice-preview"], enabled: invoiceOpen, retry: false, staleTime: 0,
+    queryFn: () => api.get<{ pricesIncludeTax: boolean; currency: string; orderTotal: number; net: number; tax: number; total: number; matchesOrder: boolean;
+      lines: { name: string; quantity: number; net: number; tax: number; rate: number; total: number }[]; byRate: { rate: number; net: number; tax: number }[] }>(`/api/admin/orders/${id}/invoice/preview`),
+  });
   const invoice = useMutation({ mutationFn: () => api.post(`/api/admin/orders/${id}/invoice`), onSuccess: () => { setInvoiceOpen(false); done(t("orders.toast.invoiceQueued"))(); }, onError: (e) => { setInvoiceOpen(false); fail(e); } });
 
   if (q.isPending) return <Loading />;
@@ -60,13 +85,20 @@ export default function OrderDetail() {
   ].sort((a, b) => a.at.localeCompare(b.at));
 
   const managed = o.source !== "website"; // marketplace order: the marketplace ships + invoices it, we only mirror it
+  const addr = o.shippingAddress as OrderAddr | undefined;
+  const canEditAddr = !managed && ["pending", "awaiting_payment", "paid", "fulfilling"].includes(o.status);
   const mockPay = o.payments.some((p) => p.isMock);
+  const handDone = o.shipments.some((s) => s.provider === "hand");
+  const activeCarrier = o.shipments.some((s) => s.provider !== "hand" && !["cancelled", "returned"].includes(s.status));
+  /** Hand delivery: website orders that are paid and not delivered, with no live carrier shipment. */
+  const canHand = !managed && !handDone && !activeCarrier && ["paid", "fulfilling", "shipped"].includes(o.status);
   return (
     <>
       <PageHeader title={t("orders.detail.title", { number: o.number })} description={t("orders.detail.description", { date: dateTime(o.createdAt), customer: `${o.customerName ?? ""} ${o.email ?? ""}`.trim() || "-" })} guide="orders#siparis-detayi"
         actions={<><Link to="/orders"><Button variant="ghost">{t("common.back")}</Button></Link>
           {canRefund && <Button variant="secondary" title={t("orders.detail.refund.title")} onClick={() => setRefund({ amount: "", reason: "" })}>{t("orders.detail.refund")}</Button>}
-          {!managed && <Button variant="secondary" title={t("orders.detail.createShipment.title")} onClick={() => setShip("")}>{t("orders.detail.createShipment")}</Button>}
+          {!managed && !handDone && <Button variant="secondary" title={t("orders.detail.createShipment.title")} onClick={() => setShip("")}>{t("orders.detail.createShipment")}</Button>}
+          {canHand && <Button variant="secondary" title={t("orders.hand.buttonTitle")} onClick={() => setHand({ note: "", notify: true })}><Handshake size={15} />{t("orders.hand.button")}</Button>}
           {!managed && <Button variant="secondary" title={t("orders.detail.issueInvoice.title")} loading={invoice.isPending} onClick={() => setInvoiceOpen(true)}>{t("orders.detail.issueInvoice")}</Button>}
           {!managed && <Link to={`/invoices/new?orderId=${encodeURIComponent(o.id)}`} title={t("orders.detail.invoiceFromOrder.title")}><Button variant="secondary"><FileText size={15} />{t("orders.detail.invoiceFromOrder")}</Button></Link>}
           <Link to={`/emails/compose?${new URLSearchParams({ ...(o.email ? { to: o.email } : {}), orderId: o.id, subject: t("orders.detail.emailSubject", { number: o.number }) })}`} title={t("orders.detail.emailCustomer.title")}><Button variant="secondary"><Mail size={15} />{t("orders.detail.emailCustomer")}</Button></Link>
@@ -80,13 +112,13 @@ export default function OrderDetail() {
             ))}</Table>
             <p className="mt-3 text-right font-semibold">{t("orders.detail.totalLine", { total: money(o.total, o.currency) })}</p>
           </Card>
-          <Card title={t("orders.detail.payments")}>{o.payments.length === 0 ? <EmptyState title={t("orders.detail.payments.empty")} description={t("orders.detail.payments.emptyBody")} /> : (
-            <Table head={[t("orders.detail.col.provider"), t("orders.detail.col.status"), t("orders.detail.col.amount"), t("orders.detail.col.date")]}>{o.payments.map((p) => <tr key={p.id}><Td>{enumLabel("provider", p.provider)}{p.isMock && <span className="ml-2"><Badge tone="danger">{t("orders.mockBadge")}</Badge></span>}</Td><Td><Badge tone={statusTone(p.status)}>{enumLabel("payment", p.status)}</Badge></Td><Td>{money(p.amount, o.currency)}</Td><Td>{dateTime(p.createdAt)}</Td></tr>)}</Table>)}</Card>
+          {!managed && <Card title={t("orders.detail.payments")} actions={!managed && o.payments.length > 0 && ["awaiting_payment", "pending", "cancelled"].includes(o.status) && <Button size="sm" variant="secondary" title={t("orders.recheck.title")} loading={recheck.isPending} onClick={() => recheck.mutate()}>{t("orders.recheck.action")}</Button>}>{o.payments.length === 0 ? <EmptyState title={t("orders.detail.payments.empty")} description={t("orders.detail.payments.emptyBody")} /> : (
+            <Table head={[t("orders.detail.col.provider"), t("orders.detail.col.status"), t("orders.detail.col.amount"), t("orders.detail.col.date")]}>{o.payments.map((p) => <tr key={p.id}><Td>{enumLabel("provider", p.provider)}{p.isMock && <span className="ml-2"><Badge tone="danger">{t("orders.mockBadge")}</Badge></span>}</Td><Td><Badge tone={statusTone(p.status)}>{enumLabel("payment", p.status)}</Badge></Td><Td>{money(p.amount, o.currency)}</Td><Td>{dateTime(p.createdAt)}</Td></tr>)}</Table>)}</Card>}
           <Card title={t("orders.detail.shipments")}>{o.shipments.length === 0 ? <EmptyState title={t("orders.detail.shipments.empty")} description={managed ? t("orders.detail.shipments.managedBody") : t("orders.detail.shipments.emptyBody")} /> : (
             <Table head={[<Term key="c" id="carrier">{t("orders.detail.col.carrier")}</Term>, <Term key="t" id="trackingno">{t("orders.detail.col.tracking")}</Term>, t("orders.detail.col.status"), t("orders.detail.col.label")]}>{o.shipments.map((s) => <tr key={s.id}><Td>{s.carrier ?? "-"}</Td><Td>{s.trackingNumber ? (s.trackingUrl ? <a className="text-brand-ink underline" href={s.trackingUrl} target="_blank" rel="noopener noreferrer">{s.trackingNumber}</a> : s.trackingNumber) : "-"}</Td><Td><Badge tone={statusTone(s.status)}>{enumLabel("shipment", s.status)}</Badge></Td><Td>{s.labelUrl ? <a className="text-brand-ink underline" href={s.labelUrl} target="_blank" rel="noopener noreferrer">{t("common.open")}</a> : "-"}</Td></tr>)}</Table>)}</Card>
-          <NotificationHistory orderId={o.id} />
-          <Card title={t("orders.detail.invoices")}>{o.invoices.length === 0 ? <EmptyState title={t("orders.detail.invoices.empty")} description={managed ? t("orders.detail.invoices.managedBody") : t("orders.detail.invoices.emptyBody")} /> : (
-            <Table head={[t("orders.detail.col.type"), t("orders.detail.col.number"), t("orders.detail.col.status"), t("orders.detail.col.document")]}>{o.invoices.map((i) => <tr key={i.id}><Td>{typeLabel(i.type)}</Td><Td>{i.number ?? "-"}</Td><Td><Badge tone={statusTone(i.status)}>{enumLabel("invoice", i.status)}</Badge></Td><Td>{i.url ? <a className="text-brand-ink underline" href={i.url} target="_blank" rel="noopener noreferrer">{t("common.open")}</a> : "-"}</Td></tr>)}</Table>)}</Card>
+          {!managed && <NotificationHistory orderId={o.id} />}
+          {!managed && <Card title={t("orders.detail.invoices")}>{o.invoices.length === 0 ? <EmptyState title={t("orders.detail.invoices.empty")} description={managed ? t("orders.detail.invoices.managedBody") : t("orders.detail.invoices.emptyBody")} /> : (
+            <Table head={[t("orders.detail.col.type"), t("orders.detail.col.number"), t("orders.detail.col.status"), t("orders.detail.col.document")]}>{o.invoices.map((i) => <tr key={i.id}><Td>{typeLabel(i.type)}</Td><Td>{i.number ?? "-"}</Td><Td><Badge tone={statusTone(i.status)}>{enumLabel("invoice", i.status)}</Badge></Td><Td>{i.url ? <a className="text-brand-ink underline" href={i.url} target="_blank" rel="noopener noreferrer">{t("common.open")}</a> : "-"}</Td></tr>)}</Table>)}</Card>}
         </div>
         <div className="space-y-6">
           <Card title={<span className="inline-flex items-center gap-1">{t("orders.detail.statusCard")}<HelpTip id="orders.statusActions" /></span>}>
@@ -97,6 +129,9 @@ export default function OrderDetail() {
                 <p className="mt-3 text-xs text-muted">{t("orders.detail.statusHint")}</p>
               </>
             )}
+          </Card>
+          <Card testId="order-address-card" title={t("orders.address.title")} actions={canEditAddr && <Button size="sm" variant="secondary" onClick={() => setEditAddr(true)}>{t("common.edit")}</Button>}>
+            <AddressSummary a={addr} />
           </Card>
           <Card title={t("orders.detail.timeline")}>
             {timeline.length === 0 ? <EmptyState title={t("orders.detail.timeline.empty")} description={t("orders.detail.timeline.emptyBody")} /> : (
@@ -111,8 +146,31 @@ export default function OrderDetail() {
         message={transition ? `${t("orders.transition.confirm", { status: enumLabel("status", transition) })} ${td(`orders.transition.effect.${transition}`) === `orders.transition.effect.${transition}` ? t("orders.transition.effect.default") : td(`orders.transition.effect.${transition}`)}` : ""}
         danger={transition === "cancelled"} loading={status.isPending}
         onConfirm={() => transition && status.mutate(transition)} onClose={() => setTransition(null)} />
-      <ConfirmDialog open={invoiceOpen} title={t("orders.invoice.confirmTitle")} message={t("orders.invoice.confirmMessage")} confirmLabel={t("orders.invoice.confirmAction")} loading={invoice.isPending}
-        onConfirm={() => invoice.mutate()} onClose={() => setInvoiceOpen(false)} />
+      <Modal open={invoiceOpen} onClose={() => setInvoiceOpen(false)} title={t("orders.invoice.confirmTitle")} wide
+        footer={<><Button variant="ghost" onClick={() => setInvoiceOpen(false)}>{t("common.cancel")}</Button><Button loading={invoice.isPending} disabled={invoicePreview.isPending || !!invoicePreview.error || invoicePreview.data?.matchesOrder === false} onClick={() => invoice.mutate()}>{t("orders.invoice.confirmAction")}</Button></>}>
+        <div className="space-y-4" data-testid="invoice-preview">
+          <p className="text-sm text-muted">{t("orders.invoice.confirmMessage")}</p>
+          {invoicePreview.isPending ? <Skeleton className="h-32" /> : invoicePreview.error ? <p role="alert" className="rounded-lg border border-danger bg-danger-soft px-3 py-2 text-sm text-danger">{errMsg(invoicePreview.error)}</p> : invoicePreview.data && (() => {
+            const p = invoicePreview.data;
+            return (
+              <>
+                <p className="rounded-lg border border-line bg-canvas px-3 py-2 text-sm">{t(p.pricesIncludeTax ? "orders.invoice.basis.incl" : "orders.invoice.basis.excl")}</p>
+                <div className="overflow-x-auto"><table className="w-full min-w-[30rem] text-sm">
+                  <thead className="text-left text-[11px] uppercase tracking-wider text-muted"><tr><th className="pb-2 pr-2 font-semibold">{t("orders.invoice.col.item")}</th><th className="pb-2 pr-2 text-right font-semibold">{t("orders.invoice.col.net")}</th><th className="pb-2 pr-2 text-right font-semibold">{t("orders.invoice.col.kdv")}</th><th className="pb-2 text-right font-semibold">{t("orders.invoice.col.total")}</th></tr></thead>
+                  <tbody className="divide-y divide-line">{p.lines.map((l, i) => <tr key={i}><td className="py-1.5 pr-2">{l.name}{l.quantity > 1 && <span className="text-muted"> × {l.quantity}</span>}</td><td className="pr-2 text-right tabular-nums">{money(l.net, p.currency)}</td><td className="pr-2 text-right tabular-nums">{money(l.tax, p.currency)} <span className="text-xs text-muted">%{l.rate}</span></td><td className="text-right font-medium tabular-nums">{money(l.total, p.currency)}</td></tr>)}</tbody>
+                </table></div>
+                <dl className="space-y-1 border-t border-line pt-3 text-sm">
+                  <div className="flex justify-between"><dt className="text-muted">{t("orders.invoice.net")}</dt><dd className="tabular-nums">{money(p.net, p.currency)}</dd></div>
+                  {p.byRate.map((r) => <div key={r.rate} className="flex justify-between"><dt className="text-muted">KDV %{r.rate}</dt><dd className="tabular-nums">{money(r.tax, p.currency)}</dd></div>)}
+                  <div className="flex justify-between text-base font-semibold"><dt>{t("orders.invoice.total")}</dt><dd data-testid="invoice-preview-total" className="tabular-nums">{money(p.total, p.currency)}</dd></div>
+                </dl>
+                {p.matchesOrder ? <p className="text-xs text-success">{t("orders.invoice.matches", { total: money(p.orderTotal, p.currency) })}</p>
+                  : <p role="alert" className="rounded-lg border border-warn-line bg-warn-soft px-3 py-2 text-sm text-warn">{t("orders.invoice.mismatch", { invoice: money(p.total, p.currency), order: money(p.orderTotal, p.currency) })}</p>}
+              </>
+            );
+          })()}
+        </div>
+      </Modal>
       <Modal open={!!refund} onClose={() => setRefund(null)} title={t("orders.refund.title")}
         footer={<><Button variant="ghost" onClick={() => setRefund(null)}>{t("common.cancel")}</Button><Button variant="danger" loading={doRefund.isPending} disabled={!refund?.amount || !refund?.reason} onClick={() => doRefund.mutate()}>{t("orders.refund.action")}</Button></>}>
         {refund && <div className="space-y-3">
@@ -122,10 +180,33 @@ export default function OrderDetail() {
           <p role="note" className="rounded-lg border border-warn-line bg-warn-soft px-3 py-2 text-sm text-warn">{t("orders.refund.consequences")}</p>
         </div>}
       </Modal>
-      <Modal open={ship !== null} onClose={() => setShip(null)} title={t("orders.ship.title")}
-        footer={<><Button variant="ghost" onClick={() => setShip(null)}>{t("common.cancel")}</Button><Button loading={doShip.isPending} disabled={!ship} onClick={() => doShip.mutate()}>{t("orders.ship.action")}</Button></>}>
+      <Modal open={!!hand} onClose={() => setHand(null)} title={t("orders.hand.title", { number: o.number })}
+        footer={<><Button variant="ghost" onClick={() => setHand(null)}>{t("common.cancel")}</Button><Button loading={doHand.isPending} onClick={() => doHand.mutate()}><Handshake size={15} />{t("orders.hand.confirm")}</Button></>}>
+        {hand && <div className="space-y-4">
+          <p className="text-sm text-muted">{t("orders.hand.body")}</p>
+          <TextField label={t("orders.hand.note")} hint={t("orders.hand.noteHint")} maxLength={300} value={hand.note} onChange={(e) => setHand({ ...hand, note: e.target.value })} />
+          <Toggle label={t("orders.hand.notify")} hint={o.email ? t("orders.hand.notifyHint", { email: o.email }) : undefined} checked={hand.notify} onChange={(v) => setHand({ ...hand, notify: v })} />
+        </div>}
+      </Modal>
+      {editAddr && <AddressDialog orderId={o.id} address={addr} onClose={() => setEditAddr(false)} />}
+      <Modal open={ship !== null && !editAddr} onClose={() => setShip(null)} title={t("orders.ship.title")}
+        footer={<><Button variant="ghost" onClick={() => setShip(null)}>{t("common.cancel")}</Button><Button loading={doShip.isPending} disabled={!ship || !!addressIssue(addr)} onClick={() => doShip.mutate()}>{t("orders.ship.action")}</Button></>}>
         <div className="space-y-3">
-          <TextField label={t("orders.ship.serviceId")} help="orders.shipService" hint={t("orders.ship.serviceId.hint")} value={ship ?? ""} onChange={(e) => setShip(e.target.value)} />
+          <div className="rounded-lg border border-line bg-canvas p-3">
+            <div className="mb-1 flex items-center justify-between gap-2"><p className="text-xs font-semibold uppercase tracking-wide text-muted">{t("orders.address.title")}</p>{canEditAddr && <Button size="sm" variant="ghost" onClick={() => setEditAddr(true)}>{t("common.edit")}</Button>}</div>
+            <AddressSummary a={addr} />
+          </div>
+          {quotes.data?.testMode && <p role="note" className="rounded-lg border border-warn-line bg-warn-soft px-3 py-2 text-sm text-warn">{t("orders.ship.testMode")} <Link to="/integrations?configure=geliver" className="font-medium underline">{t("orders.ship.testMode.link")}</Link></p>}
+          {quotes.isPending ? <Skeleton className="h-16" />
+            : quotes.data?.items.length ? (
+              <SelectField label={t("orders.ship.service")} help="orders.shipService" hint={t("orders.ship.service.hint", { weight: quotes.data.weightKg })} value={ship ?? ""} onChange={(e) => setShip(e.target.value)}>
+                {quotes.data.items.map((q) => <option key={q.serviceId} value={q.serviceId}>{`${q.carrier} · ${q.serviceId} · ${money(q.price, q.currency)}${q.etaDays ? ` · ${t("orders.ship.eta", { days: q.etaDays })}` : ""}`}</option>)}
+              </SelectField>
+            ) : (<>
+              <p role="alert" className="rounded-lg border border-warn-line bg-warn-soft px-3 py-2 text-sm text-warn">{quotes.error ? t("orders.ship.quotesFailed", { reason: errMsg(quotes.error) }) : t("orders.ship.noQuotes")}</p>
+              <Button size="sm" variant="secondary" loading={quotes.isFetching} onClick={() => void quotes.refetch()}>{t("orders.ship.retry")}</Button>
+              <TextField label={t("orders.ship.serviceId")} help="orders.shipService" hint={t("orders.ship.serviceId.hint")} value={ship ?? ""} onChange={(e) => setShip(e.target.value)} />
+            </>)}
           <p className="text-sm text-muted">{t("orders.ship.consequences")}</p>
         </div>
       </Modal>

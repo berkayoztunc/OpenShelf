@@ -147,12 +147,12 @@ export const operations: TrendyolOperation[] = [
       storefront, acceptLanguage,
     ],
     body: { kind: "none" }, risk: "read",
-    table: { listPath: "content", columns: [{ key: "attributeValueId", label: t("Değer ID", "Value ID") }, { key: "attributeValueName", label: t("Değer", "Value") }] },
+    table: { listPath: "content", columns: [{ key: "attributeValueId", label: t("Değer ID", "Value ID") }, { key: "attributeValue", label: t("Değer", "Value") }] },
     pagination: { pageParam: "page", sizeParam: "size", maxSize: 1000, firstPage: 0 },
     rateLimit: RL_READ, docsUrl: ref("getCategoryAttributeValues"),
     notes: t(
-      "Docs tutarsızlığı: OpenAPI yanıtta attributeValueName, rehber örneği attributeValue yazıyor; burada OpenAPI alanı kullanıldı.",
-      "Docs inconsistency: the OpenAPI response uses attributeValueName while the guide example shows attributeValue; the OpenAPI field is used here.",
+      "Docs tutarsızlığı: OpenAPI yanıtta attributeValueName, rehber örneği attributeValue yazıyor; canlı yanıt attributeValue döner (kategori özellikleri yanıtında kapalı listeler zaten satır içi gelir).",
+      "Docs inconsistency: the OpenAPI response says attributeValueName while the guide example shows attributeValue; the live answer uses attributeValue (and getCategoryAttributes already lists closed value lists inline).",
     ),
   },
   {

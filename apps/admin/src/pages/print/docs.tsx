@@ -1,7 +1,9 @@
 import { computeInvoiceTotals } from "@openshelf/shared";
+import type { LabelSize } from "../../lib/print";
 import { dateOnly, enumLabel, money } from "../../lib/format";
 import { translate, useT } from "../../i18n";
 import type { Locale } from "../../i18n";
+import { orderPricesIncludeTax } from "@openshelf/shared";
 import { fullName, orderInvoiceLines, streetOf } from "../../lib/rawOrder";
 import type { RawAddress, RawOrder } from "../../lib/rawOrder";
 import type { InvoiceFull } from "../../lib/invoices";
@@ -31,15 +33,17 @@ function AddressBlock({ a, name }: { a?: RawAddress | null; name?: string }) {
   );
 }
 
-/* ---------- 100x150mm shipping label ---------- */
-export function LabelDoc({ order, seller }: { order: RawOrder; seller: Seller }) {
+/* ---------- shipping label: 100x150, 100x100 or 50x70 mm ---------- */
+/** Barcode bar height per size: the small sizes give most of the paper to the barcode so it scans reliably. */
+const BARCODE_H: Record<LabelSize, string> = { "100x150": "17mm", "100x100": "36mm", "50x70": "26mm" };
+export function LabelDoc({ order, seller, size = "100x150" }: { order: RawOrder; seller: Seller; size?: LabelSize }) {
   const { bi } = useBi();
   const ship = order.shipments.find((s) => s.trackingNumber) ?? order.shipments[0];
   const a = order.shippingAddress;
   const code = ship?.trackingNumber?.trim() || order.number;
   const qty = order.items.reduce((n, i) => n + i.quantity, 0);
   return (
-    <section className="pr-page pr-label" data-testid="label-doc">
+    <section className={`pr-page pr-label pr-label-${size}`} data-testid="label-doc" data-size={size}>
       <div className="pr-label-from">
         <small>{bi("print.h.sender")}</small>
         <strong>{seller.name}</strong>
@@ -55,7 +59,7 @@ export function LabelDoc({ order, seller }: { order: RawOrder; seller: Seller })
       <div className="pr-label-code">
         {order.source === "trendyol" && <div className="pr-label-carrier" data-testid="label-marketplace"><span>{bi("print.h.marketplace")}</span><span>{ship?.externalPackageId ? `${bi("print.h.package")}: ${ship.externalPackageId}` : ""}</span></div>}
         <div className="pr-label-carrier"><span>{ship?.carrier ?? bi("print.h.carrier")}</span><span>{ship?.trackingNumber ? bi("print.h.tracking") : bi("print.h.noTracking")}</span></div>
-        <Code128 value={code} height={64} />
+        <Code128 value={code} height={64} cssHeight={BARCODE_H[size]} />
         <div className="pr-label-codetext">{code}</div>
       </div>
       <div className="pr-label-foot">
@@ -99,7 +103,7 @@ export function orderInvoiceData(o: RawOrder, seller: Seller, defaultRate: numbe
   const inv = o.invoices.find((i) => i.number && i.status !== "failed" && i.status !== "cancelled") ?? o.invoices.find((i) => i.status === "issued");
   const b = o.billingAddress ?? o.shippingAddress;
   return {
-    number: inv?.number ?? null, type: inv?.type ?? null, date: day(inv?.createdAt ?? o.createdAt), currency: o.currency, pricesIncludeTax: true, orderNumber: o.number,
+    number: inv?.number ?? null, type: inv?.type ?? null, date: day(inv?.createdAt ?? o.createdAt), currency: o.currency, pricesIncludeTax: orderPricesIncludeTax(o), orderNumber: o.number,
     seller, buyer: { name: fullName(b) || o.email || "", email: o.email, taxId: b?.taxId, taxOffice: b?.taxOffice, isCompany: !!b?.isCompany, address: [streetOf(b), cityLine(b)].filter(Boolean) as string[] },
     lines: orderInvoiceLines(o, defaultRate), notes: o.notes, pdfUrl: inv?.pdfUrl ?? null, issued: !!inv,
   };

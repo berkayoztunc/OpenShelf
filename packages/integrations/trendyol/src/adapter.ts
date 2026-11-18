@@ -3,11 +3,11 @@ import { z } from "zod";
 import type { OrderStatus } from "@openshelf/shared";
 import type {
   AdapterDeps, AdapterFactory, HealthResult, IntegrationCredentials, IntegrationManifest,
-  MarketplaceCategory, MarketplaceOrder, MarketplaceProduct, MarketplaceProvider, MarketplaceStockUpdate,
+  MarketplaceCategory, MarketplaceListingState, MarketplaceOrder, MarketplaceProduct, MarketplaceProvider, MarketplaceStockUpdate,
 } from "@openshelf/integration-sdk";
 import type { TrendyolCallBody, TrendyolCallResult, TrendyolEnv, TrendyolOperation } from "@openshelf/shared";
 import {
-  MAX_INVENTORY_BATCH, MAX_ORDER_WINDOW_MS, MAX_QUANTITY, ORDER_PAGE_SIZE, CATEGORY_TREE_PATH, PRODUCT_PAGE_SIZE, alternativeDeliveryPath, approvedProductsPath, assertAllowed,
+  MAX_INVENTORY_BATCH, MAX_ORDER_WINDOW_MS, MAX_QUANTITY, ORDER_PAGE_SIZE, CATEGORY_TREE_PATH, PRODUCT_PAGE_SIZE, alternativeDeliveryPath, approvedProductsPath, unapprovedProductsPath, assertAllowed,
   batchResultPath, hostFor, inventoryUpdatePath, shipmentPackagesPath, shipmentPackagesStreamPath,
 } from "./endpoints";
 import { mapTrendyolStatus } from "./status";
@@ -207,6 +207,23 @@ export class TrendyolProvider implements MarketplaceProvider {
   }
 
   async fetchCategories(): Promise<MarketplaceCategory[]> { return flattenCategoryTree(await this.call("GET", CATEGORY_TREE_PATH)); }
+
+  /**
+   * Is each barcode in the seller's Trendyol catalog? Approved list first (filter `barcode`), then the unapproved (pending) list.
+   * A barcode in neither is simply absent from the result: the product was never created on Trendyol.
+   */
+  async lookupProducts(barcodes: string[]): Promise<Record<string, MarketplaceListingState>> {
+    const out: Record<string, MarketplaceListingState> = {};
+    for (const barcode of [...new Set(barcodes.map((b) => b.trim()).filter(Boolean))]) {
+      const q = new URLSearchParams({ barcode, page: "0", size: "10" });
+      const ok = await this.call("GET", `${approvedProductsPath(this.sid)}?${q}`);
+      const hit = ((ok.content ?? []) as any[]).find((c) => !Array.isArray(c?.variants) || c.variants.length === 0 || c.variants.some((v: any) => String(v?.barcode) === barcode));
+      if (hit) { out[barcode] = { state: "approved", ...(hit.contentId != null ? { externalId: String(hit.contentId) } : {}) }; continue; }
+      const wait = await this.call("GET", `${unapprovedProductsPath(this.sid)}?${q}`);
+      if (((wait.content ?? []) as any[]).length > 0) out[barcode] = { state: "pending" };
+    }
+    return out;
+  }
 
   /** Pages through approved products. Cursor = next page number (Trendyol caps page x size at 10,000 contents). */
   async fetchProducts(cursor?: string) {

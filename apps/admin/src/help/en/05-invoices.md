@@ -9,7 +9,7 @@ Invoices are created in two ways:
 
 | Route | When | Where you see it |
 |---|---|---|
-| **Automatic invoice** | When a customer pays and the e-Faturam integration is on, the system issues it by itself. | Order page → **Invoices** card |
+| **Automatic invoice** (currently OFF) | No invoice is issued by itself after payment; press **Issue invoice** on the order. | Order page → **Invoices** card |
 | **Manual invoice** | You prepare and issue it from the **Invoices** page (or from an order with **Create invoice from this order**). | **Invoices** page |
 
 In mock mode, issuing an invoice produces only an imitation; nothing goes to e-Faturam or the tax authority.
@@ -188,6 +188,10 @@ See [VKN](term:vkn) and [TCKN](term:tckn) in the glossary, and also [tax office]
 ## VAT calculation {#kdv-hesabi}
 
 The system stores money amounts in kuruş (whole numbers) and rounds each line separately (0.5 and above rounds up). The calculation on screen is exactly the same as the server's.
+
+**Choosing KDV-inclusive or exclusive.** On the Lines card pick it from the **Prices** list; the unit price column header shows the choice too. *Incl. KDV*: the price you type is what the customer pays and KDV is taken out of it (the right choice if your store prices include KDV). *Excl. KDV*: KDV is added on top and the total goes up. For a new invoice the default is the store setting **Prices include KDV**.
+
+**Invoice issued from an order.** The order's **Issue invoice** button first shows what will be issued: the items, each item's KDV, totals per KDV rate and the invoice total. The invoice follows the order's **own pricing** (not today's setting): a KDV-inclusive order is invoiced KDV-inclusive and the invoice total equals the amount the customer paid to the kuruş. Shipping is its own line, invoiced at the items' KDV rate; a coupon discount brings the total down to the amount paid. If the invoice total would not equal the order total the invoice is not issued and you see a warning.
 
 The **Prices include KDV** switch sets up two different logics:
 

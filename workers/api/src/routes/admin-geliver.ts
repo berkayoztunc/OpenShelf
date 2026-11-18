@@ -1,6 +1,8 @@
 import { Hono } from "hono";
-import { eq } from "drizzle-orm";
-import { integrationConfigs } from "@openshelf/db";
+import { desc, eq } from "drizzle-orm";
+import { integrationConfigs, outboxJobs } from "@openshelf/db";
+import { enqueueJob } from "@openshelf/core";
+import { TRACK_JOB } from "../lib/shipmentTracking";
 import { GELIVER_OPERATIONS, GeliverConsoleError } from "@openshelf/integration-geliver";
 import { GeliverCallBody, type GeliverCatalogResponse } from "@openshelf/shared";
 import type { AppEnv } from "../env";
@@ -72,4 +74,25 @@ adminGeliver.post("/geliver/call", async (c) => {
   // live changes are also visible in Admin → integration events
   if (!result.mock && op.risk !== "read") await logIntegrationEvent(db, "geliver", result.ok ? "info" : "warn", `console ${op.id}: HTTP ${result.status}`, { operationId: op.id, ok: result.ok }).catch(() => {});
   return c.json(result);
+});
+
+/**
+ * Automatic tracking: the URL to register on Geliver (secret token in the path) and a manual "check now".
+ * The token is derived from the API token, so it is only shown to owner/admin (this router's guard).
+ */
+adminGeliver.get("/geliver/tracking", async (c) => {
+  const db = c.get("db");
+  const a = await getAdapter(c.env, db, "geliver");
+  const ad = a?.adapter as { webhookToken?: () => Promise<string> } | undefined;
+  const origin = (c.env.API_ORIGIN || new URL(c.req.url).origin).replace(/\/+$/, "");
+  const url = ad?.webhookToken ? `${origin}/webhooks/geliver/${await ad.webhookToken()}` : null;
+  const [last] = await db.select({ at: outboxJobs.updatedAt, status: outboxJobs.status }).from(outboxJobs).where(eq(outboxJobs.kind, TRACK_JOB)).orderBy(desc(outboxJobs.updatedAt)).limit(1);
+  return c.json({ enabled: !!url, webhookUrl: url, lastRun: last ? { at: last.at, status: last.status } : null });
+});
+adminGeliver.post("/geliver/tracking/run", async (c) => {
+  const db = c.get("db");
+  if (!(await getAdapter(c.env, db, "geliver"))) throw new ApiError(409, "integration_unavailable", "Geliver integration is not available");
+  await enqueueJob(db, { kind: TRACK_JOB, payload: {}, dedupeKey: `${TRACK_JOB}:manual:${crypto.randomUUID()}` });
+  await audit(c, "geliver.tracking.run", "geliver_call", TRACK_JOB);
+  return c.json({ ok: true });
 });

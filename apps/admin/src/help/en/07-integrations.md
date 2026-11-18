@@ -102,7 +102,7 @@ The states of background jobs ([outbox](term:outbox)): **Pending**, **Running**,
 
 ## Trendyol {#trendyol}
 
-**What it does:** Sends stock and price to Trendyol, brings Trendyol orders into your orders list (reconciliation about every 5 minutes), matches products by SKU/barcode and records stock deductions.
+**What it does:** Sends stock and price to Trendyol, brings Trendyol orders into your orders list (reconciliation about every 15 minutes), matches products by SKU/barcode and records stock deductions.
 
 > [!WARNING]
 > The Trendyol integration's endpoints (submission addresses, field names, limits, status dictionary) are **unverified**. Before going live, confirm them against Trendyol's current integration documentation and with the seller support team. **Trendyol Express or Trendyol-specific shipping is not assumed or implemented.**

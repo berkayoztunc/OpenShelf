@@ -77,7 +77,7 @@ Durum kartında düğme yoksa "Bu sipariş son durumda; artık değiştirilemez.
 
 ### Rezervasyon süresi ve otomatik iptal
 
-Müşteri ödemeye geçtiğinde stok, **Mağaza ayarları → Ödeme ve sipariş → Stok rezervasyonu (dakika)** kadar ayrılır (varsayılan 15). Süre dolup ödeme gelmediyse sistem (her dakika çalışan bir kontrolle) siparişi kendiliğinden **İptal edildi** yapar, stoğu serbest bırakır. Siz bir şey yapmazsınız.
+Müşteri ödemeye geçtiğinde stok, **Mağaza ayarları → Ödeme ve sipariş → Stok rezervasyonu (dakika)** kadar ayrılır (varsayılan 15). Süre dolup ödeme gelmediyse sistem (15 dakikada bir çalışan bir kontrolle) siparişi kendiliğinden **İptal edildi** yapar, stoğu serbest bırakır. Siz bir şey yapmazsınız.
 
 ### Sık yapılan hatalar
 
@@ -141,7 +141,7 @@ Sipariş, ancak şu kontroller geçildikten sonra **Ödendi** olur:
 | **Ödeme başarısız** | Ödeme "Başarısız" olur; sipariş **Ödeme bekleniyor**'da kalır, süre dolunca iptal olur. | Gerekmez; müşteri tekrar deneyebilir. |
 
 > [!NOTE]
-> Rezervasyon süresini çok kısa tutmak "geç ödeme" olasılığını artırır. 15–30 dakika makul bir aralıktır.
+> Rezervasyon süresini çok kısa tutmak "geç ödeme" olasılığını artırır. 15–30 dakika makul bir aralıktır. Süresi dolan rezervasyonlar 15 dakikada bir toplu olarak bırakılır; bu yüzden ödenmeyen sipariş, sürenin dolmasından sonra en fazla 15 dakika daha stok tutabilir.
 
 Ödeme sorunları için [Sorun giderme](/help/troubleshooting#odeme-sorunlari) bölümüne bakın.
 
@@ -191,7 +191,7 @@ Siparişi paketledikten sonra sipariş sayfasından kargo gönderisi oluştururs
 ### Kargo oluşturma (adım adım)
 
 1. Sipariş sayfasında **Kargo oluştur**'a tıklayın.
-2. **Kargo hizmet kimliği** alanına, Geliver'ın size sunduğu teklifteki hizmet kimliğini yazın (ipucu: "Kargo entegrasyonunuzdan (Geliver) gelen hizmet/teklif kimliği"). Bu sürümde teklif listesi bu pencerede gösterilmez; kodu Geliver panelinizden veya Geliver dokümanındaki fiyat listesinden almanız gerekir.
+2. **Kargo hizmeti** listesinden bir teklif seçin. Liste, bu siparişin paketi için Geliver'dan o anda alınır; her satırda kargo firması, hizmet kodu ve fiyat yazar. En ucuz teklif seçili gelir. Teklifler alınamazsa pencere nedenini gösterir; **Teklifleri yeniden al** ile tekrar deneyebilir ya da hizmet kodunu **Kargo hizmet kimliği** alanına elle yazabilirsiniz.
 3. **Oluştur**'a basın.
 4. Sistem Geliver'dan gönderiyi ve etiketi alır; **Kargolar** kartında kargo firması, takip numarası ve etiket bağlantısı belirir. Sipariş **Ödendi** ise otomatik **Hazırlanıyor**'a geçer.
 5. Etiketi yazdırıp paketi kargo firmasına teslim edin (bkz. [Yazdırma](/help/orders#yazdirma)).
@@ -201,6 +201,18 @@ Siparişi paketledikten sonra sipariş sayfasından kargo gönderisi oluştururs
 ### Kargoyu Geliver dışında yaptıysanız
 
 Gönderiyi başka bir yoldan (örneğin kargo şubesinden) yaptıysanız **Kargo oluştur** kullanmak zorunda değilsiniz. Ancak **Ödendi** durumundaki bir sipariş doğrudan **Kargoya verildi**'ye geçemez: önce **Hazırlanıyor**'a, sonra **Kargoya verildi**'ye alın. Bu durumda sistemde takip numarası olmadığından müşteri bildirimine takip numarası eklenemez; takip numarasını **Müşteriye e-posta gönder** ile elle iletebilirsiniz.
+
+### Elden teslimat
+
+Siparişi kargo kullanmadan müşteriye kendiniz verdiyseniz (mağazadan teslim, kurye ile kendiniz götürme vb.) takip kodu gerekmez. Yalnızca web sitesi siparişlerinde kullanılır; Trendyol siparişlerinin teslimatını Trendyol yönetir.
+
+1. Sipariş detayında **Elden teslim et**'e basın (sipariş panosunda el sıkışma ikonu da aynı işi yapar).
+2. İsterseniz bir not yazın (örn. teslim alan kişi). Not yalnızca sipariş geçmişinde görünür.
+3. **Müşteriye "teslim edildi" bildirimi gönder** açıksa müşteriye yalnızca "teslim edildi" e-postası/SMS'i gider; takip linksiz "kargoya verildi" bildirimi gönderilmez.
+4. **Teslim edildi olarak işaretle** ile onaylayın. Sipariş **Teslim edildi** olur, kargo listesinde "Elden teslimat" görünür.
+
+- Siparişin aktif bir kargo gönderisi varsa önce onu Geliver'de iptal edin. Elden teslim edilen siparişe sonradan kargo etiketi alınamaz; Geliver otomatik gönderisi de bu siparişi atlar.
+- İşlem geri alınamaz. Fatura kesimi bundan etkilenmez; faturayı her zamanki gibi **Fatura kes** ile kesin.
 
 ### Paket ağırlığı ve ölçüleri
 
@@ -273,7 +285,7 @@ Sipariş sayfasındaki **Yazdır** menüsü veya sipariş listesindeki toplu çu
 
 **Trendyol** entegrasyonunu açtıysanız Trendyol'daki siparişleriniz de **Siparişler** listesine düşer. Bunları **Kaynak: Trendyol** filtresiyle ayırabilirsiniz. Kurulum için [Trendyol](/help/integrations#trendyol) bölümüne bakın.
 
-- Siparişler **yaklaşık her 5 dakikada** bir otomatik çekilir (webhook kullanıyorsanız anında da gelir). Sipariş numarası `TY-` ile başlar.
+- Siparişler **yaklaşık her 15 dakikada** bir otomatik çekilir (webhook kullanıyorsanız anında da gelir). Sipariş numarası `TY-` ile başlar.
 - Her Trendyol siparişi yalnızca bir kez içeri alınır; tekrar çekildiğinde çoğaltılmaz, yalnızca durumu güncellenir.
 - Ürün satırları SKU/barkod ile mağazanızdaki varyantlara eşlenir. Eşleşen varyantın stoğu otomatik **düşer** ("Trendyol satışı"). Eşleşmeyen satır, stok düşmeden kaydedilir ve günlüğe uyarı düşer; SKU'ları Trendyol'daki ile aynı tutun.
 - Trendyol durumları OpenShelf durumlarına çevrilir (örneğin "Created" → **Ödendi**, "Shipped" → **Kargoya verildi**, "Delivered" → **Teslim edildi**, "Cancelled" → **İptal edildi**). Bu eşleme Trendyol'un güncel durum sözlüğüyle doğrulanmamıştır; sonuçları kendi panelinizle karşılaştırın.

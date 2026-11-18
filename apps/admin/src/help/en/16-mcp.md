@@ -37,6 +37,8 @@ When an assistant connects it reads two things: the **store guide** (units, chan
 - **Files and images:** `upload_help`, `upload_media_from_url`, `create_upload_link`, `import_attached_files`, `set_store_image`, `view_image`, `list_media`, `update_media_alt` (see below).
 - **Messages and campaigns:** e-mail/SMS sending and campaign drafts (preview and test first, send after approval).
 - **Guide:** `help_topics`, `help_search`, `help_read` and the `openshelf://help/<chapter>` resources.
+- **Matching Trendyol listings:** `trendyol_match_suggestions` compares your Trendyol listings with the local variants that are not linked yet (barcode first, then stock code = SKU) and returns suggestions, conflicts and stale mappings. It reads only; link the confirmed ones through the mappings endpoint.
+- **Putting a product on Trendyol:** `trendyol_prepare_product` prepares what will be sent for a product (reads only): it finds brand, leaf category and attribute values from the product's data, its variants' names and your last choices, and lists what it could not decide with suggestions. `trendyol_find` searches brands, categories and attribute values. When everything is ready `trendyol_create_product` sends the product and links the variants; it needs **full** access and writes to your real Trendyol account.
 - **Integrations:** the Trendyol and Geliver consoles, integration events and background jobs.
 
 **Settings → MCP** lists what every tool does and its level.

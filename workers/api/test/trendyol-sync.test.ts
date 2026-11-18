@@ -30,7 +30,7 @@ beforeAll(async () => {
 });
 // the DB is shared with other suites (the import suite expects the mock barcodes to be unknown): remove everything this file created
 afterAll(async () => {
-  await env.DB.exec(`DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE external_order_id LIKE 'SYNC-ORD-%'); DELETE FROM orders WHERE external_order_id LIKE 'SYNC-ORD-%'; DELETE FROM product_mappings WHERE variant_id LIKE 'sync-v%'; DELETE FROM channel_listings WHERE variant_id LIKE 'sync-v%'; DELETE FROM channel_prices WHERE variant_id LIKE 'sync-v%'; DELETE FROM inventory_movements WHERE variant_id LIKE 'sync-v%'; DELETE FROM inventory WHERE variant_id LIKE 'sync-v%'; DELETE FROM product_images WHERE product_id = 'sync-p1'; DELETE FROM channel_product_settings WHERE product_id = 'sync-p1'; DELETE FROM product_variants WHERE id LIKE 'sync-v%'; DELETE FROM products WHERE id = 'sync-p1'; DELETE FROM outbox_jobs;`);
+  await env.DB.exec(`DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE external_order_id LIKE 'SYNC-ORD-%'); DELETE FROM orders WHERE external_order_id LIKE 'SYNC-ORD-%'; DELETE FROM product_mappings WHERE variant_id LIKE 'sync-v%'; DELETE FROM channel_listings WHERE variant_id LIKE 'sync-v%'; DELETE FROM channel_prices WHERE variant_id LIKE 'sync-v%'; DELETE FROM inventory_movements WHERE variant_id LIKE 'sync-v%'; DELETE FROM inventory WHERE variant_id LIKE 'sync-v%'; DELETE FROM product_images WHERE product_id LIKE 'sync-p%'; DELETE FROM channel_product_settings WHERE product_id LIKE 'sync-p%'; DELETE FROM product_variants WHERE id LIKE 'sync-v%'; DELETE FROM products WHERE id IN ('sync-p1','sync-p2'); DELETE FROM outbox_jobs;`);
   await setMock(false);
 });
 const clearOutbox = () => env.DB.exec("DELETE FROM outbox_jobs");
@@ -56,7 +56,7 @@ describe("Trendyol sync control", () => {
   it("turning sync on links variants by barcode, skips the ones without, and queues a stock push", async () => {
     await clearOutbox();
     const r = await admin(owner, "/trendyol/sync", "PUT", { productIds: [P], enabled: true });
-    expect(await j(r)).toEqual({ updated: 1, linked: 1, skippedNoBarcode: 1, barcodeTaken: 0 });
+    expect(await j(r)).toEqual({ updated: 1, linked: 1, skippedNoBarcode: 1, barcodeTaken: 0, notOnTrendyol: 0, pendingApproval: 0 });
     const d = await row();
     expect(d).toMatchObject({ mode: "synced", linked: 1, enabled: 1 });
     expect(d.variantRows.map((v: any) => [v.sku, v.linked, v.enabled])).toEqual([["SYNC-S", true, true], ["SYNC-X", false, false]]);
@@ -100,6 +100,51 @@ describe("Trendyol sync control", () => {
     await importTrendyolOrder(db, { externalId: "SYNC-ORD-2", status: "paid", placedAt: new Date(0).toISOString(), total: 500, currency: "TRY", customer: { name: "A", address: "x", city: "y" }, lines: [{ sku: "SYNC-S", barcode: "MOCKTY-1-S", quantity: 2, unitPrice: 250 }] });
     expect((await one<{ t: number }>("SELECT total AS t FROM inventory WHERE variant_id = ?1", V1))?.t).toBe(12);
     expect((await admin(owner, "/trendyol/sync/push", "POST", { productIds: [P] })).status).toBe(202);
+  });
+
+  it("a product that was never created on Trendyol is reported as such and gets no stock push until it exists there", async () => {
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO products (id, slug, name_tr, status) VALUES ('sync-p2', 'sync-p2', 'Yeni Çanta Süsü', 'active')"),
+      env.DB.prepare("INSERT INTO product_variants (id, product_id, sku, barcode, position) VALUES ('sync-v3', 'sync-p2', 'SYNC-NEW', '2411198546', 0)"),
+      env.DB.prepare("INSERT INTO product_variants (id, product_id, sku, barcode, position) VALUES ('sync-v4', 'sync-p2', 'SYNC-WAIT', 'MOCKTY-PENDING-1', 1)"),
+      env.DB.prepare("INSERT INTO inventory (variant_id, total, reserved, safety_stock) VALUES ('sync-v3', 20, 0, 0)"),
+      env.DB.prepare("INSERT INTO inventory (variant_id, total, reserved, safety_stock) VALUES ('sync-v4', 7, 0, 0)"),
+    ]);
+    await clearOutbox();
+    const r = await j<any>(await admin(owner, "/trendyol/sync", "PUT", { productIds: ["sync-p2"], enabled: true }));
+    expect(r).toMatchObject({ linked: 2, notOnTrendyol: 1, pendingApproval: 1 });
+    const d = await j<any>(await admin(owner, "/trendyol/sync/sync-p2"));
+    expect(d).toMatchObject({ mode: "synced", notListed: 1, pending: 1, errors: 0 });
+    expect(d.variantRows.map((v: any) => [v.sku, v.state, v.lastError])).toEqual([["SYNC-NEW", "not_listed", null], ["SYNC-WAIT", "pending", null]]);
+    // nothing is pushed for them, so they never look "in sync"
+    await runOutbox(env as never, { limit: 20 });
+    expect((await one<{ s: number | null }>("SELECT last_synced_stock AS s FROM channel_listings WHERE variant_id = 'sync-v3'"))?.s).toBeNull();
+    const list = await j<any>(await admin(owner, "/trendyol/sync?mode=not_listed"));
+    expect(list.items.map((i: any) => i.productId)).toEqual(["sync-p2"]); expect(list.summary.notListed).toBe(1);
+    // the product gets created + approved on Trendyol (here: its barcode becomes a known one), then a re-check starts the sync
+    await env.DB.exec("UPDATE product_mappings SET external_barcode = 'MOCKTY-1-M' WHERE variant_id = 'sync-v3'");
+    const v = await j<any>(await admin(owner, "/trendyol/sync/verify", "POST", { productIds: ["sync-p2"] }));
+    expect(v).toMatchObject({ approved: 1, pending: 1, notListed: 0 });
+    await runOutbox(env as never, { limit: 20 });
+    const after = await j<any>(await admin(owner, "/trendyol/sync/sync-p2"));
+    expect(after.variantRows[0]).toMatchObject({ state: "listed", lastSyncedStock: 20 });
+    expect(await one<{ e: string }>("SELECT external_id AS e FROM product_mappings WHERE variant_id = 'sync-v3'")).toEqual({ e: "900001" });
+  });
+
+  it("remembers the Trendyol choices per local category (admin only, validated)", async () => {
+    const d = { localCategoryId: "cat-remember", trendyolCategoryId: 411, categoryPath: "Aksesuar › Çanta Süsü", brandId: 9001, brandName: "Nuad", attrs: { "47": { ids: [1002], custom: "" } }, cargo: "YKMP", vatRate: "20", dimensionalWeight: "1", deliveryDuration: "2", origin: "TR" };
+    expect(await j<any>(await admin(owner, "/trendyol/defaults?category=cat-remember"))).toEqual({ defaults: null });
+    expect((await admin(owner, "/trendyol/defaults", "PUT", d)).status).toBe(204);
+    const { localCategoryId, ...saved } = d;
+    expect(await j<any>(await admin(owner, `/trendyol/defaults?category=${localCategoryId}`))).toEqual({ defaults: saved });
+    expect((await admin(owner, "/trendyol/defaults", "PUT", { ...d, brandName: "Yeni" })).status).toBe(204);   // overwrite, not duplicate
+    expect((await j<any>(await admin(owner, "/trendyol/defaults?category=cat-remember"))).defaults.brandName).toBe("Yeni");
+    expect((await admin(owner, "/trendyol/defaults", "PUT", { ...d, trendyolCategoryId: -1 })).status).toBe(400);
+    expect((await admin(owner, "/trendyol/defaults", "PUT", { ...d, attrs: { abc: { ids: [], custom: "" } } })).status).toBe(400);
+    expect((await admin(owner, "/trendyol/defaults")).status).toBe(400);
+    expect((await admin(staff, "/trendyol/defaults?category=cat-remember")).status).toBe(403);
+    expect((await admin(staff, "/trendyol/defaults", "PUT", d)).status).toBe(403);
+    await env.DB.exec("DELETE FROM sync_cursors WHERE key LIKE 'trendyol:defaults:%'");
   });
 
   it("validates input", async () => {

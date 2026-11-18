@@ -10,6 +10,8 @@ export type JobHandler = (
 export interface ShipmentRepo {
   /** Order channel ("website" | "trendyol" ...). Marketplace orders are shipped/invoiced by the marketplace. */
   sourceOf?(orderId: string): Promise<string | undefined>;
+  /** Why the order must not get a carrier label any more (handed over in person, delivered, cancelled …), or null. */
+  blockedReason?(orderId: string): Promise<string | null>;
   loadOrder(orderId: string): Promise<{ input: ShipmentInput; currency: string; total: number } | null>;
   findShipment(orderId: string): Promise<{ id: string } | null>;
   saveShipment(orderId: string, r: { providerShipmentId: string; carrier?: string; trackingNumber?: string; labelUrl?: string }): Promise<void>;
@@ -19,6 +21,12 @@ export interface ShipmentRepo {
 export function drizzleShipmentRepo(db: any): ShipmentRepo {
   return {
     async sourceOf(orderId) { const [o] = await db.select({ source: orders.source }).from(orders).where(eq(orders.id, orderId)).limit(1); return o?.source; },
+    async blockedReason(orderId) {
+      const [o] = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, orderId)).limit(1);
+      if (o && !["paid", "fulfilling"].includes(o.status)) return `order is ${o.status}`;
+      const [h] = await db.select({ id: shipments.id }).from(shipments).where(and(eq(shipments.orderId, orderId), eq(shipments.provider, "hand"))).limit(1);
+      return h ? "handed over in person" : null;
+    },
     async loadOrder(orderId) {
       const [o] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
       if (!o) return null;
@@ -56,6 +64,8 @@ export function createShipmentHandler(repoFor: (db: any) => ShipmentRepo = drizz
     const src = await repo.sourceOf?.(orderId);
     if (src && src !== "website") { await ctx.log("info", "shipment.create skipped (channel-managed order)", { orderId, source: src }); return; }
     if (await repo.findShipment(orderId)) { await ctx.log("info", "shipment.create skipped (exists)", { orderId }); return; }
+    const blocked = await repo.blockedReason?.(orderId);
+    if (blocked) { await ctx.log("info", `shipment.create skipped (${blocked})`, { orderId }); return; }
     const data = await repo.loadOrder(orderId);
     if (!data) throw new Error(`shipment.create: order ${orderId} not found`);
     const adapter = (await ctx.getAdapter("geliver")) as ShippingProvider;

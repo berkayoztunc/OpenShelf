@@ -15,7 +15,7 @@ import Questions, { answerProblem } from "../pages/trendyol/views/Questions";
 import Finance from "../pages/trendyol/views/Finance";
 import Products, { normalizeRows } from "../pages/trendyol/views/Products";
 import { toCsv, presetRange, tryMoney } from "../components/trendyol/views/shared";
-import { buildBody, emptyForm, validateBody, batchFinished, leaves, absoluteImage } from "../pages/trendyol/views/products/build";
+import { buildBody, emptyForm, validateBody, batchFinished, leaves, filterLeaves, absoluteImage } from "@openshelf/shared";
 
 const OPS = [...orderOps, ...claimOps, ...productOps, ...catalogOps] as TrendyolOperation[];
 const cat = (mode: TrendyolCatalogResponse["mode"] = "mock", extra: Partial<TrendyolCatalogResponse> = {}): TrendyolCatalogResponse =>
@@ -410,6 +410,253 @@ describe("product wizard body", () => {
     expect(absoluteImage("/media/x", undefined, "https://shop.example.com")).toBe("https://shop.example.com/media/x");
     expect(absoluteImage(undefined, "m1", "https://shop.example.com/")).toBe("https://shop.example.com/media/m1");
   });
+  const autoSetup = (defaults: unknown, brandHits = [{ id: 9001, name: "OpenShelf Home" }, { id: 9002, name: "OpenShelf" }], valueKey = "attributeValueName") => setup({
+    filterApprovedProducts: () => result("filterApprovedProducts", { content: [], page: 0, size: 50, totalElements: 0, totalPages: 1 }),
+    getCargoProviders: () => result("getCargoProviders", [{ code: "YKMP", name: "Yurtiçi" }]),
+    getBrandsByName: () => result("getBrandsByName", brandHits),
+    getCategoryTree: () => result("getCategoryTree", [{ id: 400, name: "Aksesuar", subCategories: [{ id: 411, name: "Çanta Süsü", subCategories: [] }, { id: 412, name: "Anahtarlık", subCategories: [] }] }]),
+    getCategoryAttributes: () => result("getCategoryAttributes", { categoryAttributes: [
+      { attribute: { id: 47, name: "Color" }, required: true, varianter: true }, { attribute: { id: 48, name: "Material" }, required: true },
+      { attribute: { id: 49, name: "Menşei" }, required: true }, { attribute: { id: 60, name: "Season" } }, { attribute: { id: 61, name: "Importer name" } }] }),
+    getCategoryAttributeValues: (c) => result("getCategoryAttributeValues", { content: (c.path?.attributeId === 47
+      ? [[1001, "Pembe"], [1002, "Mavi"]] : c.path?.attributeId === 49 ? [[7, "DE"], [8, "TR"]] : [[5, "Deri"]]).map(([id, name]) => ({ attributeValueId: id, [valueKey]: name })) }),
+    createProducts: () => result("createProducts", { batchRequestId: "b-11" }),
+    getBatchRequestResult: () => result("getBatchRequestResult", { items: [] }),
+  }, "mock", {
+    "GET /api/admin/products/p9": () => ({ id: "p9", nameTr: "don't touch my bag charm", slug: "bag-charm", brand: "OpenShelf", categoryId: "c1", descriptionTr: "Çanta süsü", images: [{ url: "https://cdn.example.com/c.jpg" }], variants: [
+      { id: "va", sku: "S-1", barcode: "2411198546", title: "Pembe", options: { Renk: "Pembe" }, weightGrams: 1500, prices: { website: 69000, trendyol: null }, stock: { total: 20, reserved: 0, safetyStock: 0 } },
+      { id: "vb", sku: "S-2", barcode: "2411198547", title: "Mavi", options: { Renk: "Mavi" }, prices: { website: 69000, trendyol: null }, stock: { total: 20, reserved: 0, safetyStock: 0 } }] }),
+    "GET /api/admin/categories": () => ({ items: [{ id: "c1", slug: "canta-susu", nameTr: "Çanta Süsü", parentId: "c0", position: 0 }, { id: "c0", slug: "aksesuar", nameTr: "Aksesuar", parentId: null, position: 0 }] }),
+    "GET /api/admin/settings": () => ({ general: { storeName: "Nuad Atelier" } }),
+    "GET /api/admin/trendyol/defaults": () => ({ defaults }),
+    "PUT /api/admin/trendyol/defaults": () => null,
+    "POST /api/admin/trendyol/mappings": () => ({ ok: true }),
+    "POST /api/admin/trendyol/sync/verify": () => ({ approved: 0, pending: 2, notListed: 0 }),
+  });
+  it("wizard fills brand, category and colours by itself from the product, then remembers the choice for the category", async () => {
+    const calls = autoSetup(null);
+    const put = vi.mocked((await import("../lib/api")).api.put);
+    renderRoutes({ "/*": <Products /> }, "/?create=p9");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    const banner = await screen.findByTestId("tdyv-autofill");
+    // brand: the product says "OpenShelf"; Trendyol returns "OpenShelf Home" and "OpenShelf": only the equal name is taken
+    await waitFor(() => expect(banner).toHaveTextContent("Brand: OpenShelf (from the product's brand)"));
+    // category: no equal name ambiguity -> "Çanta Süsü" is the one leaf with that name
+    await waitFor(() => expect(banner).toHaveTextContent("Category: Aksesuar › Çanta Süsü (from the store category's name)"));
+    // colours came from the variant names, nobody touched a select
+    await waitFor(() => expect((screen.getByLabelText("Color: Pembe") as HTMLSelectElement).value).toBe("1001"));
+    expect((screen.getByLabelText("Color: Mavi") as HTMLSelectElement).value).toBe("1002");
+    // desi from the 1.5 kg variant
+    await userEvent.selectOptions(await screen.findByLabelText(/^Material/), "5");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    const body = JSON.parse((await screen.findByLabelText(/Request body/) as HTMLTextAreaElement).value);
+    const byId = (x: any, y: any) => x.attributeId - y.attributeId;
+    expect(body.items.map((i: any) => [i.brandId, i.categoryId, i.dimensionalWeight, [...i.attributes].sort(byId)])).toEqual([
+      [9002, 411, 2, [{ attributeId: 47, attributeValueId: 1001 }, { attributeId: 48, attributeValueId: 5 }, { attributeId: 49, attributeValueId: 8 }]],   // 49 = Menşei: TR, filled from the origin
+      [9002, 411, 2, [{ attributeId: 47, attributeValueId: 1002 }, { attributeId: 48, attributeValueId: 5 }, { attributeId: 49, attributeValueId: 8 }]]]);
+    expect(screen.getByText(/No problems/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Send to Trendyol" }));
+    await waitFor(() => expect(find(calls, "createProducts")).toHaveLength(1));
+    // remembered for the local category; the colour is per variant, so it is NOT remembered
+    await waitFor(() => expect(put).toHaveBeenCalledWith("/api/admin/trendyol/defaults", expect.objectContaining({
+      localCategoryId: "c1", trendyolCategoryId: 411, categoryPath: "Aksesuar › Çanta Süsü", brandId: 9002, brandName: "OpenShelf", cargo: "",   // no carrier is ever picked silently
+      attrs: { 48: { ids: [5], custom: "" }, 49: { ids: [8], custom: "" } } })));
+  });
+  it("attribute values show their names whichever field Trendyol uses (the select options were blank with 'attributeValue'); Menşei follows the origin; optional attributes are folded", async () => {
+    autoSetup(null, undefined, "attributeValue");                                  // the real answers: { attributeValueId, attributeValue }
+    renderRoutes({ "/*": <Products /> }, "/?create=p9");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    const material = await screen.findByLabelText(/^Material/) as HTMLSelectElement;
+    await waitFor(() => expect([...material.options].map((o) => o.textContent)).toEqual(["Choose…", "Deri"]));
+    const pembe = await screen.findByLabelText("Color: Pembe") as HTMLSelectElement;
+    await waitFor(() => expect([...pembe.options].map((o) => o.textContent)).toEqual(["Choose…", "Pembe", "Mavi"]));
+    expect(pembe.value).toBe("1001");                                                // matched by name: it only works when the names are read
+    await waitFor(() => expect((screen.getByLabelText(/^Menşei/) as HTMLSelectElement).value).toBe("8")); // TR, from the product's origin field
+    const folded = screen.getByTestId("tdyv-optional-attrs") as HTMLDetailsElement;
+    expect(folded.open).toBe(false); expect(folded.textContent).toContain("Season"); expect(folded.textContent).toContain("Importer name");
+    expect(screen.getByTestId("tdyv-attr-48").closest("details")).toBeNull();      // required ones are not folded away
+  });
+  it("colour-like attributes are per variant: flagged slicer, free-text colour from the variant name, an unflagged list matched by name; 'same value for all' for sizes", async () => {
+    setup({
+      filterApprovedProducts: () => result("filterApprovedProducts", { content: [], page: 0, size: 50, totalElements: 0, totalPages: 1 }),
+      getCargoProviders: () => result("getCargoProviders", [{ code: "YKMP", name: "Yurtiçi" }]),
+      getBrandsByName: () => result("getBrandsByName", [{ id: 9002, name: "OpenShelf" }]),
+      getCategoryTree: () => result("getCategoryTree", { categories: [{ id: 400, name: "Aksesuar", subCategories: [{ id: 411, name: "Çanta Süsü", subCategories: [] }] }] }),
+      getCategoryAttributes: () => result("getCategoryAttributes", { categoryAttributes: [
+        { attribute: { id: 60, name: "Web Color" }, required: true },
+        { attribute: { id: 61, name: "Renk" }, required: true, slicer: true, allowCustom: true },
+        { attribute: { id: 62, name: "Beden" }, required: true, varianter: true }] }),
+      getCategoryAttributeValues: (c) => result("getCategoryAttributeValues", { content: (c.path?.attributeId === 60 ? [[1, "Pembe"], [2, "Mavi"], [3, "Siyah"]] : c.path?.attributeId === 62 ? [[10, "Tek Ebat"], [11, "S"]] : [])
+        .map(([id, attributeValue]) => ({ attributeValueId: id, attributeValue })) }),
+      createProducts: () => result("createProducts", { batchRequestId: "b-12" }), getBatchRequestResult: () => result("getBatchRequestResult", { items: [] }),
+    }, "mock", {
+      "GET /api/admin/products/p9": () => ({ id: "p9", nameTr: "Charm", slug: "charm", brand: "OpenShelf", categoryId: "c1", descriptionTr: "x", images: [{ url: "https://cdn.example.com/c.jpg" }], variants: [
+        { id: "va", sku: "S-1", barcode: "B1", title: "Pembe", prices: { website: 1000, trendyol: null }, stock: { total: 5, reserved: 0, safetyStock: 0 } },
+        { id: "vb", sku: "S-2", barcode: "B2", title: "Mavi", prices: { website: 1000, trendyol: null }, stock: { total: 5, reserved: 0, safetyStock: 0 } }] }),
+      "GET /api/admin/categories": () => ({ items: [{ id: "c1", slug: "c", nameTr: "Çanta Süsü", parentId: null, position: 0 }] }),
+    });
+    renderRoutes({ "/*": <Products /> }, "/?create=p9");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    // unflagged "Web Color": its list holds both variant names -> one select per variant, matched by name
+    await waitFor(() => expect((screen.getByLabelText("Web Color: Pembe") as HTMLSelectElement).value).toBe("1"));
+    expect((screen.getByLabelText("Web Color: Mavi") as HTMLSelectElement).value).toBe("2");
+    // slicer "Renk" has no listed values (free text): each variant's own name goes in
+    await waitFor(() => expect((screen.getByLabelText(/^Custom value: Pembe/) as HTMLInputElement).value).toBe("Pembe"));
+    expect((screen.getByLabelText(/^Custom value: Mavi/) as HTMLInputElement).value).toBe("Mavi");
+    // size: nothing to match, so one choice for all
+    await userEvent.selectOptions(screen.getAllByLabelText(/^Give all variants the same value/).at(-1)!, "10");   // Web Color has one too; Beden is the last
+    expect((screen.getByLabelText("Beden: Pembe") as HTMLSelectElement).value).toBe("10"); expect((screen.getByLabelText("Beden: Mavi") as HTMLSelectElement).value).toBe("10");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    const body = JSON.parse((await screen.findByLabelText(/Request body/) as HTMLTextAreaElement).value);
+    const byId = (x: any, y: any) => x.attributeId - y.attributeId;
+    expect([...body.items[1].attributes].sort(byId)).toEqual([{ attributeId: 60, attributeValueId: 2 }, { attributeId: 61, customAttributeValue: "Mavi" }, { attributeId: 62, attributeValueId: 10 }]);
+    expect(screen.getByText(/No problems/)).toBeTruthy();
+  });
+  it("wizard with remembered choices for the category: brand, category, material and cargo come back without any matching", async () => {
+    autoSetup({ trendyolCategoryId: 412, categoryPath: "Aksesuar › Anahtarlık", brandId: 9055, brandName: "Eski Marka", attrs: { "48": { ids: [5], custom: "" } }, cargo: "YKMP", vatRate: "10", dimensionalWeight: "3", deliveryDuration: "2", origin: "TR" }, []);
+    renderRoutes({ "/*": <Products /> }, "/?create=p9");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    const banner = await screen.findByTestId("tdyv-autofill");
+    await waitFor(() => expect(banner).toHaveTextContent("Brand: Eski Marka (what you chose last time in this category)"));
+    expect(banner).toHaveTextContent("Category: Aksesuar › Anahtarlık (what you chose last time in this category)");
+    await waitFor(() => expect((screen.getByLabelText(/^Material/) as HTMLSelectElement).value).toBe("5"));
+  });
+  it("an imported local category that is not a leaf on Trendyol is not applied (it used to pick the parent 'Aksesuar')", async () => {
+    autoSetup(null);
+    // the product's local category is an import of Trendyol category 400 = "Aksesuar", which has sub-categories
+    const api = (await import("../lib/api")).api;
+    const get = vi.mocked(api.get); const orig = get.getMockImplementation()!;
+    get.mockImplementation(((path: string, ...rest: unknown[]) => path.startsWith("/api/admin/products/p9") ? Promise.resolve({ id: "p9", nameTr: "Charm", slug: "charm", categoryId: "ty-cat-400", descriptionTr: "x", images: [], variants: [{ id: "va", sku: "S-1", barcode: "B1", title: "Tek", prices: { website: 1000, trendyol: null }, stock: { total: 1, reserved: 0, safetyStock: 0 } }] })
+      : path.startsWith("/api/admin/categories") ? Promise.resolve({ items: [{ id: "ty-cat-400", slug: "aksesuar", nameTr: "Aksesuar", parentId: null, position: 0 }] }) : orig(path, ...(rest as []))) as never);
+    renderRoutes({ "/*": <Products /> }, "/?create=p9");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    await screen.findByLabelText(/^Category/);
+    await waitFor(() => expect(screen.getByTestId("tdyv-category-suggest")).toBeTruthy());           // suggestions, nothing chosen
+    expect(screen.queryByTestId("tdyv-autofill")?.textContent ?? "").not.toContain("Category:");
+  });
+  it("wizard that cannot decide only suggests: ambiguous category and a brand with no equal name stay open", async () => {
+    autoSetup(null, [{ id: 9001, name: "OpenShelf Home" }]);
+    renderRoutes({ "/*": <Products /> }, "/?create=p9");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    const brandBox = await screen.findByTestId("tdyv-brand-suggest");
+    expect(within(brandBox).getByRole("button", { name: "OpenShelf Home" })).toBeTruthy();
+    expect(screen.queryByTestId("tdyv-autofill")?.textContent ?? "").not.toContain("Brand:");
+    await userEvent.click(within(brandBox).getByRole("button", { name: "OpenShelf Home" }));
+    expect(await screen.findByText("OpenShelf Home", { selector: "span" })).toBeTruthy();
+  });
+  it("category search uses Trendyol's real answer shape ({categories:[...]}), searches by name and only offers leaves", () => {
+    const real = { categories: [{ id: 1, name: "Kadın", parentId: null, subCategories: [
+      { id: 2, name: "Aksesuar", parentId: 1, subCategories: [{ id: 3, name: "Diğer Aksesuarlar", parentId: 2, subCategories: null }, { id: 4, name: "Saç Aksesuarları", parentId: 2, subCategories: [] }, { id: 5, name: "Şapka", parentId: 2, subCategories: [{ id: 6, name: "Bere", parentId: 5, subCategories: [] }] }] }] }] };
+    expect(leaves(real).map((l) => [l.id, l.path])).toEqual([[3, "Kadın › Aksesuar › Diğer Aksesuarlar"], [4, "Kadın › Aksesuar › Saç Aksesuarları"], [6, "Kadın › Aksesuar › Şapka › Bere"]]); // 2 and 5 are not leaves
+    expect(leaves({ categories: [{ id: "7", name: "Eski", subCategories: [] }] }).map((l) => l.id)).toEqual([7]);                       // numeric string ids
+    expect(leaves(null)).toEqual([]); expect(leaves("<html>")).toEqual([]); expect(leaves({ categories: null })).toEqual([]);
+    const all = leaves(real);
+    expect(filterLeaves(all, "diğer aksesuarlar").map((l) => l.id)).toEqual([3]);
+    expect(filterLeaves(all, "DIGER aksesuar").map((l) => l.id)).toEqual([3]);                                                          // letters folded
+    expect(filterLeaves(all, "aksesuar şapka").map((l) => l.id)).toEqual([6]);                                                           // any order, all words
+    expect(filterLeaves(all, "yok böyle")).toEqual([]);
+  });
+  const searchSetup = (categoriesBody: (c: { query?: Record<string, unknown> }) => unknown) => setup({
+    filterApprovedProducts: () => result("filterApprovedProducts", { content: [], page: 0, size: 50, totalElements: 0, totalPages: 1 }),
+    getCargoProviders: () => result("getCargoProviders", [{ code: "YKMP", name: "Yurtiçi" }]),
+    getBrandsByName: () => result("getBrandsByName", []),
+    getCategoryTree: (c) => { const r = result("getCategoryTree", categoriesBody(c)); return categoriesBody(c) === "__truncated__" ? { ...r, response: { ...r.response, body: "<partial", truncated: true } } : r; },
+    getCategoryAttributes: () => result("getCategoryAttributes", { categoryAttributes: [] }),
+  }, "mock", {
+    "GET /api/admin/products/p9": () => ({ id: "p9", nameTr: "Charm", slug: "charm", descriptionTr: "x", images: [], variants: [{ id: "va", sku: "S-1", barcode: "B1", title: "Tek", prices: { website: 1000, trendyol: null }, stock: { total: 1, reserved: 0, safetyStock: 0 } }] }),
+  });
+  const openFields = async () => {
+    renderRoutes({ "/*": <Products /> }, "/?create=p9");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    return screen.findByLabelText(/^Category/);
+  };
+  it("typing 'Diğer Aksesuarlar' queries Trendyol by that name and lists the leaf (the real {categories} answer used to show 'no match')", async () => {
+    const calls = searchSetup(() => ({ categories: [{ id: 1, name: "Kadın", subCategories: [{ id: 2, name: "Aksesuar", subCategories: [{ id: 3, name: "Diğer Aksesuarlar", subCategories: [] }] }] }] }));
+    const input = await openFields();
+    expect(screen.getByText(/The list comes from Trendyol/)).toBeTruthy();
+    await userEvent.type(input, "Diğer Aksesuarlar");
+    const hit = await screen.findByRole("button", { name: "Kadın › Aksesuar › Diğer Aksesuarlar" });
+    expect(find(calls, "getCategoryTree").some((c) => (c.query as { name?: string })?.name === "Diğer Aksesuarlar")).toBe(true);   // server-side filter, no full-tree download
+    expect(find(calls, "getCategoryTree").every((c) => !!(c.query as { name?: string })?.name)).toBe(true);
+    await userEvent.click(hit);
+    expect(await screen.findByText("Kadın › Aksesuar › Diğer Aksesuarlar", { selector: "span" })).toBeTruthy();
+  });
+  it("category search says what to do when nothing fits or the answer was too big", async () => {
+    let mode: "none" | "big" = "none";
+    searchSetup(() => (mode === "none" ? { categories: [] } : "__truncated__"));
+    const input = await openFields();
+    await userEvent.type(input, "zzzz");
+    expect(await screen.findByText(/No leaf category found for “zzzz”/)).toBeTruthy();
+    mode = "big"; await userEvent.clear(input); await userEvent.type(input, "ev");
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Too many results/);
+  });
+  it("buildBody with variant rows: one item per ticked variant, shared content, own barcode/stock/price and varianter attribute", () => {
+    const row = (id: string, o: object) => ({ variantId: id, label: id, include: true, barcode: `BC-${id}`, stockCode: `SK-${id}`, quantity: "5", listPrice: "690", salePrice: "690", attrs: {}, ...o });
+    const body = buildBody(form(), [row("a", { attrs: { 47: { ids: [2001], custom: "" } } }), row("b", { quantity: "8", attrs: { 47: { ids: [2002], custom: "" } } }), row("c", { include: false })]);
+    expect(body.items.map((i) => [i.barcode, i.stockCode, i.quantity, i.productMainId, i.title])).toEqual([["BC-a", "SK-a", 5, "VAZO", "Seramik Vazo"], ["BC-b", "SK-b", 8, "VAZO", "Seramik Vazo"]]);
+    expect(body.items[0]!.attributes).toEqual([{ attributeId: 47, attributeValueId: 2001 }, { attributeId: 1201, customAttributeValue: "Seramik" }]);
+    expect(body.items[1]!.attributes).toEqual([{ attributeId: 47, attributeValueId: 2002 }, { attributeId: 1201, customAttributeValue: "Seramik" }]);
+    expect(validateBody(body, [47])).toEqual([]);
+    const dup = buildBody(form(), [row("a", {}), row("b", { barcode: "BC-a" })]);
+    expect(validateBody(dup).map((p) => p.key)).toContain("trendyolviews.products.v.barcode.duplicate");
+    // a single-variant product keeps using the shared form
+    expect(buildBody(form(), [row("a", {})]).items).toEqual(buildBody(form()).items);
+  });
+  it("wizard opened from a product (?create=): all variants in one request, colour per variant, variants linked afterwards", async () => {
+    const calls = setup({
+      filterApprovedProducts: () => result("filterApprovedProducts", { content: [], page: 0, size: 50, totalElements: 0, totalPages: 1 }),
+      getCargoProviders: () => result("getCargoProviders", [{ code: "YKMP", name: "Yurtiçi" }]),
+      getBrandsByName: () => result("getBrandsByName", [{ id: 9001, name: "OpenShelf" }]),
+      getCategoryTree: () => result("getCategoryTree", [{ id: 400, name: "Aksesuar", subCategories: [{ id: 411, name: "Çanta Süsü", subCategories: [] }] }]),
+      getCategoryAttributes: () => result("getCategoryAttributes", { categoryAttributes: [{ attribute: { id: 47, name: "Color" }, required: true, varianter: true }] }),
+      getCategoryAttributeValues: () => result("getCategoryAttributeValues", { content: [{ attributeValueId: 1001, attributeValueName: "Pink" }, { attributeValueId: 1002, attributeValueName: "Blue" }] }),
+      createProducts: () => result("createProducts", { batchRequestId: "b-10" }),
+      getBatchRequestResult: () => result("getBatchRequestResult", { items: [] }),
+    }, "mock", {
+      "GET /api/admin/products/p9": () => ({ id: "p9", nameTr: "don't touch my bag charm", slug: "bag-charm", descriptionTr: "Çanta süsü", taxRate: 20, images: [{ url: "https://cdn.example.com/c.jpg" }], variants: [
+        { id: "va", sku: "2411198546", barcode: "2411198546", title: "Pembe", prices: { website: 69000, trendyol: 69000 }, stock: { total: 20, reserved: 1, safetyStock: 0 } },
+        { id: "vb", sku: "2411198547", barcode: "2411198547", title: "Mavi", prices: { website: 69000, trendyol: 69000 }, stock: { total: 20, reserved: 0, safetyStock: 0 } }] }),
+      "POST /api/admin/trendyol/mappings": () => ({ ok: true }),
+      "POST /api/admin/trendyol/sync/verify": () => ({ approved: 0, pending: 2, notListed: 0 }),
+    });
+    const post = vi.mocked((await import("../lib/api")).api.post);
+    renderRoutes({ "/*": <Products /> }, "/?create=p9");
+    // no search step: the product is already chosen
+    expect(await screen.findByText("don't touch my bag charm")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Local product or variant")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    const table = await screen.findByTestId("tdyv-wizard-variants");
+    expect((within(table).getByLabelText("Barcode: Pembe") as HTMLInputElement).value).toBe("2411198546");
+    expect((within(table).getByLabelText("Stock: Pembe") as HTMLInputElement).value).toBe("19");
+    expect((within(table).getByLabelText("Sale price: Mavi") as HTMLInputElement).value).toBe("690.00");
+    expect(screen.queryByLabelText(/^Barcode$/)).not.toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText(/^Brand/), "open");
+    await userEvent.click(await screen.findByRole("button", { name: "OpenShelf" }));
+    await userEvent.type(screen.getByLabelText(/^Category/), "çanta");
+    await userEvent.click(await screen.findByRole("button", { name: "Aksesuar › Çanta Süsü" }));
+    await userEvent.selectOptions(await screen.findByLabelText("Color: Pembe"), "1001");
+    await userEvent.selectOptions(screen.getByLabelText("Color: Mavi"), "1002");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    const body = JSON.parse((await screen.findByLabelText(/Request body/) as HTMLTextAreaElement).value);
+    expect(body.items.map((i: any) => [i.barcode, i.quantity, i.salePrice, i.productMainId, i.title, i.attributes])).toEqual([
+      ["2411198546", 19, 690, "BAG-CHARM", "don't touch my bag charm", [{ attributeId: 47, attributeValueId: 1001 }]],
+      ["2411198547", 20, 690, "BAG-CHARM", "don't touch my bag charm", [{ attributeId: 47, attributeValueId: 1002 }]]]);
+    expect(screen.getByText(/No problems/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Send to Trendyol" }));
+    await waitFor(() => expect(find(calls, "createProducts")).toHaveLength(1));
+    expect(await screen.findByTestId("tdyv-wizard-linked")).toHaveTextContent("2 variant(s) linked");
+    expect(post).toHaveBeenCalledWith("/api/admin/trendyol/mappings", { variantId: "va", barcode: "2411198546" });
+    expect(post).toHaveBeenCalledWith("/api/admin/trendyol/mappings", { variantId: "vb", barcode: "2411198547" });
+    expect(post).toHaveBeenCalledWith("/api/admin/trendyol/sync/verify", { productIds: ["p9"] });
+  });
   it("wizard: pick a local variant, defaults flow into the body, createProducts + mapping", async () => {
     const calls = setup({
       filterApprovedProducts: () => result("filterApprovedProducts", { content: [], page: 0, size: 50, totalElements: 0, totalPages: 1 }),
@@ -441,6 +688,7 @@ describe("product wizard body", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(/public https/i);
     await userEvent.type(screen.getByLabelText(/^Brand/), "open");
     await userEvent.click(await screen.findByRole("button", { name: "OpenShelf" }));
+    await userEvent.type(screen.getByLabelText(/^Category/), "dekor");
     await userEvent.click(await screen.findByRole("button", { name: "Ev › Dekor" }));
     await userEvent.selectOptions(await screen.findByLabelText(/Color/), "1002");
     // https image required: replace the local url
