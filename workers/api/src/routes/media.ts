@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
-import { media, productImages } from "@openshelf/db";
+import { categories, media, productImages, products } from "@openshelf/db";
 import { getSettings, saveSettings } from "../lib/settings";
 import { IMAGE_GENERAL, IMAGE_SPECS, MEDIA_KINDS, checkImage, imageSize, isCompleteImage, type MediaKind } from "@openshelf/shared";
 import type { AppEnv } from "../env";
@@ -14,6 +14,8 @@ import { ALLOWED_MIMES, D1_LIMITS, R2_LIMIT, sniffImage } from "../lib/media";
 import { proxyPath } from "../lib/imageProxy";
 import { signTicket, TICKET_TTL_MS } from "../lib/tickets";
 import { applyProductImages } from "./admin-catalog";
+import { hydrateProducts } from "../lib/catalog";
+import { RESIZE_SCRIPT, buildEditBrief, detectCategory, isCategory, isGoal, resizePlan, EDIT_CATEGORIES, EDIT_GOALS } from "../mcp/imageEdit";
 
 /** Public: GET /media/:id */
 export const mediaPublic = new Hono<AppEnv>();
@@ -262,6 +264,57 @@ adminMedia.get("/preview", requireRole("staff"), async (c) => {
   const mime = sniffImage(bytes!); if (!mime) throw new ApiError(415, "unsupported_media_type", "Not a supported image");
   const dim = imageSize(bytes!);
   return c.json({ mime, size: bytes!.length, ...(dim ? { width: dim.width, height: dim.height } : {}), source: source!, ...(proxyUrl ? { proxyUrl } : {}), base64: Buffer.from(bytes!).toString("base64") });
+});
+
+const MEASURE_MAX = 8;
+/**
+ * MCP-ONLY (404 for the admin panel, not in the user guide): everything an AI needs to EDIT a product's photos without changing the
+ * product: the images (url / proxyUrl, measured size, a per-image resize plan to 1600×2000), category-specific "must stay identical"
+ * rules, a ready image-model prompt + negative prompt, the QA checklist and a deterministic resize script.
+ */
+adminMedia.get("/edit-kit", requireRole("staff"), async (c) => {
+  if (!c.get("admin")!.sessionHash.startsWith("mcp:")) throw notFound("Route");
+  const db = c.get("db");
+  const productId = c.req.query("productId"); const imageId = c.req.query("imageId");
+  const catQ = c.req.query("category"); const goalQ = c.req.query("goal") ?? "white_background"; const background = c.req.query("background")?.slice(0, 200) ?? null;
+  if (!productId) throw new ApiError(400, "validation_error", "productId is required");
+  if (catQ && catQ !== "auto" && !isCategory(catQ)) throw new ApiError(400, "validation_error", `category must be auto or one of ${EDIT_CATEGORIES.join(", ")}`);
+  if (!isGoal(goalQ)) throw new ApiError(400, "validation_error", `goal must be one of ${EDIT_GOALS.join(", ")}`);
+  const [row] = await db.select().from(products).where(eq(products.id, productId)).limit(1);
+  if (!row) throw notFound("Product");
+  const [p] = await hydrateProducts(db, [row]);
+  const catName = row.categoryId ? (await db.select({ n: categories.nameTr }).from(categories).where(eq(categories.id, row.categoryId)).limit(1))[0]?.n ?? null : null;
+  const category = isCategory(catQ) ? catQ : detectCategory(row.nameTr, catName, row.nameEn);
+  const colors = [...new Set(p!.variants.flatMap((v) => Object.entries(v.options ?? {}).filter(([k]) => /renk|colou?r/i.test(k)).map(([, val]) => val)))];
+  const imgs = imageId ? p!.images.filter((i) => i.id === imageId) : p!.images;
+  if (imageId && !imgs.length) throw notFound("Image");
+
+  const measure = async (i: (typeof imgs)[number]) => {
+    try {
+      let bytes: Uint8Array;
+      if (i.mediaId) {
+        const m = await c.env.DB.prepare("SELECT r2_key, data FROM media WHERE id = ?1").bind(i.mediaId).first<{ r2_key: string | null; data: unknown }>();
+        if (!m) return null;
+        if (m.r2_key && c.env.MEDIA) { const obj = await c.env.MEDIA.get(m.r2_key, { range: { offset: 0, length: 256 * 1024 } }); if (!obj) return null; bytes = new Uint8Array(await obj.arrayBuffer()); }
+        else if (m.data) bytes = toBytes(m.data); else return null;
+      } else if (i.url) bytes = await fetchImageBytes(i.url, R2_LIMIT * 2);
+      else return null;
+      return imageSize(bytes);
+    } catch { return null; }
+  };
+  const dims = await Promise.all(imgs.map((i, n) => (n < MEASURE_MAX ? measure(i) : Promise.resolve(null))));
+  const brief = buildEditBrief({ category, goal: goalQ, productName: row.nameTr, brand: row.brand, colors, background });
+  return c.json({
+    product: { id: row.id, name: row.nameTr, brand: row.brand, category: catName, colors, status: row.status },
+    editCategory: category, detected: !catQ || catQ === "auto", goal: goalQ,
+    target: { width: 1600, height: 2000, aspect: "4:5", format: "webp or jpeg, sRGB, < ~400 KB" },
+    images: imgs.map((i, n) => ({
+      id: i.id, position: i.position, url: i.url, proxyUrl: i.proxyUrl, alt: i.alt,
+      ...(dims[n] ? { width: dims[n]!.width, height: dims[n]!.height, resizePlan: resizePlan(dims[n]!.width, dims[n]!.height) } : { size: "unknown: view_image shows width/height" }),
+    })),
+    brief, resizeScript: RESIZE_SCRIPT,
+    next: "view_image (productId + imageId) each source first; edit with a MASK (product pixels locked); resize in code; QA with brief.qaChecklist; show before/after; after approval upload and add_product_images mode=append (never remove originals unless asked).",
+  });
 });
 
 /** Which way of getting a file into the store works for which client, with a ready-to-run command. Cheap to read: AI clients should call it BEFORE trying to upload. */

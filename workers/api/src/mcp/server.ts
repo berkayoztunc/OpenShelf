@@ -152,11 +152,13 @@ async function handle(app: Hono<AppEnv>, env: AppEnv["Bindings"], ctx: Ctx, db: 
       }
       return rpcError(id, -32002, "Resource not found");
     }
-    case "prompts/list": return rpcResult(id, { prompts: PROMPTS.map((x) => ({ name: x.name, description: x.description })) });
+    case "prompts/list": return rpcResult(id, { prompts: PROMPTS.map((x) => ({ name: x.name, description: x.description, ...(x.arguments ? { arguments: x.arguments } : {}) })) });
     case "prompts/get": {
       const pr = PROMPTS.find((x) => x.name === params.name);
       if (!pr) return rpcError(id, -32602, "Unknown prompt");
-      return rpcResult(id, { description: pr.description, messages: [{ role: "user", content: { type: "text", text: pr.text } }] });
+      const args: Record<string, string> = {};
+      for (const [k, v] of Object.entries((params.arguments ?? {}) as Record<string, unknown>)) if (typeof v === "string" && v.trim()) args[k] = v.trim().slice(0, 200);
+      return rpcResult(id, { description: pr.description, messages: [{ role: "user", content: { type: "text", text: pr.render ? pr.render(args) : pr.text } }] });
     }
     default:
       return method.startsWith("notifications/") ? null : rpcError(id, -32601, `Method not found: ${method}`);
