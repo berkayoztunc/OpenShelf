@@ -75,7 +75,7 @@ Panel: Workers, Worker'ınız, Settings, Domains & Routes, alan adınızı ekley
 
 ## 7. Cron
 
-`"triggers": { "crons": ["* * * * *"] }` outbox, rezervasyon süresi dolumu ve Trendyol uzlaştırmasını her dakika çalıştırır. Ücretsiz plan limitine takılırsanız sıklığı düşürün (örn. `*/5 * * * *`); yeniden denemeler ve stok tutma süresi dolumu yavaşlar.
+`"triggers": { "crons": ["*/15 * * * *"] }` 15 dakikada bir çalışır: rezervasyon süresi dolumu, Trendyol sipariş içe aktarma ve stok senkronu, outbox. Saatlik işler (Geliver takibi, Trendyol ilan/içerik kontrolleri, soru hatırlatıcısı, bakım) tam saatte çalışır. Yönetim panelinden başlatılan işler cron beklemeden hemen çalışır.
 
 ## 8. Tek Worker'ın yerel önizlemesi
 

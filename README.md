@@ -4,252 +4,257 @@
 
 **Mağazanız. Altyapınız. Özgürlüğünüz.**
 
-Tek bir Cloudflare Worker ve D1 üzerinde çalışan, açık kaynak, tek mağazalı e-ticaret altyapısı.
+Kendi Cloudflare hesabınızda, tek bir Worker ve D1 veritabanı üzerinde çalışan açık kaynak e-ticaret platformu.
+Vitrin, yönetim paneli, pazaryeri, kargo, e-fatura ve bildirimler tek kurulumda.
 
 [Türkçe](README.md) · [English](README.en.md)
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6.svg)](https://www.typescriptlang.org/)
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-f38020.svg)](https://workers.cloudflare.com/)
-[![Durum: erken geliştirme](https://img.shields.io/badge/durum-erken%20geli%C5%9Ftirme-orange.svg)](#yol-haritası)
+[![Durum: üretimde](https://img.shields.io/badge/durum-%C3%BCretimde-2ea44f.svg)](#entegrasyonlar)
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/berkayoztunc/openshelf)
 
 </div>
-
-> **Deploy butonu hakkında.** Buton yalnızca depo **GitHub'da herkese açık (public)** ise çalışır. Buton adresindeki `berkayoztunc` yerine kendi GitHub organizasyonunuzu veya kullanıcı adınızı yazın (örneğin fork'unuzun sahibi). Ayrıntılar [Hızlı başlangıç](#hızlı-başlangıç) bölümünde.
 
 <div align="center">
 
 <img src="docs/images/storefront.png" alt="OpenShelf vitrini" width="49%"> <img src="docs/images/admin-orders.png" alt="OpenShelf yönetim paneli: siparişler" width="49%">
 
-<sub>Vitrin (solda) ve yönetim paneli sipariş sayfası (sağda). Mock Modu'nda demo verisiyle alındı.</sub>
+<sub>Vitrin (solda) ve yönetim paneli sipariş ekranı (sağda).</sub>
 
 </div>
 
-## Başlamadan önce gerekenler
+## İçindekiler
 
-Yayına almak için yalnızca iki şey zorunlu. Gerisi isteğe bağlıdır ve sonradan yönetim panelinden eklenir.
+- [Neden OpenShelf](#neden-openshelf)
+- [Özellikler](#özellikler)
+- [Entegrasyonlar](#entegrasyonlar)
+- [Hızlı başlangıç](#hızlı-başlangıç)
+- [Yapılandırma](#yapılandırma)
+- [Otomasyonlar ve zamanlanmış işler](#otomasyonlar-ve-zamanlanmış-işler)
+- [Mock Modu](#mock-modu)
+- [Mimari](#mimari)
+- [Güvenlik](#güvenlik)
+- [Geliştirme](#geliştirme)
+- [Katkı ve lisans](#katkı-ve-lisans)
 
-**1. Zorunlu Worker secret'ları** (Deploy butonu ve `pnpm run setup` ikisini de sorar):
+## Neden OpenShelf
 
-| Ad | Nasıl üretilir | Ne işe yarar |
-|---|---|---|
-| `APP_ENCRYPTION_KEY` | `openssl rand -base64 32` | D1'de saklanan entegrasyon bilgilerini şifreler. Bir kopyasını saklayın: kaybederseniz kayıtlı anahtarlar okunamaz. |
-| `SETUP_TOKEN` | `openssl rand -hex 24` | `/admin/setup` sayfasında sahip hesabını oluşturmak için tek seferlik anahtar. |
+Küçük ve orta ölçekli bir işletme; katalog, müşteri ve sipariş verilerini başka bir platforma teslim etmeden profesyonel bir mağaza işletebilmeli. OpenShelf **kendi Cloudflare hesabınıza** tek bir Worker olarak kurulur:
 
-Ayrıca ücretsiz bir [Cloudflare hesabı](https://dash.cloudflare.com/sign-up) ve Deploy butonu için **herkese açık** bir GitHub deposu gerekir.
-
-**2. Entegrasyon bilgileri** (isteğe bağlı; **Yönetim → Ayarlar → Entegrasyonlar** ekranından girilir, şifreli saklanır, Worker secret'ı değildir). Girmezseniz [Mock Modu](#mock-modu) ile çalışırsınız.
-
-| Entegrasyon | Sağlayıcıdan gerekenler |
-|---|---|
-| iyzico (ödeme) | API anahtarı, Secret anahtarı, ortam (sandbox veya üretim) |
-| Trendyol Marketplace | Satıcı (supplier) ID, API anahtarı, API secret, ortam (üretim veya stage); isteğe bağlı webhook kullanıcı adı ve şifresi |
-| Geliver (kargo) | API token, gönderici adres ID |
-| Trendyol e-Faturam | Servis URL, kullanıcı adı, şifre |
-| Netgsm (SMS) | Usercode, API şifresi, gönderici başlığı |
-| Twilio (SMS) | Account SID, Auth Token, From numarası veya Messaging Service SID |
-| Cloudflare E-posta | Account ID, API token, varsayılan gönderen adresi |
-| Google Analytics 4 | Measurement ID, Measurement Protocol API secret |
-| Meta Pixel / CAPI | Pixel ID, Conversions API erişim token'ı |
-
-Her anahtarın nereden alınacağı: [entegrasyon dokümanları](docs/integrations/). Önce her sağlayıcının sandbox ortamını kullanın; hiçbiri henüz canlı hesapta doğrulanmadı.
-
-
-## OpenShelf nedir
-
-Küçük bir işletme; katalog, müşteri ve sipariş verilerini merkezi bir platforma teslim etmeden gerçek bir mağaza işletebilmeli. OpenShelf **kendi Cloudflare hesabınıza** tek bir Worker olarak kurulur: vitrin (`/`), yönetim paneli (`/admin/`) ve API (`/api/*`, `/webhooks/*`, `/media/*`, `/feeds/*`) aynı yerden sunulur. Veriler kendi D1 veritabanınızda durur. Her kurulumda tek mağaza vardır.
-
-Durum: erken geliştirme (v0.1). Nelerin doğrulandığı için [Entegrasyonlar](#entegrasyonlar) bölümüne bakın.
+- **Tek dağıtım:** vitrin (`/`), yönetim paneli (`/admin/`) ve API (`/api/*`, `/webhooks/*`, `/media/*`, `/feeds/*`, `/mcp`) aynı Worker'dan sunulur.
+- **Veri sizde:** tüm kayıtlar kendi D1 veritabanınızda; entegrasyon sırları AES-256-GCM ile şifreli saklanır.
+- **Türkiye'ye hazır:** iyzico, Trendyol Pazaryeri, Trendyol e-Faturam, Geliver ve Netgsm hazır entegre; KDV, e-Arşiv ve KVKK akışları yerleşik.
+- **Düşük işletme maliyeti:** sunucu, container ya da ayrı veritabanı yok; Cloudflare'in sunucusuz altyapısında çalışır.
 
 ## Özellikler
 
-- **Katalog**: ürünler, varyantlar, kategoriler, medya, kuponlar, müşteriler.
-- **Stok defteri**: yalnızca eklemeli stok hareketleri; ödeme sırasında işlem bazlı rezervasyon (eşzamanlı alışverişte fazla satış olmaz).
-- **Barındırılan ödeme sayfası**: kart bilgisi OpenShelf'e hiç uğramaz; fiyat sunucuda hesaplanır; ödeme, doğrulanmış webhook ve sunucudan sunucuya yeniden sorgu ile onaylanır.
-- **Kanallar**: kendi vitriniz ve outbox üzerinden Trendyol pazaryeri senkronu; yönetimde Trendyol API konsolu ([kılavuz](apps/admin/src/help/tr/15-trendyol.md)).
-- **Yönetim ayarları**: mağaza adı, logo, banner, marka renkleri, SEO, yasal metinler, ödeme kuralları, takip, bildirimler, entegrasyonlar.
-- **Güvenlik**: PBKDF2 parola özeti, isteğe bağlı TOTP MFA, `__Host-` oturum çerezi, CSRF + Origin kontrolü, rol tabanlı yetki, denetim kaydı, AES-256-GCM ile şifrelenmiş entegrasyon sırları, sabit dış istek (host) izin listesi, hız sınırları, isteğe bağlı Turnstile. Bkz. [docs/security.tr.md](docs/security.tr.md).
-- **Analitik**: GA4 ve Meta Pixel/Conversions API; consent mode ve tarayıcı/sunucu tekilleştirmesi için ortak `event_id`. Bkz. [docs/tracking.tr.md](docs/tracking.tr.md).
-- **Bildirimler**: işlemsel SMS (Netgsm, Twilio) ve e-posta (Cloudflare Email Service), düzenlenebilir TR/EN şablonlar. Bkz. [docs/notifications.tr.md](docs/notifications.tr.md).
-- **Mock Modu**: gerçek sağlayıcı hesabı olmadan tüm mağazayı deneyin. Bkz. [docs/mock-mode.tr.md](docs/mock-mode.tr.md).
+### Satış ve sipariş yönetimi
+- **Sipariş listesi ve detayı:** ödeme, kargo, fatura ve bildirim geçmişi tek ekranda; durum geçişleri kurallı ve denetim kayıtlı.
+- **Sipariş panosu:** siparişleri aşamalara göre (ödeme bekleniyor → ödendi → hazırlanıyor → kargoda → teslim edildi) gösteren kanban; her kartta ilerleme adımları ve tek tıkla işlemler.
+- **Elden teslimat:** web sitesi siparişlerini kargo ve takip kodu olmadan teslim edildi olarak işaretleme; müşteriye yalnızca "teslim edildi" bildirimi gider.
+- **Kargo etiketi ve belgeler:** 10×15, 10×10 ve 5×7 cm etiket boyutları (büyük barkod), paket fişi, sipariş özeti ve fatura kopyası.
+- **İade:** tam veya kısmi iade, sağlayıcı üzerinden.
+- **Kârlılık matrisi:** ürün/varyant bazında komisyon, kargo, maliyet, ödenecek KDV ve gelir vergisi sonrası net kâr; web sitesi ve Trendyol için ayrı parametreler.
 
-### Entegrasyonlar
+### Katalog ve vitrin
+- Ürünler, varyantlar, kategoriler, medya kütüphanesi, SEO ve yasal metinler.
+- **Stok defteri:** yalnızca eklemeli stok hareketleri ve ödeme sırasında rezervasyon; eşzamanlı alışverişte fazla satış olmaz.
+- **Vitrin düzeni:** ana sayfa ürünleri ve ürün sıralaması, mağazadaki ürün kartlarının aynısı üzerinde sürükle-bırak ile.
+- **Kuponlar:** yüzde, sabit tutar ve **kargo bedava**; tahmin edilmesi zor kod üretici, kullanım ve müşteri başı limitler.
 
-Tüm adaptörler satıcı dokümanlarına göre yazılmış, mock ve contract testlerle kapsanmıştır. **Hiçbiri henüz canlı hesapla doğrulanmadı.** Önce her sağlayıcının sandbox ortamını kullanın.
+### Ödeme
+- **Barındırılan ödeme sayfası:** kart bilgisi OpenShelf'e hiç uğramaz; fiyat sunucuda hesaplanır, ödeme doğrulanmış webhook ve sunucudan sunucuya sorgu ile onaylanır.
 
-| Entegrasyon | Tür | Doküman | Durum |
-|---|---|---|---|
-| iyzico | Ödeme (barındırılan form) | [iyzico](docs/integrations/iyzico.tr.md) | Uygulandı, canlıda DOĞRULANMADI |
-| Geliver | Kargo | [Geliver](docs/integrations/geliver.tr.md) | Uygulandı, canlıda DOĞRULANMADI |
-| Trendyol Pazaryeri | Pazaryeri senkronu | [Trendyol](docs/integrations/trendyol.tr.md) | Uygulandı, canlıda DOĞRULANMADI |
-| Trendyol e-Faturam | Fatura | [e-Faturam](docs/integrations/efaturam.tr.md) | Uygulandı, canlıda DOĞRULANMADI |
-| Google Analytics 4 | Analitik | [GA4](docs/integrations/ga4.tr.md) | Uygulandı, canlıda DOĞRULANMADI |
-| Meta Pixel / CAPI | Reklam | [Meta](docs/integrations/meta.tr.md) | Uygulandı, canlıda DOĞRULANMADI |
-| Netgsm | SMS | [Netgsm](docs/integrations/netgsm.tr.md) | Uygulandı, canlıda DOĞRULANMADI |
-| Twilio | SMS | [Twilio](docs/integrations/twilio.tr.md) | Uygulandı, canlıda DOĞRULANMADI |
-| Cloudflare Email Service | E-posta | [Cloudflare E-posta](docs/integrations/cloudflare-email.tr.md) | Uygulandı, canlıda DOĞRULANMADI. **Beta**: herhangi bir alıcıya göndermek için Workers Paid gerekir; Free planda yalnızca doğrulanmış adreslere gönderilir |
+### İletişim
+- **Markalı e-posta şablonları:** ürün satırları, ara toplam, indirim, kargo, KDV, ödeme ve adres bilgisi içeren düzenlenebilir TR/EN şablonlar.
+- **İşlemsel SMS ve e-posta:** sipariş alındı, kargoya verildi, teslim edildi, iptal, iade ve yönetici bildirimi.
+- **Kampanyalar:** izinli müşterilere e-posta/SMS kampanyası, abonelikten çıkma bağlantısı ile.
+
+### Yönetim paneli
+- **Genel bakış:** dönem KPI'ları, ciro grafiği, bugün yapılacaklar, son siparişler, satış dağılımı ve öne çıkanlar tek ekranda.
+- **Genel arama (Ctrl/⌘+K):** sayfalar, ayarlar, hızlı işlemler, ürün, sipariş ve müşteri araması.
+- **Rol tabanlı erişim:** sahip, yönetici ve personel; isteğe bağlı TOTP iki adımlı doğrulama.
+- **TR/EN arayüz**, açık/koyu tema, daraltılabilir yan menü ve yerleşik kullanım kılavuzu.
+
+### Yapay zekâ ile yönetim (MCP)
+Mağazanın tüm yönetimi `https://<adresiniz>/mcp` adresinde bir MCP sunucusu olarak sunulur. Claude, ChatGPT, Grok ve diğer MCP istemcileri; erişim anahtarı veya OAuth 2.1 (PKCE) ile bağlanıp sipariş, ürün, kampanya ve ayarları yönetebilir. Araç bazında izin ve okuma/yazma/tam yetki seviyeleri vardır. Ayrıntılar: [docs/mcp.tr.md](docs/mcp.tr.md).
+
+## Entegrasyonlar
+
+Tüm entegrasyonlar yönetim panelinden etkinleştirilir; API anahtarları şifreli olarak D1'de saklanır.
+
+| Entegrasyon | Kapsam | Doküman |
+|---|---|---|
+| **iyzico** | Barındırılan ödeme formu, webhook, iade | [iyzico](docs/integrations/iyzico.tr.md) |
+| **Trendyol Pazaryeri** | Ürün eşleştirme ve aktarım, stok/fiyat senkronu, sipariş içe aktarma, iadeler, müşteri soruları, finans; 80+ işlemli API konsolu | [Trendyol](docs/integrations/trendyol.tr.md) |
+| **Trendyol e-Faturam** | e-Fatura / e-Arşiv kesimi, iptal, gelen faturalar; isteğe bağlı sabit IP relay | [e-Faturam](docs/integrations/efaturam.tr.md) |
+| **Geliver** | Çoklu kargo teklifi, etiket, otomatik kargo takibi (webhook + zamanlanmış kontrol) | [Geliver](docs/integrations/geliver.tr.md) |
+| **Netgsm** | İşlemsel ve kampanya SMS'i | [Netgsm](docs/integrations/netgsm.tr.md) |
+| **Twilio** | Uluslararası SMS | [Twilio](docs/integrations/twilio.tr.md) |
+| **Cloudflare Email Service** | İşlemsel ve kampanya e-postası | [Cloudflare E-posta](docs/integrations/cloudflare-email.tr.md) |
+| **Google Analytics 4** | Consent Mode v2, sunucu tarafı purchase (Measurement Protocol) | [GA4](docs/integrations/ga4.tr.md) |
+| **Meta Pixel / CAPI** | Pixel + Conversions API, ürün kataloğu feed'i | [Meta](docs/integrations/meta.tr.md) |
+
+Tarayıcı ve sunucu olayları ortak `event_id` ile tekilleştirilir; analitik ve reklam olayları yalnızca kullanıcı izni varsa gönderilir. Bkz. [docs/tracking.tr.md](docs/tracking.tr.md).
 
 ## Hızlı başlangıç
 
-Üç yol var, en kolayından başlayarak.
+### Gerekenler
 
-### 1. Deploy to Cloudflare butonu
+- Bir [Cloudflare hesabı](https://dash.cloudflare.com/sign-up)
+- İki Worker sırrı:
 
-> **En kolay yol:** [Kurulum sayfası](https://berkayoztunc.github.io/OpenShelf/) gizli değerlerinizi tarayıcıda üretir, düğmeyi açar ve kurulumunuzu (`/health`) kontrol eder.
+| Ad | Nasıl üretilir | Ne işe yarar |
+|---|---|---|
+| `APP_ENCRYPTION_KEY` | `openssl rand -base64 32` | D1'deki entegrasyon bilgilerini şifreler. Güvenli bir yerde yedekleyin; kaybedilirse kayıtlı anahtarlar okunamaz. |
+| `SETUP_TOKEN` | `openssl rand -hex 24` | `/admin/setup` ekranında sahip hesabını oluşturmak için tek seferlik anahtar. |
+
+Entegrasyon bilgileri Worker sırrı değildir; kurulumdan sonra **Yönetim → Entegrasyonlar** ekranından girilir.
+
+### 1. Deploy to Cloudflare
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/berkayoztunc/openshelf)
 
-Gereksinim: depo **GitHub'da public** olmalı ve yukarıdaki adreste `berkayoztunc` yerine kendi GitHub organizasyonunuzu/kullanıcı adınızı yazmış olmalısınız.
-
-Buton şunları yapar:
+[Kurulum sayfası](https://berkayoztunc.github.io/OpenShelf/) sırları tarayıcıda üretir, butonu açar ve kurulumu (`/health`) kontrol eder. Buton:
 
 1. Depoyu GitHub hesabınıza kopyalar ve Workers Builds'e bağlar.
-2. [`wrangler.jsonc`](wrangler.jsonc) içindeki `DB` bağlamasından **D1 veritabanını otomatik oluşturur** (kopyalanacak kimlik yok).
-3. İki sır (ve bir isteğe bağlı alan) ister:
+2. [`wrangler.jsonc`](wrangler.jsonc) içindeki `DB` bağlamasından D1 veritabanını oluşturur.
+3. `APP_ENCRYPTION_KEY`, `SETUP_TOKEN` ve isteğe bağlı `TURNSTILE_SECRET` değerlerini ister.
+4. Derler, D1 migration'larını uygular ve tek Worker'ı yayınlar. Sonraki her push otomatik yayınlanır.
 
-   | Alan | Değer |
-   |---|---|
-   | `APP_ENCRYPTION_KEY` | `openssl rand -base64 32` |
-   | `SETUP_TOKEN` | `openssl rand -hex 24` (bir yere not edin) |
-   | `TURNSTILE_SECRET` | isteğe bağlı, boş bırakın |
-
-4. Derler (`pnpm build`) ve deploy betiğini çalıştırır (`pnpm run deploy` = D1 migration'larını uygula, sonra `wrangler deploy`).
-5. **Tek bir Worker** yayınlar: vitrin `/`, yönetim paneli `/admin/`, API `/api/*` altında. Sonraki her push yeniden yayınlanır.
-
-İlk açılış:
-
-1. `https://<worker-adresiniz>.workers.dev/admin/setup` adresini açın, `SETUP_TOKEN` değerini girin, sahip (owner) hesabını oluşturun (en az 12 karakterli parola) ve MFA'yı açın.
-2. Ayarları doldurun (mağaza adı, logo, yasal metinler) ve **Ayarlar → Entegrasyonlar** üzerinden entegrasyonları etkinleştirin.
-3. İsteğe bağlı demo: `ALLOW_MOCK` Worker değişkenini tanımlayıp Mock Modunu açın ([Mock Modu](#mock-modu)).
+> Buton, depo GitHub'da herkese açık olduğunda çalışır. Kendi fork'unuz için adresteki `berkayoztunc` kısmını kendi kullanıcı/organizasyon adınızla değiştirin.
 
 ### 2. Rehberli CLI
 
 ```bash
 pnpm install
-node tooling/setup/setup.mjs --dry-run   # planlanan komutları gösterir, bir şey değiştirmez
 pnpm run setup                           # giriş, D1, derleme, migration, deploy, sırlar
+node tooling/setup/setup.mjs --dry-run   # çalıştırılacak komutları önizler
 ```
 
-Tekrar çalıştırılabilir (idempotent). (`pnpm run setup` kullanın: yalın `pnpm setup` pnpm'in kendi komutudur.) Bayraklar: `--yes`, `--enable-r2`, `--skip-deploy`, `--domain=https://shop.example.com`, `--db-name=AD`, `--local`, `--dry-run`, `--mock`. Tam rehber: [docs/deploy-cloudflare.tr.md](docs/deploy-cloudflare.tr.md).
+Tekrar çalıştırılabilir. Bayraklar: `--yes`, `--enable-r2`, `--skip-deploy`, `--domain=https://magaza.example.com`, `--db-name=AD`, `--local`, `--mock`. Tam rehber: [docs/deploy-cloudflare.tr.md](docs/deploy-cloudflare.tr.md).
 
-### 3. Yerel geliştirme
+### İlk açılış
 
-Gereksinimler: Node >= 20, pnpm.
+1. `https://<adresiniz>/admin/setup` adresinde `SETUP_TOKEN` ile sahip hesabını oluşturun ve iki adımlı doğrulamayı açın.
+2. **Ayarlar** ekranında mağaza adı, logo, marka renkleri, yasal metinler ve bildirim adreslerini girin.
+3. **Entegrasyonlar** ekranından ödeme, kargo, fatura ve pazaryeri bağlantılarını etkinleştirin.
+4. Kendi alan adınızı Cloudflare'de Worker'a bağlayın ve `STOREFRONT_ORIGIN`, `ADMIN_ORIGIN`, `API_ORIGIN` değerlerini sabitleyin.
 
-```bash
-pnpm install
-pnpm setup:local            # .dev.vars + workers/api/.dev.vars yazar, yerel D1'e migration uygular
-pnpm seed                   # isteğe bağlı demo mağaza (12 ürün, 2 kupon)
-pnpm dev                    # vitrin :5173, yönetim :5174/admin/, API :8787
-```
-
-`http://localhost:5174/admin/setup` adresini açın ve `workers/api/.dev.vars` içindeki `SETUP_TOKEN` değerini kullanın. Gerçek tek-Worker düzenini görmek için: `pnpm dev:site`. Daha fazlası: [docs/quickstart.tr.md](docs/quickstart.tr.md).
-
-`npx create-openshelf@latest` yol haritasındadır, bugün çalışan bir komut değildir.
-
-## Mock Modu
-
-Mock Modu, tüm dış sağlayıcıları çevrimdışı birer taklitle değiştirir; böylece hiçbir hesap açmadan demo yapabilir veya geliştirebilirsiniz.
-
-- Ödeme adımı, Başarılı / Başarısız / İptal düğmeleri olan sahte bir ödeme sayfasına (`/mock/pay/...`) yönlenir.
-- SMS, e-posta, fatura, kargo etiketi ve analitik olayları gönderilmez; **Mock Inbox**'a (yönetim kenar çubuğu) yazılır.
-- Hiçbir gerçek sağlayıcıya istek gitmez.
-
-Açmak için: yayındaki Worker'da `ALLOW_MOCK` değişkenini tanımlayın (Dashboard → Worker → Settings → Variables veya `wrangler.jsonc` içindeki `vars`; yerel geliştirme örneğinde zaten tanımlıdır), ardından bir **owner** kullanıcı **Ayarlar → Sistem → Mock modu** anahtarını açar.
-
-Güvenlik kuralları (hedeflenen davranış):
-
-- Yayındaki Worker, `ALLOW_MOCK` tanımlı değilse Mock Modunun açılmasını reddeder.
-- Mock ve gerçek birbirini dışlar: gerçek bir ödeme sağlayıcısı etkinken veya gerçek ödenmiş siparişler varken açılamaz. Mock ödemeler işaretlenir (`payments.is_mock`).
-- Mock inbox 7 gün / 2000 satır tutulur. Yalnızca owner açıp kapatabilir veya temizleyebilir. Gerçek siparişten önce kapatın.
-
-Demo turu: `pnpm seed`, Mock Modunu açın, vitrinde bir ürünü sepete ekleyip ödemeye geçin, sahte ödeme sayfasında **Başarılı**'ya basın; ardından yönetimde sipariş `paid` olur ve Mock Inbox'ta onay SMS'i/e-postası görünür. Tam rehber: [docs/mock-mode.tr.md](docs/mock-mode.tr.md).
-
-## Bildirimler
-
-Yalnızca işlemsel mesajlar (pazarlama yok). Altı olay: `order_paid`, `order_shipped`, `order_delivered`, `order_cancelled`, `order_refunded`, `admin_new_order`. Her olay SMS, e-posta veya ikisiyle gönderilebilir. Şablonlar dil başına (TR/EN) düzenlenir ve `{{orderNumber}}` gibi değişkenler kullanır. Önlemler: SMS alıcıları ülke kodu izin listesiyle sınırlıdır (varsayılan `+90`), alıcı başına günlük üst sınır vardır, test gönderimleri hız sınırına tabidir. **Ayarlar → Bildirimler** ekranından test gönderebilirsiniz. Rehber: [docs/notifications.tr.md](docs/notifications.tr.md).
-
-## Yapılandırma referansı
+## Yapılandırma
 
 | Ad | Tür | Zorunlu | Amaç |
 |---|---|---|---|
-| `APP_ENCRYPTION_KEY` | sır | evet | 32 rastgele baytın base64 hali; D1'deki entegrasyon bilgilerini şifreler |
-| `SETUP_TOKEN` | sır | evet (ilk açılış) | `/admin/setup` için tek kullanımlık token |
-| `TURNSTILE_SECRET` | sır | hayır | ödeme/giriş için Turnstile bot koruması |
-| `ALLOW_MOCK` | değişken | hayır | yayındaki Worker'da Mock Modunu mümkün kılmak için tanımlanmalı |
-| `STOREFRONT_ORIGIN`, `ADMIN_ORIGIN`, `API_ORIGIN` | değişkenler | hayır | varsayılan olarak istek origin'i kullanılır; üretimde sıkı izin listesi için tam `https://` origin'lerini sabitleyin |
-| `MEDIA` (R2 bucket) | bağlama | hayır | isteğe bağlı ücretli eklenti; yoksa medya D1'de saklanır |
+| `APP_ENCRYPTION_KEY` | sır | evet | 32 rastgele baytın base64 hali; entegrasyon bilgilerini şifreler |
+| `SETUP_TOKEN` | sır | ilk kurulumda | `/admin/setup` için tek kullanımlık anahtar |
+| `TURNSTILE_SECRET` | sır | hayır | ödeme ve giriş için Cloudflare Turnstile bot koruması |
+| `STOREFRONT_ORIGIN`, `ADMIN_ORIGIN`, `API_ORIGIN` | değişken | önerilir | üretimde izinli origin'leri sabitler; tanımsızsa istek origin'i kullanılır |
+| `ALLOW_MOCK` | değişken | hayır | Mock Modunun açılabilmesi için tanımlanır (demo/geliştirme) |
+| `MEDIA` (R2) | bağlama | hayır | medya dosyaları için R2; tanımsızsa medya D1'de saklanır |
 
-Entegrasyon API anahtarları Worker sırrı değildir: **Ayarlar → Entegrasyonlar** ekranına girin (şifreli saklanır).
+## Otomasyonlar ve zamanlanmış işler
+
+Worker her 15 dakikada bir (`*/15 * * * *`) çalışır; yönetim panelinden başlatılan işler beklemeden hemen yürütülür.
+
+| Sıklık | İş |
+|---|---|
+| 15 dakika | Süresi dolan stok rezervasyonları, Trendyol sipariş içe aktarma, Trendyol stok senkronu, iş kuyruğu (bildirimler, etiketler, pazaryeri güncellemeleri) |
+| Saatlik | Geliver kargo takibi, Trendyol onay bekleyen ilanlar ve içerik/fiyat güncellemesi, cevapsız müşteri sorusu hatırlatıcısı, bakım |
+| Anında | Ödeme webhook'u, Trendyol ve Geliver webhook'ları (bir sonraki turda işlenir), panelden başlatılan işler |
+
+- **Kargo takibi:** Geliver gönderisi kargoya verilince sipariş "Kargoda", teslim edilince "Teslim edildi" olur ve müşteriye takip linkli bildirim gider.
+- **Trendyol soruları:** cevap bekleyen sorular için yöneticiye, soru geldiğinde ve 24 saatlik cevap süresinin dolmasına 6 saat kala e-posta gider.
+- **Fatura:** e-Fatura / e-Arşiv kesimi her zaman operatör onayıyla yapılır.
+
+## Mock Modu
+
+Mock Modu tüm dış sağlayıcıları çevrimdışı taklitlerle değiştirir; hiçbir hesap açmadan demo, eğitim ve geliştirme yapılabilir.
+
+- Ödeme adımı, Başarılı / Başarısız / İptal seçenekli test ödeme sayfasına yönlenir.
+- SMS, e-posta, fatura, kargo etiketi ve analitik olayları dışarı gönderilmez; yönetim panelindeki **Mock Inbox**'a yazılır.
+- Gerçek bir ödeme sağlayıcısı etkinken veya gerçek ödenmiş sipariş varken açılamaz; mock ödemeler ayrıca işaretlenir.
+- Yalnızca `ALLOW_MOCK` tanımlı Worker'da ve yalnızca sahip (owner) tarafından açılabilir.
+
+Demo: `pnpm seed`, Mock Modunu açın, vitrinde sipariş verip test ödeme sayfasında **Başarılı**'ya basın. Rehber: [docs/mock-mode.tr.md](docs/mock-mode.tr.md).
 
 ## Mimari
 
 ```
  Tarayıcı ──► Cloudflare Worker (Hono) ◄──► D1 (SQLite)
-               ├─ /            vitrin (statik dosyalar)
-               ├─ /admin/      yönetim paneli (statik dosyalar)
-               ├─ /api/*  /webhooks/*  /media/*  /feeds/*  /mock/*
-               └─ scheduled(): her dakika cron
+               ├─ /             vitrin (React, statik)
+               ├─ /admin/       yönetim paneli (React, statik)
+               ├─ /api/*  /webhooks/*  /media/*  /feeds/*  /mcp
+               └─ scheduled()  her 15 dakikada cron
                      │
                      ▼
-               outbox işleri ──► ödeme, kargo, fatura, pazaryeri,
-                                 analitik, SMS, e-posta adaptörleri
+               outbox iş kuyruğu ──► ödeme · kargo · fatura · pazaryeri
+                                     analitik · SMS · e-posta adaptörleri
                isteğe bağlı: R2 (medya)
 ```
 
+- **Outbox:** tüm dış çağrılar tekilleştirilmiş, yeniden denenebilir işler olarak kuyruğa alınır; bir sağlayıcının yavaşlığı ödemeyi ya da sipariş akışını bekletmez.
+- **Durum makinesi:** sipariş geçişleri kurallıdır; stok, kupon ve bildirim yan etkileri aynı atomik işlemde uygulanır.
+- **Adaptör SDK'sı:** her sağlayıcı ortak bir arayüzü uygular; yeni sağlayıcı eklemek için [docs/adapter-guide.tr.md](docs/adapter-guide.tr.md).
+
 Ayrıntılar: [docs/architecture.tr.md](docs/architecture.tr.md).
-
-## Ücretsiz katman hakkında dürüst not
-
-Çekirdek (Worker + D1 + statik dosyalar), küçük bir mağaza için Cloudflare ücretsiz planlarına sığacak şekilde tasarlanmıştır. Bu bir hedeftir, taahhüt değildir.
-
-- Limitleri ve faturalandırmayı Cloudflare belirler ve değiştirebilir; OpenShelf'in ücretsiz olduğunu ya da ücretsiz kalacağını iddia etmiyoruz.
-- Trafik, katalog büyüklüğü ve sipariş hacmi ücretsiz limitleri aşabilir (istek/CPU, D1 okuma/yazma/depolama).
-- R2 ve Queues isteğe bağlıdır ve ödeme yöntemi gerektirebilir. Cloudflare e-posta gönderimi Beta'dır; herhangi bir alıcıya göndermek için Workers Paid gerekir. SMS sağlayıcıları mesaj başına ücret alır.
-- Ödeme, kargo, fatura ve pazaryeri servislerinin kendi ücretleri vardır.
-
-Güncel limitler: [Workers](https://developers.cloudflare.com/workers/platform/limits/), [D1](https://developers.cloudflare.com/d1/platform/limits/).
 
 ## Güvenlik
 
-Özet [docs/security.tr.md](docs/security.tr.md) içinde; açıkları [SECURITY.md](SECURITY.md) uyarınca özel olarak bildirin. Üretimde origin değişkenlerini sabitleyin ve Mock Modunu kapalı tutun.
+- PBKDF2 parola özeti, isteğe bağlı TOTP MFA, `__Host-` oturum çerezi, CSRF ve Origin kontrolü
+- Rol tabanlı yetki ve tüm yönetim işlemleri için denetim kaydı
+- AES-256-GCM ile şifrelenmiş entegrasyon sırları ve dış istekler için host izin listesi
+- Hız sınırları, isteğe bağlı Turnstile, imzalı/doğrulanmış webhook'lar
+- KVKK: izin anlık görüntüleri, müşteri anonimleştirme, abonelikten çıkma
 
-## Proje yapısı
+Ayrıntılar: [docs/security.tr.md](docs/security.tr.md). Güvenlik açıklarını [SECURITY.md](SECURITY.md) uyarınca özel olarak bildirin.
 
+## Geliştirme
+
+Gereksinimler: Node ≥ 20, pnpm.
+
+```bash
+pnpm install
+pnpm setup:local     # .dev.vars dosyalarını yazar, yerel D1'e migration uygular
+pnpm seed            # isteğe bağlı demo mağaza
+pnpm dev             # vitrin :5173 · yönetim :5174/admin/ · API :8787
 ```
-apps/storefront     herkese açık mağaza (React + Vite)
-apps/admin          yönetim paneli (React + Vite, /admin/ altında sunulur)
-workers/api         Hono API, webhook'lar, cron (outbox çalıştırıcı), D1 migration'ları
-packages/           core, db, shared, ui, integration-sdk, integrations/*
-tooling/setup       rehberli Cloudflare kurulumu
-tooling/seed        demo verisi
-tooling/deploy      tek Worker için dist-site/ klasörünü hazırlar
-docs/               rehberler (her birinin .tr.md karşılığı var)
-wrangler.jsonc      tek-Worker için ana yapılandırma
-```
-
-## Komutlar
 
 | Komut | Ne yapar |
 |---|---|
-| `pnpm dev` | API + vitrin + yönetim geliştirme sunucuları |
-| `pnpm dev:site` | derler, ardından wrangler ile tek-Worker önizlemesi |
-| `pnpm build` | her şeyi derler ve `dist-site/` klasörünü hazırlar |
-| `pnpm run deploy` | uzak D1 migration'larını uygular, sonra `wrangler deploy` |
+| `pnpm dev` | API, vitrin ve yönetim geliştirme sunucuları |
+| `pnpm dev:site` | tek Worker düzeninde yerel önizleme |
+| `pnpm build` | tüm paketleri derler ve `dist-site/` klasörünü hazırlar |
+| `pnpm run deploy` | uzak D1 migration'larını uygular, ardından `wrangler deploy` |
 | `pnpm run setup` / `pnpm setup:local` | rehberli yayın / yerel kurulum |
 | `pnpm seed` | yerel D1'e demo veri yükler |
 | `pnpm db:generate` / `pnpm db:migrate:local` | migration üretir / uygular |
-| `pnpm typecheck` / `lint` / `test` / `format` | kalite kontrolleri |
+| `pnpm typecheck` / `pnpm test` / `pnpm format` | kalite kontrolleri |
+
+### Proje yapısı
+
+```
+apps/storefront     vitrin (React + Vite)
+apps/admin          yönetim paneli (React + Vite, /admin/ altında)
+workers/api         Hono API, webhook'lar, MCP sunucusu, cron, D1 migration'ları
+packages/           core, db, shared, ui, integration-sdk, integrations/*
+tooling/            kurulum, demo verisi ve dağıtım betikleri
+docs/               rehberler (Türkçe ve İngilizce)
+wrangler.jsonc      tek Worker yapılandırması
+```
+
+### Maliyet
+
+Çekirdek (Worker, D1 ve statik dosyalar) küçük bir mağaza için Cloudflare'in ücretsiz planına sığacak şekilde tasarlanmıştır; trafik ve sipariş hacmi arttıkça Workers Paid önerilir. Cloudflare Email Service ile herhangi bir alıcıya e-posta göndermek Workers Paid gerektirir. Ödeme, kargo, fatura, SMS ve pazaryeri hizmetleri kendi tarifeleriyle ücretlendirilir. Güncel limitler: [Workers](https://developers.cloudflare.com/workers/platform/limits/), [D1](https://developers.cloudflare.com/d1/platform/limits/).
 
 ## Yol haritası
 
 - `create-openshelf` CLI (`npx create-openshelf@latest`)
-- Outbox için Queues adaptörü
-- Daha fazla sağlayıcı (ödeme, kargo, SMS, e-posta)
-- Mevcut entegrasyonların canlı hesaplarla doğrulanması
+- Outbox için Cloudflare Queues adaptörü
+- Yeni ödeme, kargo ve pazaryeri sağlayıcıları
 
 ## Katkı ve lisans
 
-[CONTRIBUTING.md](CONTRIBUTING.md) ve [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) dosyalarına bakın. MIT lisanslıdır ([LICENSE](LICENSE)). Şablonlar ve dokümanlar hukuki veya vergisel danışmanlık değildir.
+Katkılar memnuniyetle karşılanır: [CONTRIBUTING.md](CONTRIBUTING.md) ve [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). OpenShelf [MIT](LICENSE) lisanslıdır. Şablonlar ve dokümanlar hukuki veya vergisel danışmanlık yerine geçmez.

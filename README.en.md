@@ -4,252 +4,257 @@
 
 **Your store. Your infrastructure. Your freedom.**
 
-Open-source, single-tenant e-commerce that runs as one Cloudflare Worker with D1.
+Open-source e-commerce platform that runs on a single Cloudflare Worker and a D1 database in your own Cloudflare account.
+Storefront, admin, marketplace, shipping, e-invoicing and notifications in one deployment.
 
 [Türkçe](README.md) · [English](README.en.md)
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6.svg)](https://www.typescriptlang.org/)
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-f38020.svg)](https://workers.cloudflare.com/)
-[![Status: early development](https://img.shields.io/badge/status-early%20development-orange.svg)](#roadmap)
+[![Status: production](https://img.shields.io/badge/status-production-2ea44f.svg)](#integrations)
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/berkayoztunc/openshelf)
 
 </div>
-
-> **About the Deploy button.** The button only works when the repository is **public on GitHub**. Replace `berkayoztunc` in the button URL with your GitHub organization or username (for example your fork). Details in [Quick start](#quick-start).
 
 <div align="center">
 
 <img src="docs/images/storefront.png" alt="OpenShelf storefront" width="49%"> <img src="docs/images/admin-orders.png" alt="OpenShelf admin: orders" width="49%">
 
-<sub>Storefront (left) and admin orders page (right), shown with demo data in Mock Mode.</sub>
+<sub>Storefront (left) and the admin orders screen (right).</sub>
 
 </div>
 
-## What you need before you start
+## Contents
 
-Only two things are required to deploy. Everything else is optional and can be added later from the admin panel.
+- [Why OpenShelf](#why-openshelf)
+- [Features](#features)
+- [Integrations](#integrations)
+- [Quick start](#quick-start)
+- [Configuration](#configuration)
+- [Automations and scheduled jobs](#automations-and-scheduled-jobs)
+- [Mock Mode](#mock-mode)
+- [Architecture](#architecture)
+- [Security](#security)
+- [Development](#development)
+- [Contributing and license](#contributing-and-license)
 
-**1. Required Worker secrets** (the Deploy button and `pnpm run setup` both ask for them):
+## Why OpenShelf
 
-| Name | How to create it | Purpose |
-|---|---|---|
-| `APP_ENCRYPTION_KEY` | `openssl rand -base64 32` | Encrypts integration credentials stored in D1. Keep a copy: losing it makes stored keys unreadable. |
-| `SETUP_TOKEN` | `openssl rand -hex 24` | One-time token to create the owner account at `/admin/setup`. |
+A small or mid-sized business should be able to run a professional store without handing its catalogue, customers and orders to someone else's platform. OpenShelf is installed **into your own Cloudflare account** as a single Worker:
 
-Also needed: a free [Cloudflare account](https://dash.cloudflare.com/sign-up) and, for the Deploy button, a **public** GitHub repository.
-
-**2. Integration credentials** (optional, entered in **Admin → Settings → Integrations**, stored encrypted, never Worker secrets). Skip them to run in [Mock Mode](#mock-mode).
-
-| Integration | You need from the vendor |
-|---|---|
-| iyzico (payments) | API key, Secret key, environment (sandbox or production) |
-| Trendyol Marketplace | Seller (supplier) ID, API key, API secret, environment (production or stage); optional webhook username and password |
-| Geliver (shipping) | API token, sender address ID |
-| Trendyol e-Faturam | Service URL, username, password |
-| Netgsm (SMS) | Usercode, API password, sender header |
-| Twilio (SMS) | Account SID, Auth Token, From number or Messaging Service SID |
-| Cloudflare Email Service | Account ID, API token, default From address |
-| Google Analytics 4 | Measurement ID, Measurement Protocol API secret |
-| Meta Pixel / CAPI | Pixel ID, Conversions API access token |
-
-Where to find each key: see the [integration docs](docs/integrations/). Use each vendor's sandbox first; nothing here has been verified against a live account yet.
-
-
-## What is OpenShelf
-
-A small merchant can run a real storefront without handing the catalog, customers and orders to a central platform. OpenShelf deploys to **your own Cloudflare account** as a single Worker that serves the storefront (`/`), the admin panel (`/admin/`) and the API (`/api/*`, `/webhooks/*`, `/media/*`, `/feeds/*`). Data lives in your D1 database. One store per deployment.
-
-Status: early development (v0.1). See [Integrations](#integrations) for what has and has not been verified.
+- **One deployment:** storefront (`/`), admin (`/admin/`) and API (`/api/*`, `/webhooks/*`, `/media/*`, `/feeds/*`, `/mcp`) are served by the same Worker.
+- **Your data:** every record lives in your own D1 database; integration secrets are encrypted with AES-256-GCM.
+- **Built for Türkiye:** iyzico, Trendyol Marketplace, Trendyol e-Faturam, Geliver and Netgsm integrated out of the box; VAT, e-Archive invoices and KVKK flows built in.
+- **Low running cost:** no servers, containers or separate database; it runs on Cloudflare's serverless platform.
 
 ## Features
 
-- **Catalog**: products, variants, categories, media, coupons, customers.
-- **Inventory ledger**: append-only stock movements, transactional reservations at checkout (no overselling under concurrency).
-- **Hosted checkout**: card data never touches OpenShelf; server-side pricing; payment confirmed by verified webhook plus server-to-server re-check.
-- **Channels**: own storefront plus Trendyol marketplace sync through the outbox, and a Trendyol API console in the admin ([guide](apps/admin/src/help/en/15-trendyol.md)).
-- **Admin settings**: store name, logo, banner, brand colors, SEO, legal texts, checkout rules, tracking, notifications, integrations.
-- **Security**: PBKDF2 password hashes, optional TOTP MFA, `__Host-` session cookies, CSRF + Origin checks, RBAC, audit log, AES-256-GCM encrypted integration secrets, fixed outbound host allowlists, rate limits, optional Turnstile. See [docs/security.md](docs/security.md).
-- **Analytics**: GA4 and Meta Pixel/Conversions API with consent mode and shared `event_id` for browser/server deduplication. See [docs/tracking.md](docs/tracking.md).
-- **Notifications**: transactional SMS (Netgsm, Twilio) and e-mail (Cloudflare Email Service), editable TR/EN templates. See [docs/notifications.md](docs/notifications.md).
-- **Mock Mode**: try the whole shop with no real provider accounts. See [docs/mock-mode.md](docs/mock-mode.md).
+### Sales and orders
+- **Order list and detail:** payment, shipping, invoice and notification history on one screen; rule-checked status transitions with an audit trail.
+- **Order board:** a kanban by stage (awaiting payment → paid → preparing → shipped → delivered) with per-order progress steps and one-click actions.
+- **Hand delivery:** mark website orders as delivered without a carrier or tracking code; the customer only gets the "delivered" message.
+- **Labels and documents:** 10×15, 10×10 and 5×7 cm shipping labels with a large barcode, packing slips, order summaries and invoice copies.
+- **Refunds:** full or partial, through the payment provider.
+- **Profit matrix:** net profit per product/variant after commission, shipping, cost, payable VAT and income tax, with separate parameters for the website and Trendyol.
 
-### Integrations
+### Catalogue and storefront
+- Products, variants, categories, media library, SEO and legal pages.
+- **Stock ledger:** append-only stock movements and reservations at checkout; no overselling under concurrent checkouts.
+- **Merchandising:** home page picks and product order by drag and drop on the same product cards the store shows.
+- **Coupons:** percentage, fixed amount and **free shipping**; a generator for hard-to-guess codes, total and per-customer limits.
 
-All adapters are written against vendor documentation and covered by mocks and contract tests. **None has been verified against a live account yet.** Use each vendor's sandbox first.
+### Payments
+- **Hosted payment page:** card data never touches OpenShelf; prices are computed server-side and payments are confirmed by a verified webhook plus a server-to-server lookup.
 
-| Integration | Kind | Docs | Status |
-|---|---|---|---|
-| iyzico | Payment (hosted form) | [iyzico](docs/integrations/iyzico.md) | Implemented, UNVERIFIED live |
-| Geliver | Shipping | [Geliver](docs/integrations/geliver.md) | Implemented, UNVERIFIED live |
-| Trendyol Marketplace | Marketplace sync | [Trendyol](docs/integrations/trendyol.md) | Implemented, UNVERIFIED live |
-| Trendyol e-Faturam | Invoicing | [e-Faturam](docs/integrations/efaturam.md) | Implemented, UNVERIFIED live |
-| Google Analytics 4 | Analytics | [GA4](docs/integrations/ga4.md) | Implemented, UNVERIFIED live |
-| Meta Pixel / CAPI | Ads | [Meta](docs/integrations/meta.md) | Implemented, UNVERIFIED live |
-| Netgsm | SMS | [Netgsm](docs/integrations/netgsm.md) | Implemented, UNVERIFIED live |
-| Twilio | SMS | [Twilio](docs/integrations/twilio.md) | Implemented, UNVERIFIED live |
-| Cloudflare Email Service | E-mail | [Cloudflare Email](docs/integrations/cloudflare-email.md) | Implemented, UNVERIFIED live. **Beta**: arbitrary recipients need Workers Paid; on Free you can only send to verified addresses |
+### Communication
+- **Branded e-mail templates:** editable TR/EN templates with item lines, subtotal, discount, shipping, VAT, payment and address.
+- **Transactional SMS and e-mail:** order received, shipped, delivered, cancelled, refunded and admin alerts.
+- **Campaigns:** e-mail/SMS campaigns to consenting customers, with unsubscribe links.
+
+### Admin panel
+- **Overview:** period KPIs, revenue chart, today's work queue, latest orders, sales mix and highlights on one screen.
+- **Global search (Ctrl/⌘+K):** pages, settings, quick actions, products, orders and customers.
+- **Role-based access:** owner, admin and staff; optional TOTP two-factor authentication.
+- **TR/EN interface**, light/dark theme, collapsible side menu and a built-in user guide.
+
+### AI-assisted management (MCP)
+The whole store is exposed as an MCP server at `https://<your-domain>/mcp`. Claude, ChatGPT, Grok and other MCP clients connect with an access key or OAuth 2.1 (PKCE) and can manage orders, products, campaigns and settings, with per-tool permissions and read/write/full levels. Details: [docs/mcp.md](docs/mcp.md).
+
+## Integrations
+
+Integrations are enabled from the admin panel; API keys are stored encrypted in D1.
+
+| Integration | Scope | Docs |
+|---|---|---|
+| **iyzico** | Hosted checkout, webhooks, refunds | [iyzico](docs/integrations/iyzico.md) |
+| **Trendyol Marketplace** | Product matching and listing, stock/price sync, order import, returns, customer questions, finance; API console with 80+ operations | [Trendyol](docs/integrations/trendyol.md) |
+| **Trendyol e-Faturam** | e-Invoice / e-Archive issuing, cancellation, incoming invoices; optional fixed-IP relay | [e-Faturam](docs/integrations/efaturam.md) |
+| **Geliver** | Multi-carrier quotes, labels, automatic shipment tracking (webhook + scheduled check) | [Geliver](docs/integrations/geliver.md) |
+| **Netgsm** | Transactional and campaign SMS | [Netgsm](docs/integrations/netgsm.md) |
+| **Twilio** | International SMS | [Twilio](docs/integrations/twilio.md) |
+| **Cloudflare Email Service** | Transactional and campaign e-mail | [Cloudflare Email](docs/integrations/cloudflare-email.md) |
+| **Google Analytics 4** | Consent Mode v2, server-side purchase (Measurement Protocol) | [GA4](docs/integrations/ga4.md) |
+| **Meta Pixel / CAPI** | Pixel + Conversions API, product catalogue feed | [Meta](docs/integrations/meta.md) |
+
+Browser and server events are de-duplicated with a shared `event_id`; analytics and ad events are only sent with the visitor's consent. See [docs/tracking.md](docs/tracking.md).
 
 ## Quick start
 
-Three ways, easiest first.
+### Requirements
 
-### 1. Deploy to Cloudflare button
+- A [Cloudflare account](https://dash.cloudflare.com/sign-up)
+- Two Worker secrets:
 
-> **Easiest path:** the [launch page](https://berkayoztunc.github.io/OpenShelf/) generates your two secrets in the browser, opens the button and checks your deployment (`/health`).
+| Name | How to generate | Purpose |
+|---|---|---|
+| `APP_ENCRYPTION_KEY` | `openssl rand -base64 32` | Encrypts integration credentials in D1. Back it up safely; if lost, stored keys cannot be read. |
+| `SETUP_TOKEN` | `openssl rand -hex 24` | One-time key to create the owner account at `/admin/setup`. |
+
+Integration credentials are not Worker secrets; enter them after installation under **Admin → Integrations**.
+
+### 1. Deploy to Cloudflare
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/berkayoztunc/openshelf)
 
-Requirements: the repo is **public on GitHub**, and you replaced `berkayoztunc` with your GitHub org/user in the URL above.
+The [setup page](https://berkayoztunc.github.io/OpenShelf/) generates the secrets in your browser, opens the button and checks the installation (`/health`). The button:
 
-What the button does:
+1. Copies the repository to your GitHub account and connects it to Workers Builds.
+2. Creates the D1 database from the `DB` binding in [`wrangler.jsonc`](wrangler.jsonc).
+3. Asks for `APP_ENCRYPTION_KEY`, `SETUP_TOKEN` and the optional `TURNSTILE_SECRET`.
+4. Builds, applies the D1 migrations and publishes the single Worker. Every later push is deployed automatically.
 
-1. Clones the repo into your GitHub account and connects it to Workers Builds.
-2. **Creates the D1 database automatically** from the `DB` binding in [`wrangler.jsonc`](wrangler.jsonc) (nothing to copy).
-3. Asks for two secrets (and one optional):
-
-   | Field | Value |
-   |---|---|
-   | `APP_ENCRYPTION_KEY` | `openssl rand -base64 32` |
-   | `SETUP_TOKEN` | `openssl rand -hex 24` (write it down) |
-   | `TURNSTILE_SECRET` | optional, leave empty |
-
-4. Builds (`pnpm build`) and runs the deploy script (`pnpm run deploy` = apply D1 migrations, then `wrangler deploy`).
-5. Deploys **one Worker**: storefront at `/`, admin at `/admin/`, API under `/api/*`. Every later push redeploys.
-
-First run:
-
-1. Open `https://<your-worker>.workers.dev/admin/setup`, enter `SETUP_TOKEN`, create the owner account (12+ character password) and enable MFA.
-2. Fill in Settings (store name, logo, legal texts) and enable integrations from **Settings → Integrations**.
-3. Optional demo: set the Worker variable `ALLOW_MOCK` and turn on Mock Mode (see [Mock Mode](#mock-mode)).
+> The button works when the repository is public on GitHub. For your own fork, replace `berkayoztunc` in the URL with your user or organisation name.
 
 ### 2. Guided CLI
 
 ```bash
 pnpm install
-node tooling/setup/setup.mjs --dry-run   # show planned commands, change nothing
-pnpm run setup                           # login, create D1, build, migrate, deploy, set secrets
+pnpm run setup                           # login, D1, build, migrations, deploy, secrets
+node tooling/setup/setup.mjs --dry-run   # preview the commands it would run
 ```
 
-Idempotent. (Use `pnpm run setup`: plain `pnpm setup` is a built-in pnpm command.) Flags: `--yes`, `--enable-r2`, `--skip-deploy`, `--domain=https://shop.example.com`, `--db-name=NAME`, `--local`, `--dry-run`, `--mock`. Full guide: [docs/deploy-cloudflare.md](docs/deploy-cloudflare.md).
+Safe to re-run. Flags: `--yes`, `--enable-r2`, `--skip-deploy`, `--domain=https://shop.example.com`, `--db-name=NAME`, `--local`, `--mock`. Full guide: [docs/deploy-cloudflare.md](docs/deploy-cloudflare.md).
 
-### 3. Local development
+### First launch
 
-Requirements: Node >= 20, pnpm.
+1. Open `https://<your-domain>/admin/setup`, create the owner account with `SETUP_TOKEN` and enable two-factor authentication.
+2. Fill in **Settings**: store name, logo, brand colours, legal pages and notification addresses.
+3. Enable payment, shipping, invoicing and marketplace connections under **Integrations**.
+4. Attach your own domain to the Worker in Cloudflare and pin `STOREFRONT_ORIGIN`, `ADMIN_ORIGIN` and `API_ORIGIN`.
 
-```bash
-pnpm install
-pnpm setup:local            # writes .dev.vars + workers/api/.dev.vars, migrates local D1
-pnpm seed                   # optional demo store (12 products, 2 coupons)
-pnpm dev                    # storefront :5173, admin :5174/admin/, API :8787
-```
+## Configuration
 
-Open `http://localhost:5174/admin/setup` and use the `SETUP_TOKEN` from `workers/api/.dev.vars`. To preview the real single-Worker layout: `pnpm dev:site`. More: [docs/quickstart.md](docs/quickstart.md).
+| Name | Type | Required | Purpose |
+|---|---|---|---|
+| `APP_ENCRYPTION_KEY` | secret | yes | base64 of 32 random bytes; encrypts integration credentials |
+| `SETUP_TOKEN` | secret | first launch | one-time key for `/admin/setup` |
+| `TURNSTILE_SECRET` | secret | no | Cloudflare Turnstile bot protection for checkout and login |
+| `STOREFRONT_ORIGIN`, `ADMIN_ORIGIN`, `API_ORIGIN` | variables | recommended | pin the allowed origins in production; the request origin is used when unset |
+| `ALLOW_MOCK` | variable | no | allows Mock Mode to be switched on (demos/development) |
+| `MEDIA` (R2) | binding | no | R2 for media files; media is stored in D1 when unset |
 
-`npx create-openshelf@latest` is a roadmap item, not a working command today.
+## Automations and scheduled jobs
+
+The Worker runs every 15 minutes (`*/15 * * * *`); jobs started from the admin panel run immediately.
+
+| Frequency | Work |
+|---|---|
+| 15 minutes | Expired stock reservations, Trendyol order import, Trendyol stock sync, job queue (notifications, labels, marketplace updates) |
+| Hourly | Geliver shipment tracking, Trendyol listing approval and content/price refresh, unanswered-question reminder, housekeeping |
+| On demand | Payment webhooks, Trendyol and Geliver webhooks (processed on the next run), jobs started from the panel |
+
+- **Shipment tracking:** once a Geliver parcel is picked up the order becomes "Shipped", once delivered "Delivered", and the customer gets a message with the tracking link.
+- **Trendyol questions:** the admin gets an e-mail when a customer question arrives and again 6 hours before the 24-hour answer deadline.
+- **Invoices:** e-Invoice / e-Archive documents are always issued with operator approval.
 
 ## Mock Mode
 
-Mock Mode swaps every external provider for an offline stand-in so you can demo or develop without any accounts.
+Mock Mode replaces every external provider with an offline stand-in, so you can demo, train and develop without opening a single account.
 
-- Checkout redirects to a fake payment page (`/mock/pay/...`) with Success / Fail / Cancel buttons.
-- SMS, e-mail, invoices, shipping labels and analytics events are written to the **Mock Inbox** (admin sidebar) instead of being sent.
-- Nothing contacts a real provider.
+- Checkout goes to a test payment page with Success / Failure / Cancel buttons.
+- SMS, e-mail, invoices, labels and analytics events are not sent; they are written to the **Mock Inbox** in the admin panel.
+- It cannot be enabled while a real payment provider is active or real paid orders exist; mock payments are flagged.
+- It can only be switched on by the owner, on a Worker where `ALLOW_MOCK` is set.
 
-Enable it: set `ALLOW_MOCK` on a deployed Worker (Dashboard → Worker → Settings → Variables, or `wrangler.jsonc` `vars`; the local dev example already sets it), then an **owner** switches on **Settings → System → Mock mode**.
-
-Safety rules (intended behaviour):
-
-- Deployed Workers refuse to enable mock mode unless `ALLOW_MOCK` is set.
-- Mock and real are exclusive: it cannot be enabled while a real payment provider is enabled or real paid orders exist. Mock payments are flagged (`payments.is_mock`).
-- Mock inbox keeps 7 days / 2000 rows. Only an owner can toggle or clear it. Turn it off before real orders.
-
-Demo walkthrough: `pnpm seed`, enable Mock Mode, open the storefront, add a product, check out, press **Success** on the mock payment page, then open the admin: the order is `paid` and the Mock Inbox shows the confirmation SMS/e-mail. Full guide: [docs/mock-mode.md](docs/mock-mode.md).
-
-## Notifications
-
-Transactional only (no marketing). Six events: `order_paid`, `order_shipped`, `order_delivered`, `order_cancelled`, `order_refunded`, `admin_new_order`. Each can use SMS, e-mail or both. Templates are editable per language (TR/EN) with variables like `{{orderNumber}}`. Safeguards: SMS recipients are limited to an allowlist of country codes (default `+90`) with per-recipient daily caps, and test sends are rate limited. Send a test from **Settings → Notifications**. Guide: [docs/notifications.md](docs/notifications.md).
-
-## Configuration reference
-
-| Name | Kind | Required | Purpose |
-|---|---|---|---|
-| `APP_ENCRYPTION_KEY` | secret | yes | base64 of 32 random bytes; encrypts integration credentials in D1 |
-| `SETUP_TOKEN` | secret | yes (first run) | one-time token for `/admin/setup` |
-| `TURNSTILE_SECRET` | secret | no | Turnstile bot protection on checkout/login |
-| `ALLOW_MOCK` | var | no | must be set to allow Mock Mode on a deployed Worker |
-| `STOREFRONT_ORIGIN`, `ADMIN_ORIGIN`, `API_ORIGIN` | vars | no | default to the request origin; pin exact `https://` origins in production for a strict allowlist |
-| `MEDIA` (R2 bucket) | binding | no | opt-in paid add-on; without it, media is stored in D1 |
-
-Integration API keys are not Worker secrets: enter them in **Settings → Integrations** (stored encrypted).
+Demo: `pnpm seed`, switch Mock Mode on, place an order in the storefront and press **Success** on the test payment page. Guide: [docs/mock-mode.md](docs/mock-mode.md).
 
 ## Architecture
 
 ```
  Browser ──► Cloudflare Worker (Hono) ◄──► D1 (SQLite)
-              ├─ /            storefront (static assets)
-              ├─ /admin/      admin panel (static assets)
-              ├─ /api/*  /webhooks/*  /media/*  /feeds/*  /mock/*
-              └─ scheduled(): cron every minute
+              ├─ /             storefront (React, static)
+              ├─ /admin/       admin panel (React, static)
+              ├─ /api/*  /webhooks/*  /media/*  /feeds/*  /mcp
+              └─ scheduled()  cron every 15 minutes
                     │
                     ▼
-              outbox jobs ──► payment, shipping, invoicing, marketplace,
-                              analytics, SMS, e-mail adapters
+              outbox job queue ──► payment · shipping · invoicing · marketplace
+                                   analytics · SMS · e-mail adapters
               optional: R2 (media)
 ```
 
+- **Outbox:** every external call is queued as a de-duplicated, retryable job; a slow provider never holds up checkout or the order flow.
+- **State machine:** order transitions are rule-checked; stock, coupon and notification side effects are applied in the same atomic batch.
+- **Adapter SDK:** every provider implements a shared interface; to add one see [docs/adapter-guide.md](docs/adapter-guide.md).
+
 Details: [docs/architecture.md](docs/architecture.md).
-
-## Free-tier honesty
-
-The core (Worker + D1 + static assets) is designed to fit Cloudflare's free plans for a small shop. That is a design goal, not a promise.
-
-- Cloudflare sets and may change limits and billing; we do not claim OpenShelf is or will stay free.
-- Traffic, catalog size and order volume can exceed free limits (requests/CPU, D1 reads/writes/storage).
-- R2 and Queues are opt-in and may need a payment method. Cloudflare Email sending is Beta and needs Workers Paid for arbitrary recipients. SMS providers charge per message.
-- Payment, shipping, invoicing and marketplace services have their own fees.
-
-Check current limits: [Workers](https://developers.cloudflare.com/workers/platform/limits/), [D1](https://developers.cloudflare.com/d1/platform/limits/).
 
 ## Security
 
-Summary in [docs/security.md](docs/security.md); report vulnerabilities privately per [SECURITY.md](SECURITY.md). In production, pin the origin variables and keep Mock Mode off.
+- PBKDF2 password hashing, optional TOTP MFA, `__Host-` session cookie, CSRF and Origin checks
+- Role-based authorisation and an audit log of every admin action
+- AES-256-GCM encrypted integration secrets and a host allowlist for outbound requests
+- Rate limits, optional Turnstile, signed/verified webhooks
+- KVKK/GDPR: consent snapshots, customer anonymisation, unsubscribe
 
-## Project structure
+Details: [docs/security.md](docs/security.md). Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 
+## Development
+
+Requirements: Node ≥ 20, pnpm.
+
+```bash
+pnpm install
+pnpm setup:local     # writes the .dev.vars files, applies migrations to local D1
+pnpm seed            # optional demo store
+pnpm dev             # storefront :5173 · admin :5174/admin/ · API :8787
 ```
-apps/storefront     public shop (React + Vite)
-apps/admin          admin panel (React + Vite, served under /admin/)
-workers/api         Hono API, webhooks, cron (outbox runner), D1 migrations
-packages/           core, db, shared, ui, integration-sdk, integrations/*
-tooling/setup       guided Cloudflare setup
-tooling/seed        demo data
-tooling/deploy      assembles dist-site/ for the single Worker
-docs/               guides (each with a .tr.md twin)
-wrangler.jsonc      canonical single-Worker config
-```
-
-## Scripts
 
 | Command | What it does |
 |---|---|
-| `pnpm dev` | API + storefront + admin dev servers |
-| `pnpm dev:site` | build, then single-Worker preview with wrangler |
-| `pnpm build` | build everything and assemble `dist-site/` |
-| `pnpm run deploy` | apply remote D1 migrations, then `wrangler deploy` |
-| `pnpm run setup` / `pnpm setup:local` | guided deploy / local setup |
-| `pnpm seed` | load demo data into local D1 |
+| `pnpm dev` | API, storefront and admin dev servers |
+| `pnpm dev:site` | local preview in the single-Worker layout |
+| `pnpm build` | builds every package and prepares `dist-site/` |
+| `pnpm run deploy` | applies remote D1 migrations, then `wrangler deploy` |
+| `pnpm run setup` / `pnpm setup:local` | guided deployment / local setup |
+| `pnpm seed` | loads demo data into local D1 |
 | `pnpm db:generate` / `pnpm db:migrate:local` | generate / apply migrations |
-| `pnpm typecheck` / `lint` / `test` / `format` | quality gates |
+| `pnpm typecheck` / `pnpm test` / `pnpm format` | quality checks |
+
+### Project layout
+
+```
+apps/storefront     storefront (React + Vite)
+apps/admin          admin panel (React + Vite, served under /admin/)
+workers/api         Hono API, webhooks, MCP server, cron, D1 migrations
+packages/           core, db, shared, ui, integration-sdk, integrations/*
+tooling/            setup, demo data and deployment scripts
+docs/               guides (English and Turkish)
+wrangler.jsonc      single-Worker configuration
+```
+
+### Cost
+
+The core (Worker, D1 and static assets) is designed to fit Cloudflare's free plan for a small store; Workers Paid is recommended as traffic and order volume grow. Sending e-mail to any recipient with Cloudflare Email Service requires Workers Paid. Payment, shipping, invoicing, SMS and marketplace services are billed by their providers. Current limits: [Workers](https://developers.cloudflare.com/workers/platform/limits/), [D1](https://developers.cloudflare.com/d1/platform/limits/).
 
 ## Roadmap
 
 - `create-openshelf` CLI (`npx create-openshelf@latest`)
-- Queues adapter for the outbox
-- More providers (payments, shipping, SMS, e-mail)
-- Live-account verification of existing integrations
+- Cloudflare Queues adapter for the outbox
+- More payment, shipping and marketplace providers
 
 ## Contributing and license
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). MIT licensed ([LICENSE](LICENSE)). Templates and documentation are not legal or tax advice.
+Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). OpenShelf is [MIT](LICENSE) licensed. Templates and documentation are not legal or tax advice.

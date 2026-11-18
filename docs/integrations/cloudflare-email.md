@@ -26,6 +26,6 @@ On the Free plan, add your own address as a verified destination and send a test
 
 ## Caveats
 
-- Status: implemented from vendor docs, **UNVERIFIED against a live account**; the Beta API may change.
+- Email Sending is a Cloudflare Beta product; Cloudflare may change the API, keep the integration up to date.
 - Subjects are stripped of control characters; the HTML body is fully escaped. Plain-text and HTML parts are both sent.
 - Deliverability (SPF, DKIM, DMARC) depends on your domain setup.

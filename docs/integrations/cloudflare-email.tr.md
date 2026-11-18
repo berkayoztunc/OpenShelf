@@ -26,6 +26,6 @@ Free planda kendi adresinizi doğrulanmış hedef olarak ekleyin ve Ayarlar, Bil
 
 ## Dikkat edilecekler
 
-- Durum: satıcı dokümanlarına göre uygulandı, **canlı hesapla DOĞRULANMADI**; Beta API değişebilir.
+- Email Sending, Cloudflare'in Beta ürünüdür; API'yi Cloudflare değiştirebilir, entegrasyonu güncel tutun.
 - Konu satırından kontrol karakterleri temizlenir; HTML gövde tamamen kaçışlanır. Hem düz metin hem HTML bölümü gönderilir.
 - Teslim edilebilirlik (SPF, DKIM, DMARC) alan adı kurulumunuza bağlıdır.

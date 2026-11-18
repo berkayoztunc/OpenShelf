@@ -53,7 +53,7 @@ Admin SPA calls with `credentials: "include"`. In dev, Vite proxies `/api`, `/me
 - POST `/api/store/consent` `{visitorId,analytics,marketing,policyVersion}`
 - POST `/api/store/track` `{ event: TrackEvent, consent, attribution }` (`attribution.visitorId` required; client `consent` is advisory only: with `tracking.consentRequired` the Meta/GA4 server sinks fire only if the latest stored `/consent` row for that visitorId grants the needed flag) → 204 (server-side mirror for non-purchase events; purchase is ONLY server-generated on verified payment)
 - GET `/feeds/meta.xml` · `/feeds/meta.csv` · `/sitemap.xml` · `/robots.txt`
-- POST `/webhooks/trendyol` · scheduled(): cron every minute → outbox runner, reservation expiry, Trendyol reconcile
+- POST `/webhooks/trendyol` · scheduled(): cron every 15 minutes → reservation expiry, Trendyol reconcile/stock sweep, outbox runner; hourly: Geliver tracking, Trendyol listing/content checks, question reminder, housekeeping
 
 ## Server-side purchase flow (contract between A, D, E)
 On verified `PaymentEvent{status:"succeeded"}`: (1) tx: payment→succeeded, order→paid, reservation→converted, inventory movements; (2) enqueue outbox jobs: `marketing.purchase` (E consumes: Meta CAPI + GA4 MP, skipped if order.consent lacks needed flag), `invoice.issue`, `shipment.create` (if auto), `trendyol.stock_push`; (3) never block webhook response on external calls.

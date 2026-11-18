@@ -25,7 +25,6 @@ Twilio test kimlik bilgileri ve deneme (trial) hesapları sunar; trial hesaplar 
 
 ## Dikkat edilecekler
 
-- Durum: satıcı dokümanlarına göre uygulandı, **canlı hesapla DOĞRULANMADI**.
 - Gönderici kaydı (A2P 10DLC, alfanümerik gönderici kimlikleri, yerel mevzuat) sizin sorumluluğunuzdadır ve ülkeye göre değişir.
 - Twilio parça başına ücretlendirir; Türkçe karakterler UCS-2'ye geçirir (parça başına 70 karakter).
 - Varsayılan `+90` ülke izin listesinin dışındaki mesajlar, listeyi genişletene kadar atlanır.

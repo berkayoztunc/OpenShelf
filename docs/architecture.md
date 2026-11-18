@@ -54,7 +54,7 @@ Purchase events for analytics are generated only server-side from verified payme
 
 ## Outbox
 
-`outbox_jobs(kind, payload, dedupe_key UNIQUE, status, attempts, next_run_at)`. The cron (every minute) claims due jobs, runs the registered handler (`registerJobHandler(kind, fn)`), marks `done`, or retries with exponential backoff up to `max_attempts`, then `dead`. `dedupe_key` makes enqueueing idempotent; handlers must be idempotent too (e.g. invoices unique on `(order_id, type)`). Failures show in Admin → integration events and outbox, with manual retry. External calls only happen here, never inside request-critical paths.
+`outbox_jobs(kind, payload, dedupe_key UNIQUE, status, attempts, next_run_at)`. The cron (every 15 minutes, and right after an admin action) claims due jobs, runs the registered handler (`registerJobHandler(kind, fn)`), marks `done`, or retries with exponential backoff up to `max_attempts`, then `dead`. `dedupe_key` makes enqueueing idempotent; handlers must be idempotent too (e.g. invoices unique on `(order_id, type)`). Failures show in Admin → integration events and outbox, with manual retry. External calls only happen here, never inside request-critical paths.
 
 ## Event dedup (tracking)
 

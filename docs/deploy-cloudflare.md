@@ -78,7 +78,7 @@ Dashboard: Workers, your Worker, Settings, Domains & Routes, add your domain (it
 
 ## 7. Cron
 
-`"triggers": { "crons": ["* * * * *"] }` runs the outbox, reservation expiry and Trendyol reconcile every minute. If you hit free-plan limits, lower the frequency (e.g. `*/5 * * * *`) at the cost of slower retries and stock-hold expiry.
+`"triggers": { "crons": ["*/15 * * * *"] }` runs every 15 minutes: reservation expiry, Trendyol order import and stock sync, and the outbox; hourly work (Geliver tracking, Trendyol listing/content checks, question reminders, housekeeping) runs on the full hour. Jobs started from the admin panel run immediately and do not wait for the cron.
 
 ## 8. Local preview of the single Worker
 

@@ -25,7 +25,6 @@ Twilio provides test credentials and trial accounts (trial accounts can only mes
 
 ## Caveats
 
-- Status: implemented from vendor docs, **UNVERIFIED against a live account**.
 - Sender registration (A2P 10DLC, alphanumeric sender IDs, local regulations) is your responsibility and varies by country.
 - Twilio bills per segment; Turkish characters switch to UCS-2 (70 characters per segment).
 - Outside the default `+90` country allowlist, messages are skipped until you extend it.

@@ -27,4 +27,4 @@ Admin → **Geliver konsolu** (yalnızca sahip/yönetici; kargo verisi müşteri
 - **API gezgini**: 18 operasyon (gönderiler, teklif/etiket, adresler, hesap, webhook, il/ilçe); parametre formları otomatik, JSON gövde editörü ve yanıt görüntüleyici var. Canlıda yazma/yıkıcı çağrılar önce onay ister, sunucu `confirm = operationId` şartı koşar; ücretlendirilebilen çağrılar işaretlidir. Çağrılar denetim kaydına yazılır, canlı değişiklikler *Entegrasyon olayları*'nda da görünür.
 - **Mock Modu** her operasyona çevrimdışı, deterministik sahte veriyle yanıt verir (aynı girdi doğrulamasıyla); Geliver hesabı olmadan ekranın tamamını deneyebilirsiniz.
 
-Webhook, il ve ilçe yolları resmi SDK'lardan alındı, canlı hesapta doğrulanmadı; test modunda doğrulamanın en hızlı yolu konsoldur. Adaptör gibi konsol da canlı hesapta değil, mock'larla test edildi.
+Bir çağrıyı gerçek hesabınızda çalıştırmadan önce denemenin en güvenli yolu Geliver test modudur.

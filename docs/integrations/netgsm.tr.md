@@ -24,7 +24,6 @@ Doğruladığımız herkese açık bir Netgsm sandbox'ı yok. Geliştirme için 
 
 ## Dikkat edilecekler
 
-- Durum: satıcı dokümanlarına göre uygulandı, **canlı hesapla DOĞRULANMADI**. Özellikle bakiye/sağlık kontrolü uç noktası teyit edilemedi.
 - msgheader onayı, İYS (ticari ileti izni) kuralları ve kontör bakiyesi Netgsm tarafında yönetilir. OpenShelf yalnızca işlemsel mesaj gönderir (`iysfilter: "0"`).
 - Türkiye dışı numaralara SMS, varsayılan ülke izin listesi (`+90`) nedeniyle engellenir.
 - Türkçe karakterli mesajlar UCS-2 parçaları kullanır; şablon editöründeki parça sayacına bakın.

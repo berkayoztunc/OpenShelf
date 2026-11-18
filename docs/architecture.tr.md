@@ -54,7 +54,7 @@ Analitik purchase olayları yalnızca doğrulanmış ödemeden, sunucu tarafınd
 
 ## Outbox
 
-`outbox_jobs(kind, payload, dedupe_key UNIQUE, status, attempts, next_run_at)`. Cron (dakikada bir) vadesi gelen işleri alır, kayıtlı handler'ı çalıştırır (`registerJobHandler(kind, fn)`), `done` işaretler veya üssel backoff ile `max_attempts`'e kadar yeniden dener, sonra `dead`. `dedupe_key` ekleme işlemini idempotent yapar; handler'lar da idempotent olmalıdır (örn. faturalar `(order_id, type)` tekil). Hatalar Admin'de entegrasyon olayları ve outbox ekranında, elle yeniden deneme ile görünür. Dış çağrılar yalnızca burada yapılır, istek yolunda yapılmaz.
+`outbox_jobs(kind, payload, dedupe_key UNIQUE, status, attempts, next_run_at)`. Cron (15 dakikada bir ve yönetim işleminden hemen sonra) vadesi gelen işleri alır, kayıtlı handler'ı çalıştırır (`registerJobHandler(kind, fn)`), `done` işaretler veya üssel backoff ile `max_attempts`'e kadar yeniden dener, sonra `dead`. `dedupe_key` ekleme işlemini idempotent yapar; handler'lar da idempotent olmalıdır (örn. faturalar `(order_id, type)` tekil). Hatalar Admin'de entegrasyon olayları ve outbox ekranında, elle yeniden deneme ile görünür. Dış çağrılar yalnızca burada yapılır, istek yolunda yapılmaz.
 
 ## Olay tekilleştirme (takip)
 

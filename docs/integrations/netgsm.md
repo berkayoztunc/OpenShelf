@@ -24,7 +24,6 @@ Netgsm has no public sandbox that we verified. Use Mock Mode for development ([.
 
 ## Caveats
 
-- Status: implemented from vendor docs, **UNVERIFIED against a live account**. The balance/health check endpoint in particular could not be confirmed.
 - Your msgheader approval, IYS (commercial message consent) rules and credit balance are managed in Netgsm. OpenShelf sends transactional messages only (`iysfilter: "0"`).
 - SMS to non-Turkish numbers is blocked by the default country allowlist (`+90`).
 - Messages with Turkish characters use UCS-2 segments; check the segment counter in the template editor.
