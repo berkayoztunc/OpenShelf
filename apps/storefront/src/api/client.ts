@@ -38,6 +38,7 @@ type Wire = any;
 const variantOf = (v: Wire): Variant => ({
   id: v.id, sku: v.sku, title: v.title ?? (v.options ? Object.values(v.options).join(" / ") : ""), options: v.options ?? undefined,
   price: v.price, compareAtPrice: v.compareAtPrice ?? null, available: v.available,
+  ...(typeof v.trendyolUrl === "string" && v.trendyolUrl.startsWith("https://www.trendyol.com/") && { trendyolUrl: v.trendyolUrl }),
 });
 const productOf = (p: Wire): ProductSummary & { description?: string } => {
   const variants: Variant[] = (p.variants ?? []).map(variantOf);

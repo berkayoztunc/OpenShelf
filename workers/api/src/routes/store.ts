@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { cartItems, carts, categories, coupons, customerConsents, customers, marketingEvents, orderItems, orders, payments, productImages, products, productVariants, shipments, utmAttributions } from "@openshelf/db";
+import { cartItems, carts, categories, coupons, customerConsents, customers, marketingEvents, orderItems, orders, payments, productImages, productMappings, products, productVariants, shipments, utmAttributions } from "@openshelf/db";
 import { attachReservations, CouponError, evaluateCoupon, InsufficientStockError, InvalidTransitionError, priceItems, releaseReservationIds, reserveStock, transitionOrder, type PricedCart } from "@openshelf/core";
 import type { ServerEventSink } from "@openshelf/integration-sdk";
 import { CartCouponBody, CartItemBody, CheckoutBody, ConsentBody, EVENT_NAMES, META_EVENT_MAP, SORT_KEYS, TrackBody, type SortKey } from "@openshelf/shared";
@@ -51,9 +51,23 @@ async function localeOf(c: Context<AppEnv>) {
   const q = c.req.query("locale");
   return q === "en" || q === "tr" ? q : (await getSettings(c.get("db"), "general")).defaultLocale;
 }
-function shape(p: Awaited<ReturnType<typeof hydrateProducts>>[number], locale: "tr" | "en", detail: boolean, cx: SeoCx) {
+/** Public Trendyol product page for a listing. Trendyol resolves the page by the `-p-<contentId>` suffix alone; brand and name segments are cosmetic. */
+function trendyolUrl(brand: string | null, slug: string, contentId: string) {
+  const seg = (s: string) => s.toLocaleLowerCase("tr").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/ı/g, "i").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  const name = seg(slug.replace(new RegExp(`-${contentId}$`), "")) || "urun";
+  return `https://www.trendyol.com/${seg(brand ?? "") || "x"}/${name}-p-${encodeURIComponent(contentId)}`;
+}
+/** variantId -> Trendyol product page, for variants linked to a Trendyol listing. */
+async function trendyolLinks(db: Db, variantIds: string[]) {
+  if (!variantIds.length) return new Map<string, string>();
+  const rows = await db.select({ v: productMappings.variantId, ext: productMappings.externalId }).from(productMappings)
+    .where(and(eq(productMappings.provider, "trendyol"), inArray(productMappings.variantId, variantIds)));
+  return new Map(rows.filter((r) => r.ext && /^\d+$/.test(r.ext)).map((r) => [r.v, r.ext!]));
+}
+function shape(p: Awaited<ReturnType<typeof hydrateProducts>>[number], locale: "tr" | "en", detail: boolean, cx: SeoCx, tyIds?: Map<string, string>) {
   const vs = p.variants.filter((v) => v.active && v.prices.website != null).map((v) => ({
     id: v.id, sku: v.sku, title: v.title, options: v.options, price: v.prices.website!, compareAtPrice: v.compareAtPrice, available: availableOf(v.stock),
+    ...(tyIds?.has(v.id) ? { trendyolUrl: trendyolUrl(p.brand, p.slug, tyIds.get(v.id)!) } : {}),
   }));
   const prices = vs.map((v) => v.price);
   const cheapest = [...vs].sort((a, b) => a.price - b.price)[0];
@@ -104,7 +118,9 @@ store.get("/products/:slug", async (c) => {
   if (!rows.length) throw notFound("Product");
   cacheable(c, 15);
   const locale = await localeOf(c);
-  return c.json(shape((await hydrateProducts(db, rows))[0]!, locale, true, await makeCx(db, c.env.STOREFRONT_ORIGIN, locale)));
+  const [view] = await hydrateProducts(db, rows);
+  const tyIds = await trendyolLinks(db, view!.variants.map((v) => v.id));
+  return c.json(shape(view!, locale, true, await makeCx(db, c.env.STOREFRONT_ORIGIN, locale), tyIds));
 });
 store.get("/search", async (c) => {
   await enforceRateLimit(c, "search", 60, 60);

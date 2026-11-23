@@ -51,7 +51,7 @@ export async function publicConfig(db: Db) {
     legal,
     menu: s.menu,
     homepage: s.homepage,
-    merchandising: { defaultSort: s.merchandising.defaultSort, pinnedCount: s.merchandising.pinned.length },
+    merchandising: { defaultSort: s.merchandising.defaultSort, pinnedCount: s.merchandising.pinned.length, trendyolLink: s.merchandising.trendyolLink },
     locales: { default: s.general.defaultLocale, available: s.general.locales },
     mockMode: s.system.mockMode === true,
   };

@@ -21,7 +21,7 @@ export interface StoreConfig {
   /** Which products the home page "featured" section shows (auto = first N in the default order). */
   homepage?: z.infer<typeof HomepageSettings>;
   /** Storefront ordering: default sort chosen by the merchant. */
-  merchandising?: { defaultSort: SortKey; pinnedCount: number };
+  merchandising?: { defaultSort: SortKey; pinnedCount: number; trendyolLink?: boolean };
   /** "titles only": either a string title or `{ title }` per legal key. Empty = page not available. */
   legal: Partial<Record<LegalKey, string | { title?: string }>>;
   locales?: Locale[];
@@ -47,6 +47,8 @@ export interface Variant {
   price: number;            // minor units
   compareAtPrice?: number | null; // assumed
   available: number;        // total - reserved - safety
+  /** Product page on Trendyol, when this variant is listed there (product detail only). */
+  trendyolUrl?: string;
 }
 
 export interface ProductSummary {

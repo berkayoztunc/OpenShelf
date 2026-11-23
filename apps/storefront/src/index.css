@@ -61,3 +61,5 @@ select.field option { background: var(--color-surface); color: var(--color-ink);
   :root:not([data-theme="light"]) .logo-has-dark .logo-dark { display: block; }
 }
 .logo-light-only .logo-dark { display: none !important; }
+/* Room for the phone consent sheet (ConsentBanner publishes its height) so nothing is stuck underneath it. */
+body { padding-bottom: var(--consent-h, 0px); }

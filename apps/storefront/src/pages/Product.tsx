@@ -220,6 +220,12 @@ function ProductView({ product: p }: { product: ProductDetail }) {
               {added ? <CheckIcon size={18} /> : <BagIcon size={18} />}{soldOut ? t("product.soldOut") : added ? t("product.added") : t("product.addToCart")}
             </button>
           </div>
+          {config.merchandising?.trendyolLink && variant?.trendyolUrl && (
+            <p className="mt-2.5 text-center text-[13px] text-muted">
+              {t("product.orOn")}{" "}
+              <a href={variant.trendyolUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-ink underline underline-offset-2 transition hover:text-brand-600">{t("product.buyOnTrendyol")} ↗</a>
+            </p>
+          )}
 
           <ul className="mt-7 grid gap-3 rounded-2xl border border-line bg-surface p-4 text-sm">
             <li className="flex items-center gap-3"><TruckIcon className="shrink-0 text-brand-ink" /><span><strong className="font-semibold">{t("product.shipsFree")}</strong>{th != null && <span className="text-muted"> · {t("product.shipsFreeSub", { amount: money(th, currency) })}</span>}</span></li>
@@ -241,7 +247,7 @@ function ProductView({ product: p }: { product: ProductDetail }) {
         </div>
       </div>
       {variant && !buyVisible && (
-        <div className="fixed inset-x-0 bottom-0 z-30 flex items-center gap-3 border-t border-line bg-surface/95 px-4 py-3 shadow-lift backdrop-blur md:hidden" data-testid="sticky-buy">
+        <div style={{ bottom: "var(--consent-h, 0px)" }} className="fixed inset-x-0 z-30 flex items-center gap-3 border-t border-line bg-surface/95 px-4 py-3 shadow-lift backdrop-blur md:hidden" data-testid="sticky-buy">
           <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{p.title}</p><p className="text-sm font-semibold tabular-nums">{money(variant.price, currency)}</p></div>
           <button className="btn-primary shrink-0" disabled={soldOut || busy} onClick={() => void add()}>{soldOut ? t("product.soldOut") : <><BagIcon size={18} />{t("product.addToCart")}</>}</button>
         </div>

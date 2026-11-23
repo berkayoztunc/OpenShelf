@@ -141,6 +141,8 @@ export const MerchandisingSettings = z.object({
   inStockFirst: z.boolean().default(false),
   /** Look-back window for the "bestselling" order. */
   bestsellerDays: z.number().int().min(7).max(365).default(30),
+  /** Product page: show a small "Buy on Trendyol" link under the add-to-cart button for products listed on Trendyol. */
+  trendyolLink: z.boolean().default(false),
 });
 
 /** Products shown in the home page "featured" section. `auto` = the first `limit` products in the default storefront order. */
