@@ -34,6 +34,14 @@ export const FAILED_STATUSES: readonly string[] = ["29", "405"];
 
 export const KDV = { taxType: "KDV", taxCode: "0015", name: "KDV" } as const;
 export const UNIT_PIECE = "C62";
+/**
+ * Carriers we know the legal title and VKN of, keyed by the carrier code a shipment stores (Geliver providerCode or a
+ * marketplace carrier name, upper-cased, letters only). Only values seen on a real GİB document are listed; any other
+ * carrier uses the default carrier from the integration settings.
+ */
+export const KNOWN_CARRIERS: Record<string, { taxId: string; name: string }> = {
+  YURTICI: { taxId: "9860008925", name: "YURTİÇİ KARGO SERVİSİ A.Ş." }, // from a Trendyol e-Arşiv, 2026-11
+};
 /** GİB placeholder TCKN for a consumer who gave no identity number. */
 export const ANONYMOUS_TCKN = "11111111111";
 
@@ -45,6 +53,11 @@ export interface CreateInvoiceRequest {
     taxOffice?: string; email?: string; countryCode: "TR";
   };
   currencyInfo: { currency: string };
+  xsltCode?: string;
+  /** internet sale: where and how it was paid */
+  paymentInfo?: { purchaseUrl?: string; paymentAgentName?: string; paymentType?: string; paymentDate: string; paymentMeans: string };
+  /** internet sale: when and with which carrier the goods were sent */
+  deliveryInfo?: { carrierTaxId?: string; carrierName?: string; sentAt: string };
   notes?: string[];
   invoiceInfo: { invoiceType: "EARSIVFATURA" | "TEMELFATURA"; invoiceTypeCode: "SATIS"; invoiceUuid: string };
   invoiceLines: { unitCode: string; quantity: number; itemName: string; unitPriceAmount: number; totalAmount: number; taxableAmount: number; taxAmount: number; taxPercent: number; taxName: string; taxCode: string; totalDiscountAmount: number; totalTax: { totalTaxAmount: number; subTotalTaxes: TaxSubtotal[] } }[];

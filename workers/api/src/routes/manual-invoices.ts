@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { addresses, channelPrices, customers, inventory, manualInvoices, orders, productVariants, products } from "@openshelf/db";
 import type { InvoiceInput, InvoicingProvider } from "@openshelf/integration-sdk";
+import { loadOnlineSale } from "@openshelf/integration-efaturam";
 import { ManualInvoiceBody, computeInvoiceTotals } from "@openshelf/shared";
 import type { AppEnv } from "../env";
 import { ApiError, body, likeEscape, notFound, paged, paging, parse } from "../lib/http";
@@ -36,6 +37,7 @@ async function assertOrder(db: AppEnv["Variables"]["db"], orderId?: string) {
 const toRow = (b: ManualInvoiceBody, t: ReturnType<typeof computeInvoiceTotals>) => ({
   customer: b.customer, lines: b.lines, pricesIncludeTax: b.pricesIncludeTax, currency: b.currency.toUpperCase(), issueDate: b.issueDate ?? null,
   notes: b.notes || null, orderId: b.orderId ?? null, total: t.total, taxTotal: t.tax,
+  ...(b.onlineSale !== undefined ? { onlineSale: b.onlineSale } : {}),
 });
 async function getRow(db: AppEnv["Variables"]["db"], id: string): Promise<Row> {
   const [r] = await db.select().from(manualInvoices).where(eq(manualInvoices.id, id)).limit(1);
@@ -44,6 +46,7 @@ async function getRow(db: AppEnv["Variables"]["db"], id: string): Promise<Row> {
 }
 const asBody = (r: Row): ManualInvoiceBody => parse(ManualInvoiceBody, {
   customer: r.customer, lines: r.lines, pricesIncludeTax: r.pricesIncludeTax, currency: r.currency, issueDate: r.issueDate ?? undefined, notes: r.notes ?? "", orderId: r.orderId ?? undefined,
+  ...(r.onlineSale !== undefined && r.onlineSale !== null ? { onlineSale: r.onlineSale } : {}),
 });
 const view = (r: Row) => ({ ...r, computed: computeInvoiceTotals((r.lines as ManualInvoiceBody["lines"]) ?? [], r.pricesIncludeTax) });
 
@@ -65,10 +68,21 @@ const invoiceNumberFor = (id: string, orderNumber?: string | null) => orderNumbe
 async function buildInput(db: AppEnv["Variables"]["db"], id: string, b: ManualInvoiceBody): Promise<InvoiceInput> {
   let orderNumber: string | null = null;
   let addr: Record<string, any> = {};
+  let onlineSale: InvoiceInput["onlineSale"];
   if (b.orderId) {
-    const [o] = await db.select({ n: orders.number, ship: orders.shippingAddress, bill: orders.billingAddress }).from(orders).where(eq(orders.id, b.orderId)).limit(1);
+    const [o] = await db.select({ n: orders.number, ship: orders.shippingAddress, bill: orders.billingAddress, source: orders.source }).from(orders).where(eq(orders.id, b.orderId)).limit(1);
     orderNumber = o?.n ?? null;
     addr = ((o?.bill ?? o?.ship) ?? {}) as Record<string, any>;
+    // a website order paid online is an internet sale: payment and shipment details go on the e-Arşiv
+    if (o?.source === "website" && b.onlineSale === undefined) onlineSale = await loadOnlineSale(db, b.orderId);
+  }
+  if (b.onlineSale) {
+    const x = b.onlineSale;
+    onlineSale = {
+      ...(x.websiteUrl ? { websiteUrl: x.websiteUrl } : {}), paymentDate: `${x.paymentDate}T12:00:00.000Z`, paymentMeans: "CREDIT_CARD",
+      ...(x.paymentAgentName ? { paymentAgentName: x.paymentAgentName } : {}),
+      shipment: { ...(x.sentAt ? { sentAt: x.sentAt } : {}), ...(x.carrierName ? { carrierName: x.carrierName } : {}), ...(x.carrierTaxId ? { carrierTaxId: x.carrierTaxId } : {}) },
+    };
   }
   const cu = b.customer;
   const now = new Date();
@@ -83,6 +97,7 @@ async function buildInput(db: AppEnv["Variables"]["db"], id: string, b: ManualIn
       isCompany: cu.isCompany,
     },
     ...(b.notes?.trim() ? { notes: [b.notes.trim()] } : {}),
+    ...(onlineSale ? { onlineSale } : {}),
   };
 }
 async function previewOf(c: Parameters<typeof getAdapter>[0], db: AppEnv["Variables"]["db"], id: string, b: ManualInvoiceBody) {
@@ -158,6 +173,26 @@ adminManualInvoices.post("/manual-invoices/preview", requireRole("staff"), async
   const b = await body(c, ManualInvoiceBody); const db = c.get("db");
   checkBody(b);
   return c.json(await previewOf(c.env, db, "preview", b));
+});
+
+/**
+ * Internet sale details of an order as they would be printed (payment, shipment, web address and carrier resolved with the
+ * invoicing settings), to pre-fill the editor. `onlineSale: null` when the order was not paid online.
+ */
+adminManualInvoices.get("/manual-invoices/online-sale-defaults", requireRole("staff"), async (c) => {
+  const db = c.get("db"); const orderId = c.req.query("orderId") ?? "";
+  const [o] = orderId ? await db.select({ source: orders.source }).from(orders).where(eq(orders.id, orderId)).limit(1) : [];
+  if (!o) throw notFound("Order");
+  const sale = o.source === "website" ? await loadOnlineSale(db, orderId) : undefined;
+  if (!sale) return c.json({ onlineSale: null });
+  const a = await invoicingAdapter(c.env, db).catch(() => null);
+  const resolve = (a?.adapter as unknown as { resolveOnlineSale?: (o: NonNullable<InvoiceInput["onlineSale"]>, at: string) => Record<string, string | undefined> } | undefined)?.resolveOnlineSale;
+  const today = new Date().toISOString();
+  const r = resolve ? resolve.call(a!.adapter, sale, today) : { websiteUrl: sale.siteOrigin, paymentDate: sale.paymentDate, paymentAgentName: sale.paymentAgentName, sentAt: (sale.shipment?.sentAt ?? today).slice(0, 10) };
+  return c.json({ onlineSale: {
+    websiteUrl: r.websiteUrl ?? "", paymentDate: String(r.paymentDate ?? today).slice(0, 10), paymentAgentName: r.paymentAgentName ?? "",
+    sentAt: r.sentAt ?? "", carrierName: r.carrierName ?? "", carrierTaxId: r.carrierTaxId ?? "",
+  }, shipped: !!sale.shipment });
 });
 
 adminManualInvoices.get("/manual-invoices/:id", requireRole("staff"), async (c) => c.json(view(await getRow(c.get("db"), c.req.param("id")))));

@@ -105,6 +105,9 @@ export const TOOLS: ToolDef[] = [
   /* manual invoices (read) */
   t({ name: "list_manual_invoices", title: "Manual invoices", level: "read", method: "GET", path: "/manual-invoices", query: ["q", "status", "page", "pageSize"], shape: { q: q("number/customer"), status: q("draft|issued|cancelled"), ...page }, description: "Manually created invoices." }),
   t({ name: "get_manual_invoice", title: "Get manual invoice", level: "read", method: "GET", path: "/manual-invoices/:id", shape: { id: id("manual invoice") }, description: "One manual invoice with lines and totals." }),
+  t({ name: "manual_invoice_online_sale", title: "Internet sale details of an order", level: "read", method: "GET", path: "/manual-invoices/online-sale-defaults", query: ["orderId"],
+    shape: { orderId: z.string().min(1).describe("order id") },
+    description: "Internet sale details an e-Arşiv for this order will print: web address, payment date/agent, shipping date, carrier title + VKN (resolved with the e-Faturam settings). onlineSale null = not paid online. Pass it (edited) as onlineSale to create_manual_invoice / update_manual_invoice." }),
   t({ name: "preview_manual_invoice", title: "Preview manual invoice", level: "read", method: "POST", path: "/manual-invoices/preview", shape: { body: ManualInvoiceBody }, description: "Compute totals/HTML for an invoice that is not saved yet." }),
   t({ name: "preview_saved_manual_invoice", title: "Preview saved manual invoice", level: "read", method: "POST", path: "/manual-invoices/:id/preview", shape: { id: id("manual invoice") }, description: "Rendered HTML/totals of a saved manual invoice." }),
   /* Trendyol / Geliver (read) */

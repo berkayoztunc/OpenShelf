@@ -77,6 +77,25 @@ export interface InvoiceInput {
   lines: { name: string; quantity: number; unitPrice: number; taxRate: number }[]; currency: string;
   /** free-text notes printed on the invoice */
   notes?: string[];
+  /**
+   * Internet sale details (GİB wants them on an e-Arşiv for an online sale): where it was sold, how and when it was paid,
+   * and when / with which carrier it was sent. Left out for a sale that did not happen online.
+   */
+  onlineSale?: {
+    /** typed in for this invoice; wins over the settings */
+    websiteUrl?: string;
+    /** the address the store runs on; used only when neither the invoice nor the settings name one */
+    siteOrigin?: string;
+    paymentDate: string; // ISO
+    /** gateway enum, e.g. CREDIT_CARD */
+    paymentMeans: string;
+    paymentAgentName?: string;
+    /**
+     * Shipment, when known; without a sending date the invoice date is used. `carrier` is a code resolved to a known carrier;
+     * carrierName / carrierTaxId, when given, are printed as they are.
+     */
+    shipment?: { sentAt?: string; carrier?: string; carrierName?: string; carrierTaxId?: string };
+  };
 }
 export interface InvoiceResult { providerInvoiceId: string; number?: string; type: "e_fatura" | "e_arsiv"; pdfUrl?: string }
 export interface InvoicingProvider extends OpenShelfIntegration {

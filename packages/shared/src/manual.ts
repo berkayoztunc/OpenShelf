@@ -25,6 +25,19 @@ export const ManualInvoiceCustomer = z.object({
   isCompany: z.boolean().default(false),
 });
 
+const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const opt = <T extends z.ZodTypeAny>(t: T) => t.optional().or(z.literal(""));
+/** Internet sale details of an e-Arşiv (GİB): web address, payment date/agent, sending date and carrier. */
+export const ManualOnlineSale = z.object({
+  websiteUrl: opt(z.string().url().max(300).refine((u) => u.startsWith("https://"), "Use an https:// address")),
+  paymentDate: day,
+  paymentAgentName: opt(z.string().max(100)),
+  sentAt: opt(day),
+  carrierName: opt(z.string().max(200)),
+  carrierTaxId: opt(z.string().regex(/^\d{10,11}$/, "VKN (10) or TCKN (11)")),
+});
+export type ManualOnlineSale = z.infer<typeof ManualOnlineSale>;
+
 export const ManualInvoiceBody = z.object({
   customer: ManualInvoiceCustomer,
   lines: z.array(ManualInvoiceLine).min(1).max(100),
@@ -33,6 +46,8 @@ export const ManualInvoiceBody = z.object({
   issueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   notes: z.string().max(1000).optional().or(z.literal("")),
   orderId: z.string().optional(),
+  /** null = not an internet sale; left out = taken from the linked order when it was paid online */
+  onlineSale: ManualOnlineSale.nullable().optional(),
 });
 export type ManualInvoiceBody = z.infer<typeof ManualInvoiceBody>;
 

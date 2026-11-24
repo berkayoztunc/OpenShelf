@@ -1,0 +1,1 @@
+ALTER TABLE `manual_invoices` ADD `online_sale` text;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { factory, invoiceIssueHandler, buildAmounts, uuidFromKey, EfaturamAdapter, districtOf, validationDetails } from "../src/index";
+import { factory, invoiceIssueHandler, buildAmounts, uuidFromKey, EfaturamAdapter, districtOf, validationDetails, carrierOf } from "../src/index";
 import type { InvoiceRepo } from "../src/index";
 
 const PROD = "https://apigateway.trendyolecozum.com";
@@ -109,6 +109,32 @@ describe("efaturam", () => {
     expect(Number.isInteger(body.invoiceLines[0].unitPriceAmount)).toBe(true);
     const l = body.invoiceLines[0];
     expect(l.totalTax).toEqual({ totalTaxAmount: l.taxAmount, subTotalTaxes: [{ taxableAmount: l.taxableAmount, taxAmount: l.taxAmount, percent: 10, taxType: "KDV", taxCode: "0015", name: "KDV" }] });
+  });
+  it("an internet sale carries payment, delivery and design details", async () => {
+    const { adapter, calls } = mk((c) => c.path === "/api/invoice/documents/earchive" ? { json: { invoiceId: "N1" } } : undefined,
+      { carrierTaxId: "1234567890", carrierName: "ÖRNEK KARGO A.Ş.", xsltCode: "NUAD" });
+    const onlineSale = { websiteUrl: "https://shop.example.com", paymentDate: "2026-11-23T10:00:00.000Z", paymentMeans: "CREDIT_CARD", paymentAgentName: "iyzico" };
+    await adapter.issue({ ...base, customer: person, onlineSale: { ...onlineSale, shipment: { sentAt: "2026-11-24T08:00:00.000Z", carrier: "YURTICI" } } }, "o4:e_arsiv");
+    let body = calls.filter((c) => c.path === "/api/invoice/documents/earchive").at(-1)!.body;
+    expect(body.paymentInfo).toEqual({ purchaseUrl: "https://shop.example.com", paymentDate: "2026-11-23T10:00:00.000Z", paymentMeans: "CREDIT_CARD", paymentAgentName: "iyzico" });
+    expect(body.deliveryInfo).toEqual({ sentAt: "2026-11-24", carrierTaxId: "9860008925", carrierName: "YURTİÇİ KARGO SERVİSİ A.Ş." });
+    expect(body.xsltCode).toBe("NUAD");
+    // not shipped yet: invoice date, default carrier from the settings
+    await adapter.issue({ ...base, customer: person, onlineSale }, "o5:e_arsiv");
+    body = calls.filter((c) => c.path === "/api/invoice/documents/earchive").at(-1)!.body;
+    expect(body.deliveryInfo).toEqual({ sentAt: "2026-01-01", carrierTaxId: "1234567890", carrierName: "ÖRNEK KARGO A.Ş." });
+    // not an internet sale: neither block
+    await adapter.issue({ ...base, customer: person }, "o6:e_arsiv");
+    body = calls.filter((c) => c.path === "/api/invoice/documents/earchive").at(-1)!.body;
+    expect(body.paymentInfo).toBeUndefined(); expect(body.deliveryInfo).toBeUndefined();
+  });
+  it("knows a carrier by its code, else uses the default", () => {
+    const yurtici = { taxId: "9860008925", name: "YURTİÇİ KARGO SERVİSİ A.Ş." };
+    expect(carrierOf("YURTICI", {})).toEqual(yurtici);
+    expect(carrierOf("Yurtiçi Kargo Marketplace", {})).toEqual(yurtici);
+    expect(carrierOf("SURAT", { taxId: "1", name: "YURTİÇİ KARGO" })).toEqual({ name: "SÜRAT KARGO" }); // never another carrier's VKN
+    expect(carrierOf("SURAT", { taxId: "2", name: "Sürat Kargo A.Ş." })).toEqual({ taxId: "2", name: "Sürat Kargo A.Ş." });
+    expect(carrierOf(undefined, { name: "X" })).toEqual({ name: "X" });
   });
   it("finds the district in the address text when the order has none", () => {
     expect(districtOf({ address: "Sancak mah. 524. sok. No 13 çankaya/Ankara Çankaya", city: "Ankara" })).toBe("Çankaya");

@@ -3,14 +3,14 @@ import type {
   AdapterDeps, AdapterFactory, HealthResult, IntegrationCredentials, IntegrationManifest, InvoiceInput, InvoiceResult, InvoicingProvider,
 } from "@openshelf/integration-sdk";
 import {
-  ALLOWED_HOSTS, ANONYMOUS_TCKN, DEFAULT_BASE_URL, FAILED_STATUSES, KDV, PROD_BASE_URL, STAGE_BASE_URL, TOKEN_HEADER, UNIT_PIECE, bearer, paths,
+  ALLOWED_HOSTS, ANONYMOUS_TCKN, DEFAULT_BASE_URL, FAILED_STATUSES, KDV, KNOWN_CARRIERS, PROD_BASE_URL, STAGE_BASE_URL, TOKEN_HEADER, UNIT_PIECE, bearer, paths,
   type CreateInvoiceRequest, type CreateInvoiceResponse, type TaxPayer, type TaxSubtotal,
 } from "./endpoints";
 
 import type { EfaturamCallResult, EfaturamDiagnosis, EfaturamDiagnosisStep, EfaturamOperation } from "@openshelf/shared";
 import { buildEfaturamRequest, runEfaturamCall, signInFailure, type ConsoleCall } from "./console";
 
-export { jobHandlers, invoiceIssueHandler, drizzleInvoiceRepo } from "./jobs";
+export { jobHandlers, invoiceIssueHandler, drizzleInvoiceRepo, loadOnlineSale } from "./jobs";
 export type { JobHandler, InvoiceRepo } from "./jobs";
 export { EFATURAM_OPERATIONS } from "./catalog";
 export { EfaturamConsoleError, buildEfaturamRequest, runEfaturamCall } from "./console";
@@ -30,6 +30,11 @@ export const configSchema = z.object({
     // Fixed-IP relay (VPS): the gateway only accepts a whitelisted IP, which Workers do not have.
     useRelay: z.boolean().default(true), // switch: false = connect directly even when a relay address is saved (address/secret are kept)
     relayUrl: z.string().url().refine((u) => u.startsWith("https://"), "relayUrl must be https").optional().or(z.literal("").transform(() => undefined)),
+    // Internet sale details printed on e-Arşiv invoices
+    websiteUrl: z.string().url().refine((u) => u.startsWith("https://"), "websiteUrl must be https").optional().or(z.literal("").transform(() => undefined)),
+    carrierTaxId: z.string().regex(/^\d{10,11}$/, "VKN (10) or TCKN (11)").optional().or(z.literal("").transform(() => undefined)),
+    carrierName: z.string().max(200).optional().or(z.literal("").transform(() => undefined)),
+    xsltCode: z.string().max(100).optional().or(z.literal("").transform(() => undefined)), // invoice design defined in the e-Faturam portal
   }),
   secrets: z.object({ username: z.string().min(1), password: z.string().min(1), relaySecret: z.string().optional() }),
 });
@@ -46,6 +51,10 @@ export const manifest: IntegrationManifest = {
     { key: "companyId", label: "Firma ID (companyId)", type: "text", help: "Boş bırakın; bağlantı testi bulunamadığını söylerse e-Faturam'dan aldığınız değeri girin." },
     { key: "userId", label: "Kullanıcı ID (userId)", type: "text", help: "Boş bırakın; bağlantı testi bulunamadığını söylerse e-Faturam'dan aldığınız değeri girin." },
     { key: "useRelay", label: "Relay sunucusunu kullan", type: "boolean", help: "Kapalıyken istekler relay üzerinden değil doğrudan e-Faturam'a gider; relay adresi ve secret silinmez, tekrar açabilirsiniz." },
+    { key: "websiteUrl", label: "Web sitesi adresi (internet satışı)", type: "text", help: "Faturada 'Web adresi' olarak basılır, örn. https://magazaniz.com. Boş bırakılırsa mağazanın açıldığı adres kullanılır." },
+    { key: "carrierName", label: "Varsayılan kargo firması unvanı", type: "text", help: "Faturada 'Gönderiyi taşıyan' olarak basılır, örn. YURTİÇİ KARGO SERVİSİ A.Ş. Gönderinin kargo firması tanınıyorsa o kullanılır." },
+    { key: "carrierTaxId", label: "Varsayılan kargo firması VKN", type: "text", help: "Kargo firmasının 10 haneli vergi numarası." },
+    { key: "xsltCode", label: "Fatura tasarımı (XSLT kodu)", type: "text", help: "e-Faturam portalında tanımlı fatura tasarımının kodu. Boş = e-Faturam varsayılan tasarımı." },
     { key: "relayUrl", label: "Relay adresi (sabit IP)", type: "text", help: "Boş = doğrudan bağlan. Sabit IP'li VPS relay'i kullanacaksanız https://relay.example.com biçiminde kendi relay adresinizi girin ve aşağıya relay secret'ını yazın." },
   ],
   secretFields: [
@@ -103,6 +112,24 @@ export function districtOf(c: { district?: string; address: string; city: string
   return "Merkez";
 }
 const cap = (w: string) => w.charAt(0).toLocaleUpperCase("tr") + w.slice(1).toLocaleLowerCase("tr");
+
+/** Readable names of carrier codes whose VKN we do not ship with. */
+const CARRIER_NAMES: Record<string, string> = { SURAT: "SÜRAT KARGO", ARAS: "ARAS KARGO", MNG: "MNG KARGO", PTT: "PTT KARGO", HEPSIJET: "HEPSIJET", KOLAYGELSIN: "KOLAY GELSİN", SENDEO: "SENDEO", UPS: "UPS KARGO", DHL: "DHL" };
+/**
+ * Carrier for the invoice. Not shipped yet: the default carrier from the settings. Shipped: the known carrier (title + VKN)
+ * for the shipment's carrier code, or the default when it names the same carrier, else only a readable name (never another carrier's VKN).
+ */
+export function carrierOf(code: string | undefined, fallback: { taxId?: string; name?: string }): { taxId?: string; name?: string } {
+  if (!code?.trim()) return fallback;
+  const fold: Record<string, string> = { "İ": "I", "Ç": "C", "Ş": "S", "Ğ": "G", "Ü": "U", "Ö": "O" };
+  const norm = (v: string) => v.toLocaleUpperCase("tr").replace(/[İÇŞĞÜÖ]/g, (ch) => fold[ch]!).replace(/[^A-Z]/g, "");
+  const key = norm(code);
+  const hit = Object.entries(KNOWN_CARRIERS).find(([k]) => key.startsWith(k));
+  if (hit) return hit[1];
+  const named = Object.entries(CARRIER_NAMES).find(([k]) => key.startsWith(k));
+  if (fallback.name && named && norm(fallback.name).startsWith(named[0])) return fallback; // the default is this same carrier
+  return { name: named ? named[1] : code.trim().slice(0, 200) };
+}
 
 /** Deterministic UUID from the idempotency key, so a retry reuses the same ETTN and cannot create a second invoice. */
 export async function uuidFromKey(key: string): Promise<string> {
@@ -333,6 +360,31 @@ export class EfaturamAdapter implements InvoicingProvider {
     } catch { return undefined; } // the document may still be rendering; the invoice itself is issued
   }
 
+  /**
+   * The internet sale details as they will be printed: web address (settings first), payment, sending date and carrier
+   * (an explicit carrier wins, else the shipment's carrier code, else the default carrier from the settings).
+   */
+  resolveOnlineSale(o: NonNullable<InvoiceInput["onlineSale"]>, issuedAt: string) {
+    const sh = o.shipment;
+    const explicit = sh?.carrierName?.trim() || sh?.carrierTaxId?.trim();
+    const carrier = explicit ? { name: sh?.carrierName?.trim() || undefined, taxId: sh?.carrierTaxId?.trim() || undefined }
+      : carrierOf(sh?.carrier, { taxId: this.p.config.carrierTaxId, name: this.p.config.carrierName });
+    return {
+      websiteUrl: o.websiteUrl || this.p.config.websiteUrl || o.siteOrigin, paymentDate: o.paymentDate, paymentMeans: o.paymentMeans, paymentAgentName: o.paymentAgentName,
+      sentAt: (sh?.sentAt || issuedAt).slice(0, 10), carrierName: carrier.name, carrierTaxId: carrier.taxId,
+    };
+  }
+
+  /** paymentInfo + deliveryInfo of an internet sale (GİB: web address, payment means/date, sending date and carrier). */
+  private onlineSaleInfo(input: InvoiceInput): Pick<CreateInvoiceRequest, "paymentInfo" | "deliveryInfo"> {
+    if (!input.onlineSale) return {};
+    const r = this.resolveOnlineSale(input.onlineSale, input.issuedAt);
+    return {
+      paymentInfo: { ...(r.websiteUrl ? { purchaseUrl: r.websiteUrl } : {}), paymentDate: r.paymentDate, paymentMeans: r.paymentMeans, ...(r.paymentAgentName ? { paymentAgentName: r.paymentAgentName } : {}) },
+      deliveryInfo: { sentAt: r.sentAt, ...(r.carrierTaxId ? { carrierTaxId: r.carrierTaxId } : {}), ...(r.carrierName ? { carrierName: r.carrierName } : {}) },
+    };
+  }
+
   async issue(input: InvoiceInput, idempotencyKey: string): Promise<InvoiceResult> {
     const type = await this.resolveInvoiceType(input);
     const { companyId, userId } = await this.signIn();
@@ -354,6 +406,8 @@ export class EfaturamAdapter implements InvoicingProvider {
         ...(c.taxOffice ? { taxOffice: c.taxOffice } : {}), ...(c.email ? { email: c.email } : {}), countryCode: "TR",
       },
       currencyInfo: { currency: (input.currency || "TRY").toUpperCase() },
+      ...(this.p.config.xsltCode ? { xsltCode: this.p.config.xsltCode } : {}),
+      ...this.onlineSaleInfo(input),
       ...(input.notes?.some((n) => n.trim()) ? { notes: input.notes.map((n) => n.trim()).filter(Boolean).map((n) => n.slice(0, 500)) } : {}),
       invoiceInfo: { invoiceType: type === "e_fatura" ? "TEMELFATURA" : "EARSIVFATURA", invoiceTypeCode: "SATIS", invoiceUuid },
       ...buildAmounts(input.lines),

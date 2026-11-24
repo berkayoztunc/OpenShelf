@@ -282,6 +282,8 @@ export const manualInvoices = sqliteTable("manual_invoices", {
   pricesIncludeTax: integer("prices_include_tax", { mode: "boolean" }).notNull().default(true),
   currency: text("currency").notNull().default("TRY"),
   issueDate: text("issue_date"), notes: text("notes"),
+  /** internet sale details printed on an e-Arşiv: {websiteUrl,paymentDate,paymentAgentName,sentAt,carrierName,carrierTaxId}; null = not an internet sale, absent = taken from the linked order */
+  onlineSale: text("online_sale", { mode: "json" }),
   total: integer("total").notNull().default(0), taxTotal: integer("tax_total").notNull().default(0),
   provider: text("provider"), providerInvoiceId: text("provider_invoice_id"), number: text("number"), pdfUrl: text("pdf_url"),
   error: text("error"), createdBy: text("created_by"), issuedBy: text("issued_by"), issuedAt: integer("issued_at", { mode: "timestamp" }),

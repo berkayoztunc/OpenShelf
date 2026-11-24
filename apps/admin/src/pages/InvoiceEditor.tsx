@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowDown, ArrowUp, Info, Mail, Plus, Printer, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, Info, Mail, Plus, Printer, RotateCcw, Trash2 } from "lucide-react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../lib/api";
@@ -10,8 +10,9 @@ import { HelpTip } from "../components/help/HelpTip";
 import { useAdmin } from "../lib/auth";
 import { useSettings } from "../lib/settings";
 import { openPrint } from "../lib/print";
-import { describeInvoiceError, emptyForm, emptyLine, finalUnit, formToBody, fromFinalUnit, fromNetUnit, invoiceToForm, netUnit, totalsOf, validateForm, warningText } from "../lib/invoices";
-import type { CustomerForm, Described, InvoiceForm, InvoiceFull, InvoicePreview, LineForm } from "../lib/invoices";
+import { describeInvoiceError, emptyForm, emptyLine, emptyOnlineSale, finalUnit, formToBody, fromFinalUnit, fromNetUnit, invoiceToForm, netUnit, onlineSaleToForm, totalsOf, validateForm, warningText } from "../lib/invoices";
+import type { CustomerForm, Described, InvoiceForm, InvoiceFull, InvoicePreview, LineForm, OnlineSaleForm } from "../lib/invoices";
+import type { ManualOnlineSale } from "@openshelf/shared";
 import { orderToForm } from "../lib/rawOrder";
 import type { RawOrder } from "../lib/rawOrder";
 import { Typeahead } from "../components/Typeahead";
@@ -90,6 +91,20 @@ export default function InvoiceEditor() {
     document.querySelector<HTMLInputElement>(`[data-line-name="${focusKey}"]`)?.focus(); setFocusKey(null);
   }, [focusKey, form.lines]);
 
+  // Internet sale details of the linked order (payment, shipment, carrier) resolved with the invoicing settings.
+  const linkedOrder = form.orderId;
+  const saleDefaults = useQuery({
+    queryKey: ["manual-invoice-online-defaults", linkedOrder], enabled: !!linkedOrder, staleTime: 60_000,
+    queryFn: () => api.get<{ onlineSale: ManualOnlineSale | null; shipped?: boolean }>(`/api/admin/manual-invoices/online-sale-defaults?orderId=${encodeURIComponent(linkedOrder!)}`),
+  });
+  useEffect(() => {
+    // fill once, only while the editor has not decided yet (a saved invoice keeps what was saved)
+    if (saleDefaults.data && form.onlineSale === undefined && !["issued", "cancelled"].includes(existing.data?.status ?? "draft")) {
+      setForm((f) => (f.onlineSale === undefined ? { ...f, onlineSale: onlineSaleToForm(saleDefaults.data.onlineSale) } : f));
+    }
+  }, [saleDefaults.data, form.onlineSale, existing.data?.status]);
+  const online = form.onlineSale ?? emptyOnlineSale();
+
   const status = existing.data?.status ?? "draft";
   const readOnly = !canWrite || ["issued", "cancelled", "issuing", "cancelling"].includes(status);
   const errors = useMemo(() => validateForm(form), [form]);
@@ -107,6 +122,7 @@ export default function InvoiceEditor() {
 
   const patch = (p: Partial<InvoiceForm>) => setForm((f) => ({ ...f, ...p }));
   const patchCustomer = (p: Partial<CustomerForm>) => setForm((f) => ({ ...f, customer: { ...f.customer, ...p } }));
+  const patchOnline = (p: Partial<OnlineSaleForm>) => setForm((f) => ({ ...f, onlineSale: { ...(f.onlineSale ?? emptyOnlineSale()), ...p } }));
   const patchLine = (key: string, p: Partial<LineForm>) => setForm((f) => ({ ...f, lines: f.lines.map((l) => (l.key === key ? { ...l, ...p } : l)) }));
   const moveLine = (i: number, d: -1 | 1) => setForm((f) => { const ls = [...f.lines]; const j = i + d; if (j < 0 || j >= ls.length) return f; [ls[i], ls[j]] = [ls[j]!, ls[i]!]; return { ...f, lines: ls }; });
   const addCustom = () => { const l = emptyLine({ taxRate: String(defaultRate) }); setForm((f) => ({ ...f, lines: [...f.lines, l] })); setFocusKey(l.key); };
@@ -191,7 +207,10 @@ export default function InvoiceEditor() {
                 <TextField label={form.customer.isCompany ? t("invoices.customer.vkn") : t("invoices.customer.tckn")} hint={form.customer.isCompany ? t("invoices.customer.vkn.hint") : t("invoices.customer.tckn.hint")} help={form.customer.isCompany ? "invoices.taxIdCompany" : "invoices.taxIdPerson"} inputMode="numeric" value={form.customer.taxId} error={err("customer.taxId")} onChange={(e) => patchCustomer({ taxId: e.target.value.replace(/\D/g, "").slice(0, 11) })} />
                 {form.customer.isCompany && <TextField label={t("invoices.customer.taxOffice")} hint={t("invoices.customer.taxOffice.hint")} help="invoices.taxOffice" value={form.customer.taxOffice} onChange={(e) => patchCustomer({ taxOffice: e.target.value })} />}
                 <div className="sm:col-span-2"><TextField label={t("invoices.customer.address")} hint={t("invoices.customer.address.hint")} help="invoices.address" required value={form.customer.address} error={err("customer.address")} onChange={(e) => patchCustomer({ address: e.target.value })} /></div>
+                <TextField label={t("invoices.customer.district")} hint={t("invoices.customer.district.hint")} help="invoices.district" value={form.customer.district ?? ""} onChange={(e) => patchCustomer({ district: e.target.value })} />
                 <TextField label={t("invoices.customer.city")} hint={t("invoices.customer.city.hint")} help="invoices.city" required value={form.customer.city} error={err("customer.city")} onChange={(e) => patchCustomer({ city: e.target.value })} />
+                <TextField label={t("invoices.customer.postalCode")} inputMode="numeric" maxLength={20} value={form.customer.postalCode ?? ""} onChange={(e) => patchCustomer({ postalCode: e.target.value })} />
+                <TextField label={t("invoices.customer.phone")} type="tel" maxLength={30} value={form.customer.phone ?? ""} onChange={(e) => patchCustomer({ phone: e.target.value })} />
               </div>
             </div>
           </Card>
@@ -252,6 +271,26 @@ export default function InvoiceEditor() {
               </div>
             )}
             {err("lines") && form.lines.length > 0 && <p role="alert" className="mt-2 text-xs text-danger">{err("lines")}</p>}
+          </Card>
+
+          <Card title={t("invoices.online.title")} actions={!readOnly && linkedOrder && saleDefaults.data?.onlineSale ? (
+            <Button size="sm" variant="ghost" onClick={() => setForm((f) => ({ ...f, onlineSale: onlineSaleToForm(saleDefaults.data!.onlineSale) }))}><RotateCcw size={14} />{t("invoices.online.reset")}</Button>
+          ) : undefined}>
+            <div className="space-y-4" data-testid="online-sale">
+              <Toggle label={t("invoices.online.enabled")} hint={t("invoices.online.enabled.hint")} help="invoices.onlineSale" checked={online.enabled} onChange={(v) => patchOnline({ enabled: v, ...(v && !online.paymentDate ? { paymentDate: form.issueDate || new Date().toISOString().slice(0, 10) } : {}) })} />
+              {online.enabled && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="sm:col-span-2"><TextField label={t("invoices.online.websiteUrl")} hint={t("invoices.online.websiteUrl.hint")} placeholder="https://" value={online.websiteUrl} error={err("online.websiteUrl")} onChange={(e) => patchOnline({ websiteUrl: e.target.value })} /></div>
+                  <TextField label={t("invoices.online.paymentDate")} type="date" required value={online.paymentDate} error={err("online.paymentDate")} onChange={(e) => patchOnline({ paymentDate: e.target.value })} />
+                  <TextField label={t("invoices.online.paymentAgent")} hint={t("invoices.online.paymentAgent.hint")} maxLength={100} value={online.paymentAgentName} onChange={(e) => patchOnline({ paymentAgentName: e.target.value })} />
+                  <TextField label={t("invoices.online.sentAt")} type="date" hint={t("invoices.online.sentAt.hint")} value={online.sentAt} onChange={(e) => patchOnline({ sentAt: e.target.value })} />
+                  <div />
+                  <TextField label={t("invoices.online.carrierName")} hint={t("invoices.online.carrierName.hint")} maxLength={200} value={online.carrierName} onChange={(e) => patchOnline({ carrierName: e.target.value })} />
+                  <TextField label={t("invoices.online.carrierTaxId")} inputMode="numeric" value={online.carrierTaxId} error={err("online.carrierTaxId")} onChange={(e) => patchOnline({ carrierTaxId: e.target.value.replace(/\D/g, "").slice(0, 11) })} />
+                  {!online.carrierTaxId && <p role="note" className="sm:col-span-2 text-xs text-warn">{t("invoices.online.carrierTaxIdMissing")}</p>}
+                </div>
+              )}
+            </div>
           </Card>
 
           <Card title={t("invoices.options.title")}>

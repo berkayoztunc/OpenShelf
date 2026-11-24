@@ -143,6 +143,27 @@ describe("manual invoices: issue / cancel", () => {
     expect((await admin(owner, `/manual-invoices/${inv.id}/issue`, "POST")).status).toBe(409);
     expect(calls).toHaveLength(1);
   });
+  it("stores the internet sale details and the district typed in the editor and sends them on issue", async () => {
+    const onlineSale = { websiteUrl: "https://shop.example.com", paymentDate: "2026-11-23", paymentAgentName: "iyzico", sentAt: "2026-11-24", carrierName: "YURTİÇİ KARGO SERVİSİ A.Ş.", carrierTaxId: "9860008925" };
+    const inv = await create({ customer: { ...body().customer, district: "Kadıköy", postalCode: "34710", phone: "5301234567" }, onlineSale });
+    expect(inv.onlineSale).toEqual(onlineSale);
+    expect((await admin(owner, `/manual-invoices/${inv.id}/issue`, "POST")).status).toBe(200);
+    const input = calls.at(-1)!.input;
+    expect(input.customer).toMatchObject({ district: "Kadıköy", postalCode: "34710", phone: "5301234567" });
+    expect(input.onlineSale).toEqual({
+      websiteUrl: "https://shop.example.com", paymentDate: "2026-11-23T12:00:00.000Z", paymentMeans: "CREDIT_CARD", paymentAgentName: "iyzico",
+      shipment: { sentAt: "2026-11-24", carrierName: "YURTİÇİ KARGO SERVİSİ A.Ş.", carrierTaxId: "9860008925" },
+    });
+    // switched off: not an internet sale
+    const off = await create({ onlineSale: null });
+    expect(off.onlineSale).toBeNull();
+    expect((await admin(owner, `/manual-invoices/${off.id}/issue`, "POST")).status).toBe(200);
+    expect(calls.at(-1)!.input.onlineSale).toBeUndefined();
+    expect((await admin(owner, "/manual-invoices", "POST", body({ onlineSale: { ...onlineSale, websiteUrl: "http://x.com" } }))).status).toBe(400);
+  });
+  it("online sale defaults: unknown order 404", async () => {
+    expect((await admin(owner, "/manual-invoices/online-sale-defaults?orderId=nope", "GET")).status).toBe(404);
+  });
   it("concurrent double issue calls the adapter exactly once", async () => {
     beh.delayMs = 50;
     const inv = await create();

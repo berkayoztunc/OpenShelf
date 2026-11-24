@@ -47,7 +47,7 @@ export function orderToForm(o: RawOrder, defaultRate: number): InvoiceForm {
   }));
   return {
     customer: {
-      name: a.isCompany && a.name && !a.surname ? a.name : fullName(a) || o.email || "", email: o.email ?? "", phone: a.phone, address: [a.line1, a.line2, a.district].filter(Boolean).join(" "), city: a.city ?? "",
+      name: a.isCompany && a.name && !a.surname ? a.name : fullName(a) || o.email || "", email: o.email ?? "", phone: a.phone ?? "", address: [a.line1, a.line2].filter(Boolean).join(" "), district: a.district ?? "", postalCode: a.zip ?? "", city: a.city ?? "",
       taxId: a.taxId ?? "", taxOffice: a.taxOffice ?? "", isCompany: !!a.isCompany,
     },
     // the invoice follows how the order was priced: a KDV-inclusive order (the usual case) is invoiced KDV-inclusive

@@ -1,5 +1,5 @@
-import { and, eq } from "drizzle-orm";
-import { orders, orderItems, invoices, invoiceEvents } from "@openshelf/db";
+import { and, asc, eq } from "drizzle-orm";
+import { orders, orderItems, invoices, invoiceEvents, payments, shipments, storeSettings } from "@openshelf/db";
 import type { InvoiceInput, InvoicingProvider } from "@openshelf/integration-sdk";
 import { orderInvoiceLines } from "@openshelf/shared";
 
@@ -19,6 +19,31 @@ export interface InvoiceRepo {
   event(id: string, type: string, detail?: string): Promise<void>;
 }
 
+/** Payment providers by the name printed as "ödeme aracısı". */
+const PAYMENT_AGENTS: Record<string, string> = { iyzico: "iyzico", paytr: "PayTR", stripe: "Stripe" };
+/** Shipments that do not go through a carrier (no carrier on the invoice). */
+const NO_CARRIER = new Set(["hand"]);
+
+/**
+ * Internet sale details of a website order: the succeeded payment (date, provider) and the first shipment (date, carrier),
+ * plus the address the store runs on. Undefined when the order has no succeeded payment (then it was not paid online).
+ */
+export async function loadOnlineSale(db: any, orderId: string): Promise<InvoiceInput["onlineSale"]> {
+  const pays = await db.select({ provider: payments.provider, status: payments.status, at: payments.updatedAt, created: payments.createdAt }).from(payments).where(eq(payments.orderId, orderId));
+  const pay = pays.find((p: any) => p.status === "succeeded" || p.status === "refunded");
+  if (!pay) return undefined;
+  const [ship] = await db.select({ provider: shipments.provider, carrier: shipments.carrier, at: shipments.createdAt }).from(shipments).where(eq(shipments.orderId, orderId)).orderBy(asc(shipments.createdAt)).limit(1);
+  const [origin] = await db.select({ value: storeSettings.value }).from(storeSettings).where(eq(storeSettings.group, "_runtime_origin")).limit(1);
+  const iso = (d: unknown) => (d instanceof Date ? d : new Date(typeof d === "number" ? d * 1000 : String(d))).toISOString();
+  const url = typeof origin?.value === "string" ? origin.value : undefined;
+  return {
+    ...(url && /^https:\/\//.test(url) ? { siteOrigin: url.replace(/\/+$/, "") } : {}),
+    paymentDate: iso(pay.at ?? pay.created), paymentMeans: "CREDIT_CARD",
+    ...(PAYMENT_AGENTS[pay.provider] ? { paymentAgentName: PAYMENT_AGENTS[pay.provider] } : {}),
+    ...(ship && !NO_CARRIER.has(ship.provider) ? { shipment: { sentAt: iso(ship.at), ...(ship.carrier ? { carrier: ship.carrier } : {}) } } : {}),
+  };
+}
+
 /**
  * Assumptions: order.billingAddress ?? shippingAddress JSON follows addresses columns (name,line1,line2,city,taxId,taxOffice,isCompany);
  * order_items.unitPrice is minor units (KDV-inclusive or exclusive: derived from the order's totals); taxRate is a percent (e.g. 20).
@@ -34,7 +59,7 @@ export function drizzleInvoiceRepo(db: any): InvoiceRepo {
       // KDV-inclusive lines that add up to exactly what the customer paid, whether the store priced its items with or without KDV
       const lines: InvoiceInput["lines"] = orderInvoiceLines(o, items.map((i: any) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unitPrice, taxRate: i.taxRate })));
       return {
-        orderId, orderNumber: o.number, issuedAt: new Date().toISOString(), currency: o.currency, lines,
+        orderId, orderNumber: o.number, issuedAt: new Date().toISOString(), currency: o.currency, lines, onlineSale: await loadOnlineSale(db, orderId),
         customer: {
           name: a.isCompany ? (a.name ?? "") : [a.name, a.surname].filter(Boolean).join(" "), email: o.email, taxId: a.taxId ?? undefined, taxOffice: a.taxOffice ?? undefined,
           address: [a.line1, a.line2].filter(Boolean).join(" "), city: a.city ?? "", district: a.district || undefined, postalCode: a.zip || undefined, phone: a.phone || undefined,
