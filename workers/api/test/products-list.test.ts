@@ -72,6 +72,21 @@ describe("variant price + bulk actions", () => {
     expect((await list()).find((x) => x.id === "pb").categoryId).toBe("pl-cat2");
     expect((await admin(owner, "/products/bulk", "POST", { ids: ["pb"], action: "category", categoryId: "unknown" })).status).toBe(400);
   });
+  it("KDV: bulk sets/clears the rate; a product update that leaves taxRate out keeps it", async () => {
+    const tax = async (id: string) => (await env.DB.prepare("SELECT tax_rate t FROM products WHERE id = ?1").bind(id).first<{ t: number | null }>())?.t;
+    expect((await j<any>(await admin(owner, "/products/bulk", "POST", { ids: ["pa", "pc"], action: "taxRate", taxRate: 10 }))).updated).toBe(2);
+    expect(await tax("pa")).toBe(10); expect(await tax("pc")).toBe(10);
+    const full = await j<any>(await admin(owner, "/products/pa"));
+    expect(full.taxRate).toBe(10);
+    const { taxRate: _t, ...noTax } = full;
+    expect((await admin(owner, "/products/pa", "PUT", noTax)).status).toBe(200);
+    expect(await tax("pa")).toBe(10);
+    expect((await admin(owner, "/products/pa", "PUT", { ...full, taxRate: null })).status).toBe(200);
+    expect(await tax("pa")).toBeNull();
+    expect((await j<any>(await admin(owner, "/products/bulk", "POST", { ids: ["pc"], action: "taxRate", taxRate: null }))).updated).toBe(1);
+    expect(await tax("pc")).toBeNull();
+    expect((await admin(owner, "/products/bulk", "POST", { ids: ["pc"], action: "taxRate", taxRate: 101 })).status).toBe(400);
+  });
   it("POST /products/bulk price applies a percentage to price and compare-at (keeps compare-at above price)", async () => {
     const r = await j<any>(await admin(owner, "/products/bulk", "POST", { ids: ["pa", "pc"], action: "price", percent: 10 }));
     expect(r).toMatchObject({ updated: 2, pricesChanged: 2 });

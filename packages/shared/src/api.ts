@@ -95,6 +95,8 @@ export const VariantPriceBody = z.object({ price: z.number().int().min(1), compa
 export const ProductBulkBody = z.object({ ids: z.array(z.string().min(1)).min(1).max(100) }).and(z.discriminatedUnion("action", [
   z.object({ action: z.literal("status"), status: z.enum(["draft", "active", "archived"]) }),
   z.object({ action: z.literal("category"), categoryId: z.string().min(1).nullable() }),
+  /** KDV % of the products; null = use the store default */
+  z.object({ action: z.literal("taxRate"), taxRate: z.number().int().min(0).max(100).nullable() }),
   z.object({ action: z.literal("price"), percent: z.number().min(-90).max(500).refine((n) => n !== 0, "percent must be non-zero") }),
 ]));
 export const InventoryAdjustBody = z.object({ delta: z.number().int().refine((n) => n !== 0, "delta must be non-zero"), reason: z.string().min(1).max(200) });

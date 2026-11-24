@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   categories, channelListings, channelPrices, channelProductSettings, inventory, inventoryMovements, orderItems, orders, outboxJobs, productImages, productMappings,
   productVariants, products, shipments, syncCursors,
@@ -321,6 +321,8 @@ export function mergeMissing(rep: MissingReport, page: Map<string, MissingProduc
   return { ...rep, total, variants, items: [...items.values()] };
 }
 
+/** KDV rates Trendyol accepts; anything else from the API is ignored. */
+const VAT_RATES = [0, 1, 10, 20];
 const optionsTitle = (o?: Record<string, string>) => (o && Object.keys(o).length ? Object.values(o).join(" / ") : null);
 
 /**
@@ -435,6 +437,13 @@ export async function applyTrendyolProducts(
     stmts.push(db.insert(channelListings).values({ variantId, channel: CHANNEL, enabled: true, externalId: p.externalId, ...(truth ? { lastSyncedStock: v.quantity, lastSyncedAt: now } : {}) })
       .onConflictDoUpdate({ target: [channelListings.variantId, channelListings.channel], set: { externalId: p.externalId, lastError: null, ...(truth ? { lastSyncedStock: v.quantity, lastSyncedAt: now } : {}) } }));
   };
+  /** KDV from Trendyol, only where the product has none of its own (our rate always wins). */
+  const vatDone = new Set<string>();
+  const fillTaxRate = (productId: string, v: MarketplaceProductVariant) => {
+    if (vatDone.has(productId) || !VAT_RATES.includes(v.vatRate as number)) return;
+    vatDone.add(productId);
+    stmts.push(db.update(products).set({ taxRate: v.vatRate }).where(and(eq(products.id, productId), isNull(products.taxRate))));
+  };
   const writeContent = (productId: string, p: MarketplaceProduct) => {
     const categoryId = catOf.get(p.externalId);
     stmts.push(db.update(products).set({ nameTr: p.title || "Untitled", descriptionTr: p.description ?? null, brand: p.brand ?? null, ...(categoryId ? { categoryId } : {}), updatedAt: now }).where(eq(products.id, productId)));
@@ -449,6 +458,7 @@ export async function applyTrendyolProducts(
       t.linked++;
       if (opts.dryRun) continue;
       link(local.id, local.sku, v, p);
+      fillTaxRate(local.productId, v);
       if (!local.barcode) stmts.push(db.update(productVariants).set({ barcode: v.barcode }).where(eq(productVariants.id, local.id)));
       if (truth) {
         t.updated++;
@@ -472,7 +482,7 @@ export async function applyTrendyolProducts(
     if (!newProducts.has(productId)) {
       newProducts.add(productId);
       const categoryId = catOf.get(p.externalId) ?? null;
-      stmts.push(db.insert(products).values({ id: productId, slug: `${slugify(p.title)}-${p.externalId}`, categoryId, nameTr: p.title || "Untitled", descriptionTr: p.description ?? null, brand: p.brand ?? null, status: "draft" }).onConflictDoNothing());
+      stmts.push(db.insert(products).values({ id: productId, slug: `${slugify(p.title)}-${p.externalId}`, categoryId, nameTr: p.title || "Untitled", descriptionTr: p.description ?? null, brand: p.brand ?? null, status: "draft", taxRate: VAT_RATES.includes(v.vatRate as number) ? v.vatRate : null }).onConflictDoNothing());
       p.images.forEach((url, i) => stmts.push(db.insert(productImages).values({ id: `${productId}:${i}`, productId, url, alt: p.title.slice(0, 200), position: i }).onConflictDoNothing()));
     }
     const variantId = `tyv-${v.barcode}`;

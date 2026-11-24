@@ -12,6 +12,7 @@ import { Badge, Button, Card, ConfirmDialog, EmptyState, ErrorState, Loading, Mo
 import { InlineEdit } from "../components/InlineEdit";
 import { useCategories } from "./Categories";
 import { mediaUrl } from "../lib/media";
+import { TAX_RATES } from "../lib/adapt";
 
 const STATUS_TABS = ["", "active", "draft", "archived"] as const;
 const SORTS = ["newest", "updated", "oldest", "name", "name-desc", "price", "price-desc", "stock", "stock-desc"] as const;
@@ -75,14 +76,15 @@ export default function Products() {
   ) : <StockBadge n={availableOf(v)} />;
 
   // ---- bulk actions (one API call for the whole selection)
-  const [bulk, setBulk] = useState<null | { kind: "status"; status: string } | { kind: "category"; categoryId: string | null } | { kind: "price"; percent: string }>(null);
+  const [bulk, setBulk] = useState<null | { kind: "status"; status: string } | { kind: "category"; categoryId: string | null } | { kind: "taxRate"; taxRate: number | null } | { kind: "price"; percent: string }>(null);
   const pct = bulk?.kind === "price" ? Number(bulk.percent.replace(",", ".")) : NaN;
   const pctOk = Number.isFinite(pct) && pct !== 0 && pct >= -90 && pct <= 500;
   const run = useMutation({
     mutationFn: () => {
       const ids = [...sel];
       if (!bulk) return Promise.reject(new Error("no action"));
-      const body = bulk.kind === "status" ? { action: "status", status: bulk.status } : bulk.kind === "category" ? { action: "category", categoryId: bulk.categoryId } : { action: "price", percent: pct };
+      const body = bulk.kind === "status" ? { action: "status", status: bulk.status } : bulk.kind === "category" ? { action: "category", categoryId: bulk.categoryId }
+        : bulk.kind === "taxRate" ? { action: "taxRate", taxRate: bulk.taxRate } : { action: "price", percent: pct };
       return api.post<{ updated: number; missing: string[] }>("/api/admin/products/bulk", { ids, ...body });
     },
     onSuccess: (r) => {
@@ -185,14 +187,19 @@ export default function Products() {
           <select id="bulk-p-cat" className="h-8 rounded-lg border border-line bg-surface px-2 text-[13px]" value="" disabled={!canPrice} onChange={(e) => e.target.value && setBulk({ kind: "category", categoryId: e.target.value === "none" ? null : e.target.value })}>
             <option value="">{t("catalog.products.bulk.category")}</option><option value="none">{t("catalog.products.category.none")}</option>{cats.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
+          <label className="sr-only" htmlFor="bulk-p-tax">{t("catalog.products.bulk.taxRate")}</label>
+          <select id="bulk-p-tax" className="h-8 rounded-lg border border-line bg-surface px-2 text-[13px]" value="" disabled={!canPrice} onChange={(e) => e.target.value && setBulk({ kind: "taxRate", taxRate: e.target.value === "default" ? null : Number(e.target.value) })}>
+            <option value="">{t("catalog.products.bulk.taxRate")}</option><option value="default">{t("catalog.products.bulk.taxRate.default")}</option>{TAX_RATES.map((r) => <option key={r} value={r}>%{r}</option>)}
+          </select>
           <Button size="sm" variant="secondary" disabled={!canPrice} onClick={() => setBulk({ kind: "price", percent: "" })}>{t("catalog.products.bulk.price")}</Button>
           <Button size="sm" variant="ghost" onClick={() => setSel(new Set())}>{t("common.clear")}</Button>
         </div>
       )}
-      <ConfirmDialog open={bulk?.kind === "status" || bulk?.kind === "category"} loading={run.isPending}
-        title={bulk?.kind === "category" ? t("catalog.products.bulk.category.title") : t("catalog.products.bulk.status.title")} confirmLabel={t("catalog.products.bulk.apply", { n: sel.size })}
+      <ConfirmDialog open={bulk?.kind === "status" || bulk?.kind === "category" || bulk?.kind === "taxRate"} loading={run.isPending}
+        title={bulk?.kind === "category" ? t("catalog.products.bulk.category.title") : bulk?.kind === "taxRate" ? t("catalog.products.bulk.taxRate.title") : t("catalog.products.bulk.status.title")} confirmLabel={t("catalog.products.bulk.apply", { n: sel.size })}
         danger={bulk?.kind === "status" && bulk.status === "archived"}
-        message={bulk?.kind === "status" ? t("catalog.products.bulk.status.body", { n: sel.size, status: enumLabel("productStatus", bulk.status) }) : bulk?.kind === "category" ? t("catalog.products.bulk.category.body", { n: sel.size, category: catName(bulk.categoryId) }) : ""}
+        message={bulk?.kind === "status" ? t("catalog.products.bulk.status.body", { n: sel.size, status: enumLabel("productStatus", bulk.status) }) : bulk?.kind === "category" ? t("catalog.products.bulk.category.body", { n: sel.size, category: catName(bulk.categoryId) })
+          : bulk?.kind === "taxRate" ? (bulk.taxRate == null ? t("catalog.products.bulk.taxRate.bodyDefault", { n: sel.size }) : t("catalog.products.bulk.taxRate.body", { n: sel.size, rate: bulk.taxRate })) : ""}
         onConfirm={() => run.mutate()} onClose={() => !run.isPending && setBulk(null)} />
       <Modal open={bulk?.kind === "price"} onClose={() => !run.isPending && setBulk(null)} title={t("catalog.products.bulk.price.title")}
         footer={<><Button variant="ghost" disabled={run.isPending} onClick={() => setBulk(null)}>{t("common.cancel")}</Button><Button loading={run.isPending} disabled={!pctOk} onClick={() => run.mutate()}>{t("catalog.products.bulk.apply", { n: sel.size })}</Button></>}>

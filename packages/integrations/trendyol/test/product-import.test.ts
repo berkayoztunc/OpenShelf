@@ -54,6 +54,19 @@ describe("applyTrendyolProducts", () => {
     expect((await db.select().from(products))[0]!.nameTr).toBe("Local P1");
   });
 
+  it("KDV: fills the product's rate from Trendyol only where it has none; new products get it too", async () => {
+    const { db, raw } = makeDb(); seedProduct(raw); seedVariants(raw);
+    await applyTrendyolProducts(db, [mapContent(content(1, [variant("BC1", 1, 1, 2, { vatRate: 10 })])), mapContent(content(7, [variant("NEW7", 1, 1, 2, { vatRate: 10 })]))], { sourceOfTruth: "local", createMissing: true, dryRun: false });
+    expect((await db.select().from(products).where(eq(products.id, "p1")))[0]!.taxRate).toBe(10);
+    expect((await db.select().from(products).where(eq(products.id, "ty-7")))[0]!.taxRate).toBe(10);
+    // our own rate wins over Trendyol's; an unknown Trendyol rate is ignored
+    await db.update(products).set({ taxRate: 20 }).where(eq(products.id, "p1"));
+    await applyTrendyolProducts(db, [mapContent(content(1, [variant("BC1", 1, 1, 2, { vatRate: 10 })]))], { sourceOfTruth: "local", createMissing: false, dryRun: false });
+    expect((await db.select().from(products).where(eq(products.id, "p1")))[0]!.taxRate).toBe(20);
+    await applyTrendyolProducts(db, [mapContent(content(8, [variant("NEW8", 1, 1, 2, { vatRate: 18 })]))], { sourceOfTruth: "local", createMissing: true, dryRun: false });
+    expect((await db.select().from(products).where(eq(products.id, "ty-8")))[0]!.taxRate).toBeNull();
+  });
+
   it("matches by sku == stockCode when barcode differs", async () => {
     const { db, raw } = makeDb(); seedProduct(raw); seedVariants(raw);
     const m = mapContent(content(1, [variant("OTHER", 1)])); m.variants[0]!.stockCode = "SKU2";

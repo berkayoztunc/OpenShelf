@@ -184,7 +184,9 @@ export async function writeProduct(db: Db, d1: D1Database, id: string | null, b:
   const fields = {
     slug: b.slug, categoryId: b.categoryId ?? null, nameTr: b.nameTr, nameEn: b.nameEn ?? null, descriptionTr: b.descriptionTr ?? null, descriptionEn: b.descriptionEn ?? null,
     brand: b.brand ?? null, status: b.status, seoTitle: b.seoTitle ?? null, seoDescription: b.seoDescription ?? null,
-    seoOgMediaId: b.seoOgMediaId ?? null, seoOgImageUrl: b.seoOgImageUrl ?? null, seoNoindex: b.seoNoindex, seoCanonical: b.seoCanonical ?? null, taxRate: b.taxRate ?? null, updatedAt: now,
+    seoOgMediaId: b.seoOgMediaId ?? null, seoOgImageUrl: b.seoOgImageUrl ?? null, seoNoindex: b.seoNoindex, seoCanonical: b.seoCanonical ?? null, updatedAt: now,
+    // KDV: an update that does not send it keeps the stored rate (null = store default)
+    ...(b.taxRate === undefined && id ? {} : { taxRate: b.taxRate ?? null }),
   };
   try {
     if (id) {
@@ -320,6 +322,7 @@ adminCatalog.post("/products/bulk", requireRole("admin"), async (c) => {
   if (okIds.length) {
     if (b.action === "status") await db.update(products).set({ status: b.status, updatedAt: now }).where(inArray(products.id, okIds));
     else if (b.action === "category") await db.update(products).set({ categoryId: b.categoryId, updatedAt: now }).where(inArray(products.id, okIds));
+    else if (b.action === "taxRate") await db.update(products).set({ taxRate: b.taxRate, updatedAt: now }).where(inArray(products.id, okIds));
     else {
       variantIds = (await db.select({ id: productVariants.id }).from(productVariants).where(and(inArray(productVariants.productId, okIds), eq(productVariants.active, true)))).map((v) => v.id);
       const factor = 1 + b.percent / 100;

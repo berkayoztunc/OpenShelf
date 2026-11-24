@@ -20,6 +20,9 @@ export const categoryToApi = (c: Partial<Category>) => ({
   seoTitle: c.seoTitle?.trim() || null, seoDescription: c.seoDescription?.trim() || null, seoOgImageUrl: c.seoOgImageUrl?.trim() || null, seoNoindex: !!c.seoNoindex,
 });
 
+/** KDV rates offered in the product editor (Turkish rates); an unusual stored rate stays selectable. */
+export const TAX_RATES = [0, 1, 10, 20];
+export const taxOptions = (cur: string) => (cur !== "" && !TAX_RATES.includes(Number(cur)) ? [...TAX_RATES, Number(cur)].sort((a, b) => a - b) : TAX_RATES);
 export const productFromApi = (p: W): Product => ({
   id: p.id, name: p.nameTr, slug: p.slug, description: p.descriptionTr ?? undefined, status: p.status, categoryId: p.categoryId ?? null,
   brand: p.brand ?? undefined, categoryName: p.categoryName ?? undefined, onTrendyol: p.onTrendyol === true, updatedAt: iso(p.updatedAt),
@@ -29,10 +32,11 @@ export const productFromApi = (p: W): Product => ({
   })),
   images: (p.images ?? []).map((i: W) => ({ id: i.id, url: i.url ?? undefined, mediaId: i.mediaId ?? undefined, alt: i.alt ?? undefined, position: i.position })),
   seoTitle: p.seoTitle ?? "", seoDescription: p.seoDescription ?? "", seoOgMediaId: p.seoOgMediaId ?? null, seoOgImageUrl: p.seoOgImageUrl ?? "",
-  seoNoindex: p.seoNoindex === true, seoCanonical: p.seoCanonical ?? "",
+  seoNoindex: p.seoNoindex === true, seoCanonical: p.seoCanonical ?? "", taxRate: typeof p.taxRate === "number" ? p.taxRate : null,
 });
 /** Body for POST/PUT /api/admin/products (ProductInput). Media-backed images send mediaId only (url must be absolute). */
-export const productToApi = (f: { name: string; slug: string; description: string; status: string; categoryId: string | null; variants: W[]; images: W[]; seoTitle?: string; seoDescription?: string; seoOgMediaId?: string | null; seoOgImageUrl?: string; seoNoindex?: boolean; seoCanonical?: string }) => ({
+export const productToApi = (f: { name: string; slug: string; description: string; status: string; categoryId: string | null; variants: W[]; images: W[]; seoTitle?: string; seoDescription?: string; seoOgMediaId?: string | null; seoOgImageUrl?: string; seoNoindex?: boolean; seoCanonical?: string; taxRate?: number | null }) => ({
+  ...(f.taxRate !== undefined ? { taxRate: f.taxRate } : {}),
   seoTitle: f.seoTitle?.trim() || null, seoDescription: f.seoDescription?.trim() || null, seoOgMediaId: f.seoOgMediaId || null,
   seoOgImageUrl: f.seoOgImageUrl?.trim() || null, seoNoindex: !!f.seoNoindex, seoCanonical: f.seoCanonical?.trim() || "",
   slug: f.slug, nameTr: f.name, descriptionTr: f.description || null, status: f.status, categoryId: f.categoryId,

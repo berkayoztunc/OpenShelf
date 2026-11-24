@@ -22,6 +22,8 @@ export interface Product {
   brand?: string; categoryName?: string; onTrendyol?: boolean; updatedAt?: string;
   variants: Variant[]; images: ProductImage[];
   seoTitle?: string; seoDescription?: string; seoOgMediaId?: string | null; seoOgImageUrl?: string; seoNoindex?: boolean; seoCanonical?: string;
+  /** KDV % of the product; null = store default */
+  taxRate?: number | null;
 }
 export interface OrderRow {
   id: string; number: string; status: OrderStatus; source: OrderSource; total: number; currency: string; email?: string; customerName?: string; createdAt: string; isMock?: boolean;

@@ -9,16 +9,17 @@ import { TermText } from "../components/TermText";
 import { Term } from "../components/help/Term";
 import { MEDIA_ACCEPT, mediaUrl, uploadMedia } from "../lib/media";
 import type { Product, ProductImage } from "../lib/types";
-import { productFromApi, productToApi } from "../lib/adapt";
+import { productFromApi, productToApi, taxOptions } from "../lib/adapt";
 import { SeoFields } from "../components/SeoCard";
 import { SeoChecklist, SlugField } from "../components/Seo";
 import { productChecks } from "../lib/seo";
 import { Button, Card, ConfirmDialog, ErrorState, Loading, Modal, PageHeader, SelectField, TextArea, TextField, useToast } from "../components/ui";
 import { useCategories } from "./Categories";
+import { useSettings } from "../lib/settings";
 import { TrendyolSyncCard } from "../components/trendyol/SyncCard";
 
 interface VForm { id?: string; sku: string; barcode: string; title: string; options: string; website: string; trendyol: string; stock?: { total: number; reserved: number }; initialStock: string }
-interface PForm { name: string; slug: string; description: string; status: Product["status"]; categoryId: string; variants: VForm[]; images: ProductImage[]; seoTitle: string; seoDescription: string; seoOgMediaId: string | null; seoOgImageUrl: string; seoNoindex: boolean; seoCanonical: string }
+interface PForm { name: string; slug: string; description: string; status: Product["status"]; categoryId: string; variants: VForm[]; images: ProductImage[]; seoTitle: string; seoDescription: string; seoOgMediaId: string | null; seoOgImageUrl: string; seoNoindex: boolean; seoCanonical: string; /** "" = store default */ taxRate: string }
 
 const emptyVariant = (): VForm => ({ sku: "", barcode: "", title: "Default", options: "", website: "", trendyol: "", initialStock: "0" });
 const optsToString = (o?: Record<string, string>) => Object.entries(o ?? {}).map(([k, v]) => `${k}=${v}`).join(", ");
@@ -31,7 +32,7 @@ function fromProduct(p: Product): PForm {
     variants: p.variants.map((v) => ({ id: v.id, sku: v.sku, barcode: v.barcode ?? "", title: v.title, options: optsToString(v.options), website: toMajor(v.prices.website), trendyol: toMajor(v.prices.trendyol), stock: v.stock, initialStock: "0" })),
     images: [...(p.images ?? [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)),
     seoTitle: p.seoTitle ?? "", seoDescription: p.seoDescription ?? "", seoOgMediaId: p.seoOgMediaId ?? null, seoOgImageUrl: p.seoOgImageUrl ?? "",
-    seoNoindex: !!p.seoNoindex, seoCanonical: p.seoCanonical ?? "",
+    seoNoindex: !!p.seoNoindex, seoCanonical: p.seoCanonical ?? "", taxRate: p.taxRate == null ? "" : String(p.taxRate),
   };
 }
 
@@ -43,8 +44,9 @@ export default function ProductEdit() {
   const qc = useQueryClient();
   const toast = useToast();
   const cats = useCategories();
+  const storeTax = useSettings().data?.general?.defaultTaxRate ?? 20;
   const q = useQuery({ queryKey: ["product", id], enabled: !isNew, queryFn: async () => productFromApi(await api.get<unknown>(`/api/admin/products/${id}`)) });
-  const [f, setF] = useState<PForm>({ name: "", slug: "", description: "", status: "draft", categoryId: "", variants: [emptyVariant()], images: [], seoTitle: "", seoDescription: "", seoOgMediaId: null, seoOgImageUrl: "", seoNoindex: false, seoCanonical: "" });
+  const [f, setF] = useState<PForm>({ name: "", slug: "", description: "", status: "draft", categoryId: "", variants: [emptyVariant()], images: [], seoTitle: "", seoDescription: "", seoOgMediaId: null, seoOgImageUrl: "", seoNoindex: false, seoCanonical: "", taxRate: "" });
   const [slugTouched, setSlugTouched] = useState(false);
   const [adjust, setAdjust] = useState<VForm | null>(null);
   const [adj, setAdj] = useState({ delta: "", reason: "" });
@@ -67,6 +69,7 @@ export default function ProductEdit() {
         })),
         images: f.images,
         seoTitle: f.seoTitle, seoDescription: f.seoDescription, seoOgMediaId: f.seoOgMediaId, seoOgImageUrl: f.seoOgImageUrl, seoNoindex: f.seoNoindex, seoCanonical: f.seoCanonical,
+        taxRate: f.taxRate === "" ? null : Number(f.taxRate),
       });
       return isNew ? api.post<{ id: string }>("/api/admin/products", body) : api.put<{ id: string }>(`/api/admin/products/${id}`, body);
     },
@@ -186,6 +189,9 @@ export default function ProductEdit() {
             <div className="space-y-4">
               <SelectField label={t("catalog.product.status.label")} help="catalog.productStatus" hint={t(`catalog.product.status.${f.status}`)} value={f.status} onChange={(e) => setF({ ...f, status: e.target.value as Product["status"] })}>{(["draft", "active", "archived"] as const).map((s) => <option key={s} value={s}>{enumLabel("productStatus", s)}</option>)}</SelectField>
               <SelectField label={t("catalog.product.category.label")} help="catalog.categoryPick" hint={t("catalog.product.category.hint")} value={f.categoryId} onChange={(e) => setF({ ...f, categoryId: e.target.value })}><option value="">{t("common.none")}</option>{cats.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</SelectField>
+              <SelectField label={t("catalog.product.taxRate.label")} hint={t("catalog.product.taxRate.hint")} value={f.taxRate} onChange={(e) => setF({ ...f, taxRate: e.target.value })}>
+                <option value="">{t("catalog.product.taxRate.default", { rate: storeTax })}</option>{taxOptions(f.taxRate).map((r) => <option key={r} value={String(r)}>%{r}</option>)}
+              </SelectField>
             </div>
           </Card>
           {id && <TrendyolSyncCard productId={id} />}
