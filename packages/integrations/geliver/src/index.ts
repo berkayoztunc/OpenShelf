@@ -148,7 +148,7 @@ export class GeliverAdapter implements ShippingProvider {
           ...(r.district ? { districtName: r.district } : {}), ...(r.zip ? { zip: r.zip } : {}),
         },
         length: String(d.length), width: String(d.width), height: String(d.height), distanceUnit: "cm", weight: String(d.weight), massUnit: "kg",
-        items: [{ title: `Order ${input.orderId}`, quantity: 1 }],
+        items: [{ title: input.contents?.trim() || `Order ${input.orderId}`, quantity: 1 }],
         productPaymentOnDelivery: cod,
         order: { sourceCode: "API", sourceIdentifier: this.p.config.storeUrl, orderNumber: input.orderId, totalAmount: cod ? (input.codAmount as number) / 100 : 0, totalAmountCurrency: "TL" },
       },

@@ -283,7 +283,7 @@ describe("tool registry integrity", () => {
   it("level policy: money/customer-facing/deleting tools are full, read tools never mutate", () => {
     for (const n of ["refund_order", "send_campaign", "send_email", "send_sms", "anonymize_customer", "delete_product", "issue_manual_invoice", "create_shipment", "trendyol_call", "trendyol_create_product", "geliver_call", "efaturam_call"]) expect(TOOL_BY_NAME.get(n)!.level, n).toBe("full");
     for (const d of TOOLS.filter((x) => x.level === "read")) {
-      if (d.method !== "GET") expect(["preview_email", "campaign_audience", "preview_campaign", "preview_manual_invoice", "preview_saved_manual_invoice", "trendyol_prepare_product"], d.name).toContain(d.name);
+      if (d.method !== "GET") expect(["preview_email", "campaign_audience", "preview_campaign", "preview_manual_invoice", "preview_saved_manual_invoice", "trendyol_prepare_product", "manual_shipment_quotes"], d.name).toContain(d.name);
     }
     expect(MAX_RESULT_BYTES).toBeGreaterThan(0);
   });

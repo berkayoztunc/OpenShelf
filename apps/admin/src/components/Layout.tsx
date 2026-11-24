@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-do
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { applyBrandTheme } from "@openshelf/ui";
 import { Truck, ShoppingBag, BookOpen, BarChart3, ChevronRight, ClipboardList, Database, LayoutDashboard, LogOut, Menu, Package, Plug, Settings, ShieldCheck, Tags, Ticket, Users, X, Zap, Inbox, FileText, Mail, Megaphone, MessageSquare, LayoutTemplate, Images, Receipt, SquareKanban, Calculator } from "lucide-react";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Send } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { api } from "../lib/api";
 import { useAdmin } from "../lib/auth";
@@ -30,6 +30,7 @@ export const NAV_GROUPS: { id: string; titleKey?: MessageKey; items: NavItem[] }
     { to: "/order-board", labelKey: "nav.orderBoard", icon: SquareKanban },
     { to: "/customers", labelKey: "nav.customers", icon: Users },
     { to: "/invoices", labelKey: "nav.invoices", icon: FileText },
+    { to: "/shipments", labelKey: "nav.shipments", icon: Send },
     { to: "/coupons", labelKey: "nav.coupons", icon: Ticket },
     { to: "/profit", labelKey: "nav.profit", icon: Calculator },
   ] },

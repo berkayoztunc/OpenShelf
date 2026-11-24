@@ -115,6 +115,23 @@ export const CouponInput = z.object({
 export const OrderStatusBody = z.object({ status: z.enum(["pending", "awaiting_payment", "paid", "fulfilling", "shipped", "delivered", "cancelled", "refunded"]) });
 export const RefundBody = z.object({ amount: z.number().int().min(1), reason: z.string().max(300).optional() });
 export const ShipmentBody = z.object({ serviceId: z.string().min(1) });
+/** Recipient of a shipment not tied to an order (gift, extra item). */
+export const ManualShipmentRecipient = z.object({
+  name: z.string().trim().min(1).max(100), surname: z.string().trim().max(100).optional(), phone: z.string().trim().min(5).max(30),
+  email: z.string().trim().email().max(200).optional().or(z.literal("").transform(() => undefined)),
+  line1: z.string().trim().min(3).max(300), line2: z.string().trim().max(300).optional(),
+  city: z.string().trim().min(1).max(100), district: z.string().trim().max(100).optional(), zip: z.string().trim().max(20).optional(),
+});
+export type ManualShipmentRecipient = z.infer<typeof ManualShipmentRecipient>;
+/** Parcel + address for carrier offers. weightKg is the package weight; desi (optional) the volumetric size. */
+export const ManualShipmentQuoteBody = z.object({ recipient: ManualShipmentRecipient, weightKg: z.number().min(0.1).max(100), desi: z.number().int().min(0).max(1000).optional() });
+export type ManualShipmentQuoteBody = z.infer<typeof ManualShipmentQuoteBody>;
+/** Buys a label: serviceId from a quote, `contents` = what is sent (printed on the shipment), customerId/orderId = where the address came from. */
+export const ManualShipmentBody = ManualShipmentQuoteBody.extend({
+  serviceId: z.string().trim().min(1).max(100), contents: z.string().trim().min(1).max(200), note: z.string().trim().max(500).optional(),
+  customerId: z.string().max(100).optional(), orderId: z.string().max(100).optional(),
+});
+export type ManualShipmentBody = z.infer<typeof ManualShipmentBody>;
 /** Shipment `provider` for orders the store hands over itself (no carrier, no tracking number). */
 export const HAND_DELIVERY_PROVIDER = "hand";
 /** Mark a website order as handed over in person: no carrier, no code. `notify` sends the customer the "delivered" message. */

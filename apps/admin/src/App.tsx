@@ -15,6 +15,8 @@ const OrderDetail = lazy(() => import("./pages/OrderDetail"));
 const Customers = lazy(() => import("./pages/Customers"));
 const Invoices = lazy(() => import("./pages/Invoices"));
 const InvoiceEditor = lazy(() => import("./pages/InvoiceEditor"));
+const Shipments = lazy(() => import("./pages/Shipments"));
+const ShipmentNew = lazy(() => import("./pages/ShipmentNew"));
 const Emails = lazy(() => import("./pages/Emails"));
 const EmailCompose = lazy(() => import("./pages/EmailCompose"));
 const PrintPage = lazy(() => import("./pages/print/PrintPage"));
@@ -61,6 +63,8 @@ export function App() {
           <Route path="invoices" element={<Invoices />} />
           <Route path="invoices/new" element={<InvoiceEditor />} />
           <Route path="invoices/:id" element={<InvoiceEditor />} />
+          <Route path="shipments" element={<Shipments />} />
+          <Route path="shipments/new" element={<ShipmentNew />} />
           <Route path="emails" element={<Emails />} />
           <Route path="emails/compose" element={<EmailCompose />} />
           <Route path="customers" element={<Customers />} />

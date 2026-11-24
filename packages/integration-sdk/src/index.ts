@@ -54,7 +54,8 @@ export interface PaymentProvider extends OpenShelfIntegration {
 }
 
 // ---------- Shipping ----------
-export interface ShipmentInput { orderId: string; recipient: { name: string; phone: string; email?: string; address: string; city: string; district?: string; zip?: string }; parcels: { weightKg: number; desi?: number }[]; codAmount?: number }
+/** `orderId` is the reference printed as the provider's order number; `contents` (optional) names what is in the parcel. */
+export interface ShipmentInput { orderId: string; contents?: string; recipient: { name: string; phone: string; email?: string; address: string; city: string; district?: string; zip?: string }; parcels: { weightKg: number; desi?: number }[]; codAmount?: number }
 export interface ShippingQuote { carrier: string; serviceId: string; price: number; currency: string; etaDays?: number }
 export interface ShipmentResult { providerShipmentId: string; trackingNumber?: string; labelUrl?: string; carrier?: string }
 export interface TrackingStatus {

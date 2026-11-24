@@ -211,6 +211,18 @@ export const shipments = sqliteTable("shipments", {
 export const shipmentEvents = sqliteTable("shipment_events", {
   id: integer("id").primaryKey({ autoIncrement: true }), shipmentId: text("shipment_id").notNull(), status: text("status").notNull(), detail: text("detail"), at: createdAt(),
 });
+/** Shipments not tied to an order (gifts, extra items): bought from the shipping provider (Geliver) from the admin. */
+export const manualShipments = sqliteTable("manual_shipments", {
+  id: id(), reference: text("reference").notNull().unique(),            // e.g. MK-7F3K9Q, sent as the provider's order number
+  status: text("status").notNull().default("creating"),                 // creating|created|in_transit|delivered|returned|cancelled
+  recipient: text("recipient", { mode: "json" }).notNull(),             // {name,surname?,phone,email?,line1,line2?,city,district?,zip?}
+  contents: text("contents").notNull(), note: text("note"),
+  customerId: text("customer_id"), orderId: text("order_id"),           // where the address came from (optional)
+  weightGrams: integer("weight_grams").notNull(), desi: integer("desi"),
+  provider: text("provider").notNull(), serviceId: text("service_id").notNull(), providerShipmentId: text("provider_shipment_id"),
+  carrier: text("carrier"), trackingNumber: text("tracking_number"), trackingUrl: text("tracking_url"), labelUrl: text("label_url"),
+  createdBy: text("created_by"), createdAt: createdAt(), updatedAt: updatedAt(),
+}, (t) => ({ st: index("manual_shipments_status_idx").on(t.status, t.createdAt) }));
 export const invoices = sqliteTable("invoices", {
   id: id(), orderId: text("order_id").notNull(), type: text("type").notNull(), // e_fatura|e_arsiv
   provider: text("provider").notNull(), providerInvoiceId: text("provider_invoice_id"), number: text("number"), pdfUrl: text("pdf_url"),

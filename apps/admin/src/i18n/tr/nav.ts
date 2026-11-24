@@ -10,6 +10,7 @@ export const nav = {
   "nav.orderBoard": "Sipariş panosu",
   "nav.profit": "Kârlılık matrisi",
   "nav.invoices": "Faturalar",
+  "nav.shipments": "Kargolar",
   "nav.emails": "E-postalar",
   "nav.products": "Ürünler",
   "nav.storefront": "Vitrin",

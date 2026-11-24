@@ -22,6 +22,7 @@ import { efaturam } from "./efaturam";
 import { campaigns } from "./campaigns";
 import { board } from "./board";
 import { profit } from "./profit";
+import { shipments } from "./shipments";
 
 /** Merged dictionary. Each namespace file is owned by one area (see docs/admin-i18n.md). */
-export const tr = { ...common, ...nav, ...enums, ...glossary, ...helpui, ...shell, ...dashboard, ...orders, ...invoices, ...emails, ...print, ...catalog, ...settings, ...security, ...integrations, ...errors, ...trendyol, ...trendyolviews, ...trendyolsync, ...geliver, ...efaturam, ...campaigns, ...board, ...profit, };
+export const tr = { ...common, ...nav, ...enums, ...glossary, ...helpui, ...shell, ...dashboard, ...orders, ...invoices, ...emails, ...print, ...catalog, ...settings, ...security, ...integrations, ...errors, ...trendyol, ...trendyolviews, ...trendyolsync, ...geliver, ...efaturam, ...campaigns, ...board, ...profit, ...shipments, };

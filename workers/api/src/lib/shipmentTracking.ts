@@ -10,7 +10,7 @@
  *    hint for *which* shipment to re-check; the status itself is always read back from the Geliver API.
  */
 import { and, asc, eq, gt, inArray, notInArray } from "drizzle-orm";
-import { orders, shipmentEvents, shipments } from "@openshelf/db";
+import { manualShipments, orders, shipmentEvents, shipments } from "@openshelf/db";
 import { canTransition, InvalidTransitionError, transitionOrder } from "@openshelf/core";
 import type { ShippingProvider, TrackingStatus } from "@openshelf/integration-sdk";
 import type { OrderStatus } from "@openshelf/shared";
@@ -78,6 +78,33 @@ export async function applyTracking(db: Db, row: Row, st: TrackingStatus, now = 
   return { shipment: changed, order: moved };
 }
 
+type ManualRow = Pick<typeof manualShipments.$inferSelect, "id" | "reference" | "status" | "trackingNumber" | "trackingUrl" | "providerShipmentId">;
+/** Same as applyTracking for a shipment not tied to an order: only the shipment row and its events change. */
+export async function applyManualTracking(db: Db, row: ManualRow, st: TrackingStatus, now = new Date()): Promise<boolean> {
+  const patch: Partial<typeof manualShipments.$inferInsert> = {};
+  if (st.status !== "unknown" && st.status !== row.status) patch.status = st.status;
+  if (st.trackingNumber && !row.trackingNumber) patch.trackingNumber = st.trackingNumber;
+  if (st.trackingUrl && st.trackingUrl !== row.trackingUrl) patch.trackingUrl = st.trackingUrl;
+  if (!Object.keys(patch).length) return false;
+  await db.update(manualShipments).set({ ...patch, updatedAt: now }).where(eq(manualShipments.id, row.id));
+  if (patch.status) await db.insert(shipmentEvents).values({ shipmentId: row.id, status: patch.status, detail: (st.events.at(-1)?.detail || "geliver tracking").slice(0, 500) });
+  if (patch.status === "returned" || patch.status === "cancelled") {
+    await logIntegrationEvent(db, "geliver", "warn", `Manual shipment ${row.reference} ${patch.status}`, { manualShipmentId: row.id }).catch(() => {});
+  }
+  return true;
+}
+
+async function openManualShipments(db: Db, now: Date, providerShipmentId?: string): Promise<ManualRow[]> {
+  const since = new Date(now.getTime() - MAX_AGE_DAYS * 86400_000);
+  return db.select({
+    id: manualShipments.id, reference: manualShipments.reference, status: manualShipments.status, trackingNumber: manualShipments.trackingNumber,
+    trackingUrl: manualShipments.trackingUrl, providerShipmentId: manualShipments.providerShipmentId,
+  }).from(manualShipments)
+    .where(and(eq(manualShipments.provider, "geliver"), notInArray(manualShipments.status, [...FINAL, "creating"]), gt(manualShipments.createdAt, since),
+      ...(providerShipmentId ? [eq(manualShipments.providerShipmentId, providerShipmentId)] : [])))
+    .orderBy(asc(manualShipments.createdAt)).limit(SWEEP_LIMIT);
+}
+
 async function openShipments(db: Db, now: Date, providerShipmentId?: string): Promise<Row[]> {
   const since = new Date(now.getTime() - MAX_AGE_DAYS * 86400_000);
   return db.select({
@@ -107,6 +134,13 @@ export const trackShipmentsHandler: JobHandler = async (job, ctx) => {
     const res = await applyTracking(ctx.db, r, st, ctx.now);
     if (res.order.length) { await logIntegrationEvent(ctx.db, "geliver", "info", `Order ${r.orderNumber} → ${res.order.at(-1)} (carrier: ${st.status})`, { orderId: r.orderId }).catch(() => {}); }
   }
+  const manual = await openManualShipments(ctx.db, ctx.now, only);
+  for (const m of manual) {
+    if (!m.providerShipmentId) continue;
+    try { await applyManualTracking(ctx.db, m, await adapter.track(m.providerShipmentId), ctx.now); }
+    catch (e) { failed++; await ctx.log("warn", `geliver track failed for manual shipment ${m.reference}: ${e instanceof Error ? e.message : String(e)}`.slice(0, 500)); }
+  }
   // A sweep where every call failed is a real outage: fail the job so it is retried/visible.
-  if (rows.length > 0 && failed === rows.length) throw new Error(`geliver tracking failed for all ${failed} shipment(s)`);
+  const total = rows.length + manual.length;
+  if (total > 0 && failed === total) throw new Error(`geliver tracking failed for all ${failed} shipment(s)`);
 };
