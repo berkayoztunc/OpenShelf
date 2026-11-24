@@ -107,6 +107,8 @@ describe("efaturam", () => {
     expect(body.currencyInfo).toEqual({ currency: "TRY" });
     expect(body.notes).toEqual(["Sipariş 100"]);
     expect(Number.isInteger(body.invoiceLines[0].unitPriceAmount)).toBe(true);
+    const l = body.invoiceLines[0];
+    expect(l.totalTax).toEqual({ totalTaxAmount: l.taxAmount, subTotalTaxes: [{ taxableAmount: l.taxableAmount, taxAmount: l.taxAmount, percent: 10, taxType: "KDV", taxCode: "0015", name: "KDV" }] });
   });
   it("finds the district in the address text when the order has none", () => {
     expect(districtOf({ address: "Sancak mah. 524. sok. No 13 çankaya/Ankara Çankaya", city: "Ankara" })).toBe("Çankaya");

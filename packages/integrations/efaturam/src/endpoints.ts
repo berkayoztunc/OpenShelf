@@ -47,7 +47,7 @@ export interface CreateInvoiceRequest {
   currencyInfo: { currency: string };
   notes?: string[];
   invoiceInfo: { invoiceType: "EARSIVFATURA" | "TEMELFATURA"; invoiceTypeCode: "SATIS"; invoiceUuid: string };
-  invoiceLines: { unitCode: string; quantity: number; itemName: string; unitPriceAmount: number; totalAmount: number; taxableAmount: number; taxAmount: number; taxPercent: number; taxName: string; taxCode: string; totalDiscountAmount: number }[];
+  invoiceLines: { unitCode: string; quantity: number; itemName: string; unitPriceAmount: number; totalAmount: number; taxableAmount: number; taxAmount: number; taxPercent: number; taxName: string; taxCode: string; totalDiscountAmount: number; totalTax: { totalTaxAmount: number; subTotalTaxes: TaxSubtotal[] } }[];
   totalTax: { totalTaxAmount: number; subTotalTaxes: TaxSubtotal[] };
   invoiceTotal: { lineExtensionAmount: number; taxExclusiveAmount: number; taxInclusiveAmount: number; payableAmount: number; allowanceTotalAmount: number };
   orderInfo: { orderId: string; orderDate: string };

@@ -131,6 +131,8 @@ export function buildAmounts(lines: InvoiceInput["lines"]) {
     return {
       unitCode: UNIT_PIECE, quantity: l.quantity, itemName: l.name, unitPriceAmount: Math.round(taxableAmount / l.quantity), // kuruş, integer like every other amount
       totalAmount: taxableAmount, taxableAmount, taxAmount: inclusive - taxableAmount, taxPercent: l.taxRate, taxName: KDV.name, taxCode: KDV.taxCode, totalDiscountAmount: 0,
+      // the gateway rejects a line without its own tax breakdown ("Total tax (totalTax) must be provided for each invoice line")
+      totalTax: { totalTaxAmount: inclusive - taxableAmount, subTotalTaxes: [{ taxableAmount, taxAmount: inclusive - taxableAmount, percent: l.taxRate, ...KDV }] },
     };
   });
   const byRate = new Map<number, TaxSubtotal>();
