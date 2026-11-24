@@ -64,6 +64,46 @@ const jwtClaims = (token: string): Record<string, unknown> => {
 };
 const claimNum = (c: Record<string, unknown>, keys: string[]) => { for (const k of keys) { const n = Number(c[k]); if (c[k] != null && c[k] !== "" && Number.isFinite(n)) return n; } return undefined; };
 
+/**
+ * Field-level reasons from a gateway validation answer (422/400). Handles the usual shapes:
+ * `errors: { field: [msg] }` (ProblemDetails), `errors|violations|fieldErrors: [{ field|propertyName, message|defaultMessage }]`, `errors: ["msg"]`.
+ */
+export function validationDetails(j: any): string {
+  if (!j || typeof j !== "object") return "";
+  const out: string[] = [];
+  const item = (x: any) => {
+    if (typeof x === "string") return out.push(x);
+    if (!x || typeof x !== "object") return;
+    const f = x.field ?? x.propertyName ?? x.property ?? x.path ?? x.name;
+    const m = x.message ?? x.defaultMessage ?? x.errorMessage ?? x.detail ?? x.reason;
+    if (f || m) out.push(f && m ? `${f}: ${m}` : String(f ?? m));
+  };
+  for (const key of ["errors", "violations", "fieldErrors", "validationErrors", "invalidParams", "invalid-params"]) {
+    const v = j[key];
+    if (Array.isArray(v)) v.forEach(item);
+    else if (v && typeof v === "object") for (const [f, m] of Object.entries(v)) out.push(`${f}: ${Array.isArray(m) ? m.join(", ") : typeof m === "object" ? JSON.stringify(m) : String(m)}`);
+  }
+  if (!out.length && j.detail && j.title && j.detail !== j.title) out.push(String(j.detail));
+  return out.join("; ");
+}
+
+/**
+ * İlçe for the recipient address. e-Arşiv wants one; when the order did not store it, take it from a trailing
+ * "İlçe/İl" or "... İlçe İl" in the address text, else "Merkez" (the conventional value for a city centre).
+ */
+export function districtOf(c: { district?: string; address: string; city: string }): string {
+  const d = c.district?.trim();
+  if (d) return d.slice(0, 100);
+  const city = c.city.trim().toLocaleLowerCase("tr");
+  const slash = c.address.match(/([\p{L}.]+)\s*\/\s*([\p{L}.]+)\s*$/u) ?? c.address.match(/([\p{L}.]+)\s*\/\s*[\p{L}.]+/u);
+  if (slash && slash[1]!.toLocaleLowerCase("tr") !== city) return cap(slash[1]!);
+  const words = c.address.trim().split(/\s+/);
+  const last = words.at(-1)?.toLocaleLowerCase("tr");
+  if (words.length >= 2 && last && last !== city && words.at(-2)?.toLocaleLowerCase("tr").endsWith(city)) return cap(words.at(-1)!);
+  return "Merkez";
+}
+const cap = (w: string) => w.charAt(0).toLocaleUpperCase("tr") + w.slice(1).toLocaleLowerCase("tr");
+
 /** Deterministic UUID from the idempotency key, so a retry reuses the same ETTN and cannot create a second invoice. */
 export async function uuidFromKey(key: string): Promise<string> {
   const h = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode("openshelf:efaturam:" + key))).slice(0, 16);
@@ -89,7 +129,7 @@ export function buildAmounts(lines: InvoiceInput["lines"]) {
     const inclusive = gross[i]! - cut;
     const taxableAmount = Math.round(inclusive / (1 + l.taxRate / 100));
     return {
-      unitCode: UNIT_PIECE, quantity: l.quantity, itemName: l.name, unitPriceAmount: Math.round((taxableAmount / l.quantity) * 100) / 100,
+      unitCode: UNIT_PIECE, quantity: l.quantity, itemName: l.name, unitPriceAmount: Math.round(taxableAmount / l.quantity), // kuruş, integer like every other amount
       totalAmount: taxableAmount, taxableAmount, taxAmount: inclusive - taxableAmount, taxPercent: l.taxRate, taxName: KDV.name, taxCode: KDV.taxCode, totalDiscountAmount: 0,
     };
   });
@@ -138,7 +178,9 @@ export class EfaturamAdapter implements InvoicingProvider {
     let j: any;
     try { j = text ? JSON.parse(text) : undefined; } catch { /* non-JSON */ }
     const blocked = res.status === 403 && (j === undefined || typeof j !== "object");
-    throw new EfaturamError(`e-faturam HTTP ${res.status}: ${blocked ? "blocked before reaching the gateway" : String(j?.title ?? j?.detail ?? j?.message ?? "").slice(0, 300)}`, res.status, blocked);
+    const head = blocked ? "blocked before reaching the gateway" : String(j?.title ?? j?.detail ?? j?.message ?? "");
+    const fields = res.status === 400 || res.status === 422 ? validationDetails(j) : "";
+    throw new EfaturamError(`e-faturam HTTP ${res.status}: ${[head, fields].filter(Boolean).join(" | ")}`.slice(0, 600), res.status, blocked);
   }
 
   private async signIn() {
@@ -305,8 +347,12 @@ export class EfaturamAdapter implements InvoicingProvider {
       ...(alias ? { targetAlias: alias } : {}),
       recipientInfo: {
         taxId, name: cut > 0 ? fullName.slice(0, cut) : fullName, ...(cut > 0 ? { surname: fullName.slice(cut + 1) } : {}),
-        city: c.city, address: c.address.slice(0, 255), ...(c.taxOffice ? { taxOffice: c.taxOffice } : {}), ...(c.email ? { email: c.email } : {}), countryCode: "TR",
+        city: c.city, district: districtOf(c), address: c.address.slice(0, 255),
+        ...(c.postalCode?.trim() ? { postalCode: c.postalCode.trim() } : {}), ...(c.phone?.trim() ? { phone: c.phone.trim() } : {}),
+        ...(c.taxOffice ? { taxOffice: c.taxOffice } : {}), ...(c.email ? { email: c.email } : {}), countryCode: "TR",
       },
+      currencyInfo: { currency: (input.currency || "TRY").toUpperCase() },
+      ...(input.notes?.some((n) => n.trim()) ? { notes: input.notes.map((n) => n.trim()).filter(Boolean).map((n) => n.slice(0, 500)) } : {}),
       invoiceInfo: { invoiceType: type === "e_fatura" ? "TEMELFATURA" : "EARSIVFATURA", invoiceTypeCode: "SATIS", invoiceUuid },
       ...buildAmounts(input.lines),
       orderInfo: { orderId: input.orderNumber, orderDate: input.issuedAt.slice(0, 10) },

@@ -70,7 +70,14 @@ export interface ShippingProvider extends OpenShelfIntegration {
 }
 
 // ---------- Invoicing ----------
-export interface InvoiceInput { orderId: string; orderNumber: string; issuedAt: string; customer: { name: string; email?: string; taxId?: string; taxOffice?: string; address: string; city: string; isCompany: boolean }; lines: { name: string; quantity: number; unitPrice: number; taxRate: number }[]; currency: string }
+export interface InvoiceInput {
+  orderId: string; orderNumber: string; issuedAt: string;
+  /** district (ilçe), postalCode and phone are optional; e-Arşiv wants the district, so pass it whenever the address has one */
+  customer: { name: string; email?: string; taxId?: string; taxOffice?: string; address: string; city: string; district?: string; postalCode?: string; phone?: string; isCompany: boolean };
+  lines: { name: string; quantity: number; unitPrice: number; taxRate: number }[]; currency: string;
+  /** free-text notes printed on the invoice */
+  notes?: string[];
+}
 export interface InvoiceResult { providerInvoiceId: string; number?: string; type: "e_fatura" | "e_arsiv"; pdfUrl?: string }
 export interface InvoicingProvider extends OpenShelfIntegration {
   /** Must be idempotent per (orderId, type) — caller passes idempotencyKey. */

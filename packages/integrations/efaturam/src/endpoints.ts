@@ -40,7 +40,12 @@ export const ANONYMOUS_TCKN = "11111111111";
 export interface TaxSubtotal { taxableAmount: number; taxAmount: number; taxType: string; percent: number; taxCode: string; name: string }
 export interface CreateInvoiceRequest {
   autoInvoiceId: true; companyId: number; userId: number; source: "WEB"; localReferenceId: string; prefix?: string; targetAlias?: string; issuedAt: string;
-  recipientInfo: { taxId: string; name: string; surname?: string; city: string; address?: string; taxOffice?: string; email?: string; countryCode: "TR" };
+  recipientInfo: {
+    taxId: string; name: string; surname?: string; city: string; district: string; address?: string; postalCode?: string; phone?: string;
+    taxOffice?: string; email?: string; countryCode: "TR";
+  };
+  currencyInfo: { currency: string };
+  notes?: string[];
   invoiceInfo: { invoiceType: "EARSIVFATURA" | "TEMELFATURA"; invoiceTypeCode: "SATIS"; invoiceUuid: string };
   invoiceLines: { unitCode: string; quantity: number; itemName: string; unitPriceAmount: number; totalAmount: number; taxableAmount: number; taxAmount: number; taxPercent: number; taxName: string; taxCode: string; totalDiscountAmount: number }[];
   totalTax: { totalTaxAmount: number; subTotalTaxes: TaxSubtotal[] };

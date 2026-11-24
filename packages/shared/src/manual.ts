@@ -19,6 +19,9 @@ export const ManualInvoiceCustomer = z.object({
   taxOffice: z.string().max(120).optional().or(z.literal("")),
   address: z.string().min(3).max(400),
   city: z.string().min(2).max(80),
+  district: z.string().max(100).optional().or(z.literal("")),   // ilçe; e-Arşiv wants it (taken from the linked order when empty)
+  postalCode: z.string().max(20).optional().or(z.literal("")),
+  phone: z.string().max(30).optional().or(z.literal("")),
   isCompany: z.boolean().default(false),
 });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { factory, invoiceIssueHandler, buildAmounts, uuidFromKey, EfaturamAdapter } from "../src/index";
+import { factory, invoiceIssueHandler, buildAmounts, uuidFromKey, EfaturamAdapter, districtOf, validationDetails } from "../src/index";
 import type { InvoiceRepo } from "../src/index";
 
 const PROD = "https://apigateway.trendyolecozum.com";
@@ -95,6 +95,31 @@ describe("efaturam", () => {
     });
     expect(uuid).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     expect(calls.find((c) => c.path.endsWith("/permanent-url"))!.body).toMatchObject({ documentType: "EARCHIVE", fileExtension: "pdf", invoiceUuid: uuid, companyId: 77 });
+  });
+  it("sends district, contact details, currency and notes; unit price stays whole kuruş", async () => {
+    const { adapter, calls } = mk((c) => c.path === "/api/invoice/documents/earchive" ? { json: { invoiceId: "N1" } } : undefined);
+    await adapter.issue({
+      ...base, lines: [{ name: "P", quantity: 3, unitPrice: 10000, taxRate: 10 }], notes: ["Sipariş 100", " "],
+      customer: { ...person, district: "Kadıköy", postalCode: "34710", phone: "+905301234567", email: "a@example.com" },
+    }, "o2:e_arsiv");
+    const body = calls.find((c) => c.path === "/api/invoice/documents/earchive")!.body;
+    expect(body.recipientInfo).toMatchObject({ district: "Kadıköy", postalCode: "34710", phone: "+905301234567", email: "a@example.com", countryCode: "TR" });
+    expect(body.currencyInfo).toEqual({ currency: "TRY" });
+    expect(body.notes).toEqual(["Sipariş 100"]);
+    expect(Number.isInteger(body.invoiceLines[0].unitPriceAmount)).toBe(true);
+  });
+  it("finds the district in the address text when the order has none", () => {
+    expect(districtOf({ address: "Sancak mah. 524. sok. No 13 çankaya/Ankara Çankaya", city: "Ankara" })).toBe("Çankaya");
+    expect(districtOf({ address: "Atatürk Cad. No 5 Kadıköy/İstanbul", city: "İstanbul" })).toBe("Kadıköy");
+    expect(districtOf({ address: "Atatürk Cad. No 5 İstanbul Kadıköy", city: "İstanbul" })).toBe("Kadıköy");
+    expect(districtOf({ address: "Atatürk Cad. No 5", city: "Ankara" })).toBe("Merkez");
+    expect(districtOf({ district: " Etimesgut ", address: "x", city: "Ankara" })).toBe("Etimesgut");
+  });
+  it("a 422 names the invalid fields", async () => {
+    expect(validationDetails({ title: "Request is not valid", errors: { "recipientInfo.District": ["required"] } })).toBe("recipientInfo.District: required");
+    expect(validationDetails({ errors: [{ field: "issuedAt", defaultMessage: "must be in the past" }] })).toBe("issuedAt: must be in the past");
+    const { adapter } = mk((c) => c.path === "/api/invoice/documents/earchive" ? { status: 422, json: { title: "Request is not valid", errors: { "recipientInfo.district": ["must not be blank"] } } } : undefined);
+    await expect(adapter.issue({ ...base, customer: person }, "o3:e_arsiv")).rejects.toThrow("e-faturam HTTP 422: Request is not valid | recipientInfo.district: must not be blank");
   });
   it("issues an e-Fatura to the taxpayer's alias", async () => {
     const { adapter, calls } = mk((c) => taxpayers([{ alias: "urn:mail:pk@acme.com", aliasType: "INVOICE" }])(c) ?? (c.path === "/api/invoice/documents/outgoing-einvoice" ? { json: { invoiceId: "EFT2026000000001" } } : { status: 404 }));

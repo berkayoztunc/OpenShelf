@@ -64,13 +64,25 @@ async function resolveType(c: Parameters<typeof getAdapter>[0], db: AppEnv["Vari
 const invoiceNumberFor = (id: string, orderNumber?: string | null) => orderNumber ?? `MAN-${id.slice(0, 8).toUpperCase()}`;
 async function buildInput(db: AppEnv["Variables"]["db"], id: string, b: ManualInvoiceBody): Promise<InvoiceInput> {
   let orderNumber: string | null = null;
-  if (b.orderId) { const [o] = await db.select({ n: orders.number }).from(orders).where(eq(orders.id, b.orderId)).limit(1); orderNumber = o?.n ?? null; }
+  let addr: Record<string, any> = {};
+  if (b.orderId) {
+    const [o] = await db.select({ n: orders.number, ship: orders.shippingAddress, bill: orders.billingAddress }).from(orders).where(eq(orders.id, b.orderId)).limit(1);
+    orderNumber = o?.n ?? null;
+    addr = ((o?.bill ?? o?.ship) ?? {}) as Record<string, any>;
+  }
   const cu = b.customer;
+  const now = new Date();
+  // A past date is issued at noon; today's date uses the current time so the invoice is never dated ahead of its sending.
+  const issuedAt = b.issueDate && b.issueDate !== now.toISOString().slice(0, 10) ? `${b.issueDate}T12:00:00.000Z` : now.toISOString();
   return {
-    orderId: `manual:${id}`, orderNumber: invoiceNumberFor(id, orderNumber), currency: b.currency.toUpperCase(),
-    issuedAt: b.issueDate ? `${b.issueDate}T12:00:00.000Z` : new Date().toISOString(),
+    orderId: `manual:${id}`, orderNumber: invoiceNumberFor(id, orderNumber), currency: b.currency.toUpperCase(), issuedAt,
     lines: toInvoiceLines(b.lines, b.pricesIncludeTax),
-    customer: { name: cu.name, email: cu.email || undefined, taxId: cu.taxId || undefined, taxOffice: cu.taxOffice || undefined, address: cu.address, city: cu.city, isCompany: cu.isCompany },
+    customer: {
+      name: cu.name, email: cu.email || undefined, taxId: cu.taxId || undefined, taxOffice: cu.taxOffice || undefined, address: cu.address, city: cu.city,
+      district: cu.district || addr.district || undefined, postalCode: cu.postalCode || addr.zip || undefined, phone: cu.phone || addr.phone || undefined,
+      isCompany: cu.isCompany,
+    },
+    ...(b.notes?.trim() ? { notes: [b.notes.trim()] } : {}),
   };
 }
 async function previewOf(c: Parameters<typeof getAdapter>[0], db: AppEnv["Variables"]["db"], id: string, b: ManualInvoiceBody) {

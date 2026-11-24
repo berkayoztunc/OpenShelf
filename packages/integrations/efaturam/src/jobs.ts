@@ -35,7 +35,11 @@ export function drizzleInvoiceRepo(db: any): InvoiceRepo {
       const lines: InvoiceInput["lines"] = orderInvoiceLines(o, items.map((i: any) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unitPrice, taxRate: i.taxRate })));
       return {
         orderId, orderNumber: o.number, issuedAt: new Date().toISOString(), currency: o.currency, lines,
-        customer: { name: a.name ?? "", email: o.email, taxId: a.taxId ?? undefined, taxOffice: a.taxOffice ?? undefined, address: [a.line1, a.line2].filter(Boolean).join(" "), city: a.city ?? "", isCompany: !!a.isCompany },
+        customer: {
+          name: a.isCompany ? (a.name ?? "") : [a.name, a.surname].filter(Boolean).join(" "), email: o.email, taxId: a.taxId ?? undefined, taxOffice: a.taxOffice ?? undefined,
+          address: [a.line1, a.line2].filter(Boolean).join(" "), city: a.city ?? "", district: a.district || undefined, postalCode: a.zip || undefined, phone: a.phone || undefined,
+          isCompany: !!a.isCompany,
+        },
       };
     },
     async claim(orderId, type) {
