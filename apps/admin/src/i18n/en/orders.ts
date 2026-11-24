@@ -267,6 +267,7 @@ export const orders = {
   "orders.error.invalid_order_state": "This action is not possible in the order's current state. A shipment needs a paid order; an invoice needs an order that is paid and not cancelled.",
   "orders.error.shipping_unavailable": "No shipping integration is enabled. Connect Geliver on the Integrations page or turn on mock mode.",
   "orders.error.invoicing_unavailable": "No invoicing integration is enabled. Connect Trendyol e-Faturam on the Integrations page or turn on mock mode.",
+  "orders.error.already_invoiced": "This order already has an invoice created in the invoice editor; see the Invoices card.",
   "orders.error.openIntegrations": "Open Integrations",
 
   // ---- "?" explanations

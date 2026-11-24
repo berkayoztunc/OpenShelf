@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { addresses, auditLogs, customerConsents, customers, integrationConfigs, inventory, invoices, orderItems, orders, paymentEvents, payments, productVariants, products, refunds, shipmentEvents, shipments, utmAttributions } from "@openshelf/db";
+import { addresses, auditLogs, customerConsents, customers, integrationConfigs, inventory, invoices, manualInvoices, orderItems, orders, paymentEvents, payments, productVariants, products, refunds, shipmentEvents, shipments, utmAttributions } from "@openshelf/db";
 import { InvalidTransitionError, enqueueJob, transitionOrder } from "@openshelf/core";
 import type { PaymentProvider, ShipmentInput, ShippingProvider } from "@openshelf/integration-sdk";
 import { HAND_DELIVERY_PROVIDER, HandDeliveryBody, ORDER_STATUSES, OrderAddressBody, orderPricesIncludeTax, OrderStatusBody, RefundBody, ShipmentBody, type OrderStatus } from "@openshelf/shared";
@@ -35,10 +35,27 @@ const dateParam = (v: string | undefined, endOfDay: boolean) => {
 };
 const intParam = (v: string | undefined) => { if (v === undefined || v === "") return undefined; const n = Number(v); if (!Number.isInteger(n) || n < 0) throw new ApiError(400, "validation_error", "Invalid amount"); return n; };
 /** child-table filter: "none" = no row, otherwise a row with that status exists */
-const childFilter = (table: "payments" | "shipments" | "invoices", v: string) =>
-  v === "none"
-    ? sql`NOT EXISTS (SELECT 1 FROM ${sql.raw(table)} x WHERE x.order_id = ${orders.id})`
-    : sql`EXISTS (SELECT 1 FROM ${sql.raw(table)} x WHERE x.order_id = ${orders.id} AND x.status = ${v})`;
+const childFilter = (table: "payments" | "shipments" | "invoices", v: string) => {
+  // an issued manual invoice linked to the order counts as the order's invoice (drafts don't)
+  const manual = table === "invoices"
+    ? (v === "none" ? sql` AND NOT EXISTS (SELECT 1 FROM manual_invoices m WHERE m.order_id = ${orders.id} AND m.status <> 'draft')` : sql` OR EXISTS (SELECT 1 FROM manual_invoices m WHERE m.order_id = ${orders.id} AND m.status = ${v})`)
+    : sql``;
+  return v === "none"
+    ? sql`(NOT EXISTS (SELECT 1 FROM ${sql.raw(table)} x WHERE x.order_id = ${orders.id})${manual})`
+    : sql`(EXISTS (SELECT 1 FROM ${sql.raw(table)} x WHERE x.order_id = ${orders.id} AND x.status = ${v})${manual})`;
+};
+/** Invoices of these orders: automatic ones plus non-draft manual invoices linked to the order (same row shape, `manual: true`). */
+async function orderInvoicesOf(db: AppEnv["Variables"]["db"], ids: string[]) {
+  if (!ids.length) return [];
+  const [auto, manual] = await Promise.all([
+    db.select().from(invoices).where(inArray(invoices.orderId, ids)),
+    db.select().from(manualInvoices).where(and(inArray(manualInvoices.orderId, ids), sql`${manualInvoices.status} <> 'draft'`)),
+  ]);
+  return [
+    ...auto.map((i) => ({ ...i, manual: false })),
+    ...manual.map((m) => ({ id: m.id, orderId: m.orderId!, type: m.type ?? "e_arsiv", provider: m.provider ?? "efaturam", providerInvoiceId: m.providerInvoiceId, number: m.number, pdfUrl: m.pdfUrl, status: m.status, createdAt: m.issuedAt ?? m.createdAt, manual: true })),
+  ];
+}
 
 function orderListFilters(c: { req: { query(k: string): string | undefined } }, opts: { withStatus: boolean }) {
   const conds = [];
@@ -87,7 +104,7 @@ adminOrders.get("/orders", requireRole("staff"), async (c) => {
     db.select().from(payments).where(inArray(payments.orderId, ids)),
     db.select().from(orderItems).where(inArray(orderItems.orderId, ids)),
     db.select().from(shipments).where(inArray(shipments.orderId, ids)),
-    db.select().from(invoices).where(inArray(invoices.orderId, ids)),
+    orderInvoicesOf(db, ids),
   ]) : [[], [], [], []];
   const mockIds = new Set(pays.filter((x) => x.isMock).map((x) => x.orderId));
   const lastPay = latestBy(pays); const lastShip = latestBy(ships); const lastInv = latestBy(invs);
@@ -126,7 +143,7 @@ adminOrders.get("/orders/:id", requireRole("staff"), async (c) => {
     db.select().from(orderItems).where(eq(orderItems.orderId, id)),
     db.select().from(payments).where(eq(payments.orderId, id)),
     db.select().from(shipments).where(eq(shipments.orderId, id)),
-    db.select().from(invoices).where(eq(invoices.orderId, id)),
+    orderInvoicesOf(db, [id]),
     db.select().from(refunds).where(eq(refunds.orderId, id)),
   ]);
   const payIds = pays.map((x) => x.id);
@@ -333,6 +350,8 @@ adminOrders.post("/orders/:id/invoice", requireRole("staff"), async (c) => {
   let on = false;
   for (const p of INVOICING_PROVIDER_IDS) if (await isIntegrationEnabled(c.env, db, p)) { on = true; break; }
   if (!on) throw new ApiError(503, "invoicing_unavailable", "No invoicing provider enabled");
+  const [m] = await db.select({ number: manualInvoices.number }).from(manualInvoices).where(and(eq(manualInvoices.orderId, id), inArray(manualInvoices.status, ["issuing", "issued", "cancelling"]))).limit(1);
+  if (m) throw new ApiError(409, "already_invoiced", `This order already has a manual invoice${m.number ? ` (${m.number})` : ""}`);
   await enqueueJob(db, { kind: "invoice.issue", payload: { orderId: id }, dedupeKey: `invoice.issue:${id}` });
   await audit(c, "order.invoice", "order", id);
   return c.json({ queued: true }, 202);
@@ -430,7 +449,7 @@ adminOrders.get("/dashboard/insights", requireRole("staff"), async (c) => {
   const [a] = await db.all<Record<string, number>>(sql`SELECT
     (SELECT COUNT(*) FROM orders o WHERE o.source = 'website' AND o.status IN ('paid','fulfilling') AND NOT EXISTS (SELECT 1 FROM shipments s WHERE s.order_id = o.id)) AS to_ship,
     (SELECT COUNT(*) FROM orders o WHERE o.status IN ('pending','awaiting_payment')) AS awaiting_payment,
-    (SELECT COUNT(*) FROM orders o WHERE o.source = 'website' AND o.status IN ('paid','fulfilling','shipped','delivered') AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.order_id = o.id)) AS to_invoice,
+    (SELECT COUNT(*) FROM orders o WHERE o.source = 'website' AND o.status IN ('paid','fulfilling','shipped','delivered') AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.order_id = o.id) AND NOT EXISTS (SELECT 1 FROM manual_invoices m WHERE m.order_id = o.id AND m.status IN ('issuing','issued','cancelling'))) AS to_invoice,
     (SELECT COUNT(*) FROM outbox_jobs WHERE status = 'dead') AS failed_jobs,
     (SELECT COUNT(*) FROM inventory i JOIN product_variants v ON v.id = i.variant_id JOIN products p ON p.id = v.product_id WHERE v.active = 1 AND p.status = 'active' AND i.total - i.reserved - i.safety_stock <= 0) AS out_of_stock,
     (SELECT COUNT(*) FROM inventory i JOIN product_variants v ON v.id = i.variant_id JOIN products p ON p.id = v.product_id WHERE v.active = 1 AND p.status = 'active' AND i.total - i.reserved - i.safety_stock BETWEEN 1 AND 5) AS low_stock,

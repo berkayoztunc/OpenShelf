@@ -267,6 +267,7 @@ export const orders = {
   "orders.error.invalid_order_state": "Bu işlem siparişin şu anki durumunda yapılamaz. Kargo için sipariş ödenmiş olmalı; fatura için sipariş iptal edilmemiş ve ödenmiş olmalı.",
   "orders.error.shipping_unavailable": "Etkin bir kargo entegrasyonu yok. Entegrasyonlar sayfasından Geliver’i bağlayın ya da deneme modunu açın.",
   "orders.error.invoicing_unavailable": "Etkin bir fatura entegrasyonu yok. Entegrasyonlar sayfasından Trendyol e-Faturam’ı bağlayın ya da deneme modunu açın.",
+  "orders.error.already_invoiced": "Bu siparişe fatura oluşturucudan zaten fatura kesildi; Faturalar kartına bakın.",
   "orders.error.openIntegrations": "Entegrasyonları aç",
 
   // ---- "?" açıklamaları

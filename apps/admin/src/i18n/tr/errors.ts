@@ -67,6 +67,7 @@ export const errors = {
   "error.payment_provider_error": "Ödeme başlatılamadı. Biraz sonra tekrar deneyin; sürerse iyzico ayarlarını sınayın.",
   "error.shipping_unavailable": "Etkin bir kargo sağlayıcısı yok. Entegrasyonlar sayfasından Geliver'i etkinleştirin ya da deneme modunu açın.",
   "error.invoicing_unavailable": "Etkin bir fatura sağlayıcısı yok. Entegrasyonlar sayfasından e-Faturam'ı etkinleştirin ya da deneme modunu açın.",
+  "error.already_invoiced": "Bu siparişe fatura oluşturucudan zaten fatura kesildi.",
   "error.no_invoicing_provider": "Etkin bir fatura sağlayıcısı yok. Entegrasyonlar sayfasında e-Faturam'ı etkinleştirin (ya da deneme modunu açın), sonra tekrar deneyin.",
   "error.no_email_provider": "Etkin bir e-posta sağlayıcısı yok. Entegrasyonlar sayfasında Cloudflare E-posta'yı etkinleştirin (ya da deneme modunu açın), sonra tekrar deneyin.",
   "error.issue_failed": "Fatura sağlayıcısı faturayı kabul etmedi. Fatura bilgilerini (VKN/TCKN, adres) düzeltip tekrar deneyin; ayrıntı için Entegrasyon olayları sayfasına bakın.",

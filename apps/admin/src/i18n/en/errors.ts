@@ -67,6 +67,7 @@ export const errors = {
   "error.payment_provider_error": "Could not start the payment. Try again shortly; if it persists, test the iyzico settings.",
   "error.shipping_unavailable": "No shipping provider is enabled. Enable Geliver on the Integrations page or turn on mock mode.",
   "error.invoicing_unavailable": "No invoicing provider is enabled. Enable e-Faturam on the Integrations page or turn on mock mode.",
+  "error.already_invoiced": "This order already has an invoice created in the invoice editor.",
   "error.no_invoicing_provider": "No invoicing provider is enabled. Enable e-Faturam on the Integrations page (or turn on mock mode), then try again.",
   "error.no_email_provider": "No e-mail provider is enabled. Enable Cloudflare Email on the Integrations page (or turn on mock mode), then try again.",
   "error.issue_failed": "The invoicing provider did not accept the invoice. Fix the invoice details (tax ID, address) and try again; see Integration events for details.",

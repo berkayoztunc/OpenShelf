@@ -1,5 +1,5 @@
-import { and, asc, eq } from "drizzle-orm";
-import { orders, orderItems, invoices, invoiceEvents, payments, shipments, storeSettings } from "@openshelf/db";
+import { and, asc, eq, inArray } from "drizzle-orm";
+import { orders, orderItems, invoices, invoiceEvents, manualInvoices, payments, shipments, storeSettings } from "@openshelf/db";
 import type { InvoiceInput, InvoicingProvider } from "@openshelf/integration-sdk";
 import { orderInvoiceLines } from "@openshelf/shared";
 
@@ -13,6 +13,8 @@ export interface InvoiceRepo {
   /** Order channel ("website" | "trendyol" ...). Marketplace orders are shipped/invoiced by the marketplace. */
   sourceOf?(orderId: string): Promise<string | undefined>;
   loadOrder(orderId: string): Promise<InvoiceInput | null>;
+  /** Number (or "") of a manual invoice already issued for this order, so the automatic one is not issued twice. */
+  manualInvoiceOf?(orderId: string): Promise<string | undefined>;
   /** INSERT ... ON CONFLICT(order_id,type) DO NOTHING, then return the (possibly pre-existing) row. */
   claim(orderId: string, type: "e_fatura" | "e_arsiv"): Promise<InvoiceRow>;
   markIssued(id: string, r: { providerInvoiceId: string; number?: string; pdfUrl?: string }): Promise<void>;
@@ -67,6 +69,11 @@ export function drizzleInvoiceRepo(db: any): InvoiceRepo {
         },
       };
     },
+    async manualInvoiceOf(orderId) {
+      const [m] = await db.select({ number: manualInvoices.number }).from(manualInvoices)
+        .where(and(eq(manualInvoices.orderId, orderId), inArray(manualInvoices.status, ["issuing", "issued", "cancelling"]))).limit(1);
+      return m ? (m.number ?? "") : undefined;
+    },
     async claim(orderId, type) {
       await db.insert(invoices).values({ id: crypto.randomUUID(), orderId, type, provider: "efaturam", status: "pending" }).onConflictDoNothing();
       const [row] = await db.select({ id: invoices.id, status: invoices.status }).from(invoices).where(and(eq(invoices.orderId, orderId), eq(invoices.type, type))).limit(1);
@@ -87,6 +94,8 @@ export function invoiceIssueHandler(repoFor: (db: any) => InvoiceRepo = drizzleI
     const repo = repoFor(ctx.db);
     const src = await repo.sourceOf?.(orderId);
     if (src && src !== "website") { await ctx.log("info", "invoice.issue skipped (channel-managed order)", { orderId, source: src }); return; }
+    const manual = await repo.manualInvoiceOf?.(orderId);
+    if (manual !== undefined) { await ctx.log("info", "invoice.issue skipped (manual invoice exists)", { orderId, number: manual || undefined }); return; }
     const input = await repo.loadOrder(orderId);
     if (!input) throw new Error(`invoice.issue: order ${orderId} not found`);
     const adapter = (await ctx.getAdapter("efaturam")) as InvoicingProvider & { resolveInvoiceType(i: InvoiceInput): Promise<"e_fatura" | "e_arsiv"> };

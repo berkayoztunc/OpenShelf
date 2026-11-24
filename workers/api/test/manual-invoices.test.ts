@@ -161,6 +161,23 @@ describe("manual invoices: issue / cancel", () => {
     expect(calls.at(-1)!.input.onlineSale).toBeUndefined();
     expect((await admin(owner, "/manual-invoices", "POST", body({ onlineSale: { ...onlineSale, websiteUrl: "http://x.com" } }))).status).toBe(400);
   });
+  it("an issued manual invoice counts as the order's invoice; automatic invoicing is refused", async () => {
+    const oid = `mi-order-${crypto.randomUUID()}`;
+    await env.DB.prepare("INSERT INTO orders (id, number, source, status, email, shipping_address, currency, subtotal, total, tracking_token, created_at, updated_at) VALUES (?1, ?1, 'website', 'shipped', 'a@example.invalid', '{}', 'TRY', 24000, 24000, ?1, unixepoch(), unixepoch())").bind(oid).run();
+    const draft = await create({ orderId: oid });
+    // a draft is not an invoice yet
+    expect((await j<any>(await admin(owner, `/orders/${oid}`, "GET"))).invoices).toEqual([]);
+    expect((await admin(owner, `/manual-invoices/${draft.id}/issue`, "POST")).status).toBe(200);
+    const o = await j<any>(await admin(owner, `/orders/${oid}`, "GET"));
+    expect(o.invoices).toEqual([expect.objectContaining({ id: draft.id, number: "EA2026000001", status: "issued", type: "e_arsiv", pdfUrl: "https://pdf.test/inv.pdf", manual: true })]);
+    const list = await j<any>(await admin(owner, `/orders?q=${oid}`, "GET"));
+    expect(list.items[0].invoice).toEqual({ status: "issued", number: "EA2026000001" });
+    expect((await j<any>(await admin(owner, `/orders?q=${oid}&invoice=none`, "GET"))).items).toHaveLength(0);
+    expect((await j<any>(await admin(owner, `/orders?q=${oid}&invoice=issued`, "GET"))).items).toHaveLength(1);
+    const r = await admin(owner, `/orders/${oid}/invoice`, "POST");
+    expect(r.status).toBe(409);
+    expect((await j<any>(r)).error.code).toBe("already_invoiced");
+  });
   it("online sale defaults: unknown order 404", async () => {
     expect((await admin(owner, "/manual-invoices/online-sale-defaults?orderId=nope", "GET")).status).toBe(404);
   });
