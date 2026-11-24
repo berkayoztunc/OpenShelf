@@ -35,6 +35,10 @@ export const IntegrationPutBody = z.object({
   secrets: z.record(z.string().nullable()).optional(), // omitted/"" = keep, null = clear
 });
 export type IntegrationPutBody = z.infer<typeof IntegrationPutBody>;
+/** Partial update of an integration's public settings: given keys are set, null removes one; secrets are never accepted here. */
+export const IntegrationConfigPatch = z.object({
+  config: z.record(z.union([z.string().max(500), z.number(), z.boolean(), z.null()])).refine((o) => Object.keys(o).length > 0, "Name at least one setting"),
+});
 
 // ---------- media ----------
 export const MEDIA_KINDS = ["logo", "logo_dark", "favicon", "banner", "og", "product", "category"] as const;

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import {
   BrandingSettings, CategoryInput, CheckoutSettings, ComposeEmailBody, GeneralSettings, HandDeliveryBody, LegalSettings, HomepageSettings, MenuSettings, MerchandisingSettings, NotificationSettings, SeoSettings, TrackingSettings, CouponInput, EfaturamCallBody, GeliverCallBody, InventoryAdjustBody, ManualInvoiceBody, OrderAddressBody, OrderStatusBody, ProductBulkBody, ProductInput, RefundBody, SETTING_GROUPS, VariantPriceBody,
-  ShipmentBody, TrendyolCallBody, TrendyolDraftOverrides,
+  ShipmentBody, TrendyolCallBody, TrendyolDraftOverrides, IntegrationConfigPatch,
 } from "@openshelf/shared";
 import { CampaignBody } from "../lib/campaigns";
 
@@ -176,6 +176,9 @@ export const TOOLS: ToolDef[] = [
     shape: { id: id("category"), body: CategoryInput.pick({ seoTitle: true, seoDescription: true, seoOgImageUrl: true, seoNoindex: true }).partial() },
     description: "Set a category's seoTitle (≤70), seoDescription (≤320), seoOgImageUrl (https) and seoNoindex without touching anything else. Verify with seo_preview type=category." }),
   t({ name: "retry_outbox_job", title: "Retry background job", level: "write", method: "POST", path: "/outbox/:id/retry", shape: { id: id("job") }, description: "Re-queue a failed/dead background job." }),
+  t({ name: "update_integration_config", title: "Change integration settings", level: "full", method: "PATCH", path: "/integrations/:provider/config",
+    shape: { provider: z.string().min(1).describe("provider id, e.g. efaturam, geliver, trendyol"), body: IntegrationConfigPatch },
+    description: "Change only the named PUBLIC settings of an integration (keys from list_integrations publicFields; null removes one). Secrets (passwords, API keys) and the on/off switch cannot be changed here and are kept. The provider validates the result. e-Faturam: websiteUrl, carrierName, carrierTaxId, xsltCode, seriesPrefixEArsiv ..." }),
   t({ name: "test_integration", title: "Test integration", level: "write", method: "POST", path: "/integrations/:provider/test", shape: { provider: z.string().min(1).describe("provider id, e.g. trendyol, geliver, iyzico") }, description: "Run the provider's health check (one outbound API call, nothing is changed)." }),
   t({ name: "view_image", title: "See an image (product photo, banner…)", level: "read", method: "GET", path: "/media/preview", query: ["mediaId", "productId", "imageId"],
     shape: { mediaId: q("an uploaded image id (list_media / upload result)"), productId: q("product id (with imageId)"), imageId: q("image id from get_product images[].id (with productId)") },

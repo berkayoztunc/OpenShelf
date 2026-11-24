@@ -201,3 +201,24 @@ describe("MCP: storefront menu and product order", () => {
     expect(pl.result.prompts.map((x: any) => x.name)).toEqual(expect.arrayContaining(["build_menu", "arrange_storefront"]));
   });
 });
+
+describe("PATCH /integrations/:provider/config", () => {
+  afterAll(async () => { await admin(owner, "/integrations/geliver/config", "PATCH", { config: { storeUrl: null, senderAddressId: null } }); });
+  it("sets only the named public settings, keeps secrets and the switch, rejects unknown or secret keys", async () => {
+    expect((await admin(owner, "/integrations/geliver", "PUT", { enabled: false, config: { senderAddressId: "addr-1" }, secrets: { apiToken: "tok-12345678" } })).status).toBe(200);
+    const r = await admin(owner, "/integrations/geliver/config", "PATCH", { config: { storeUrl: "https://shop.example.com/" } });
+    expect(r.status).toBe(200);
+    const out = await j<any>(r);
+    expect(out.configPublic).toMatchObject({ senderAddressId: "addr-1", storeUrl: "https://shop.example.com/" });
+    expect(out.enabled).toBe(false);
+    expect(out.secretsSet.apiToken).toBe(true);
+    expect((await admin(owner, "/integrations/geliver/config", "PATCH", { config: { apiToken: "x" } })).status).toBe(400);
+    expect((await admin(owner, "/integrations/geliver/config", "PATCH", { config: { nope: "x" } })).status).toBe(400);
+    expect((await admin(owner, "/integrations/geliver/config", "PATCH", { config: {} })).status).toBe(400);
+    expect((await admin(owner, "/integrations/nope/config", "PATCH", { config: { a: 1 } })).status).toBe(404);
+  });
+  it("is reachable through MCP as update_integration_config", async () => {
+    const r = await tool("update_integration_config", { provider: "geliver", body: { config: { storeUrl: "https://mcp.example.com/" } }, confirm: true });
+    expect(data(r).configPublic.storeUrl).toBe("https://mcp.example.com/");
+  });
+});

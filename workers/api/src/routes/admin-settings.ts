@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { auditLogs, integrationEvents, marketingEvents, outboxJobs } from "@openshelf/db";
-import { SETTING_GROUPS, type SettingGroup, IntegrationPutBody } from "@openshelf/shared";
+import { SETTING_GROUPS, type SettingGroup, IntegrationPutBody, IntegrationConfigPatch } from "@openshelf/shared";
 import type { AppEnv } from "../env";
 import { ApiError, body, notFound, paged, paging, parse } from "../lib/http";
 import { audit } from "../lib/audit";
@@ -62,6 +62,26 @@ adminSettings.put("/integrations/:provider", requireRole("admin"), async (c) => 
   await saveIntegration(c.env, c.get("db"), provider, b, c.get("admin")!.id);
   // audit records which secret keys changed, never values
   await audit(c, "integration.update", "integration", provider, { enabled: b.enabled, secretKeysTouched: Object.keys(b.secrets ?? {}).filter((k) => b.secrets![k] !== "") });
+  const all = await listIntegrations(c.env, c.get("db"));
+  return c.json(all.find((i) => i.provider === provider));
+});
+/**
+ * Change only the named PUBLIC settings of an integration (null removes one). Secrets and the enabled switch are kept as they are,
+ * so this is safe to expose to tools; the provider's schema still validates the result.
+ */
+adminSettings.patch("/integrations/:provider/config", requireRole("admin"), async (c) => {
+  const provider = c.req.param("provider");
+  if (!isProvider(provider)) throw notFound("Integration");
+  const b = await body(c, IntegrationConfigPatch);
+  const cur = (await listIntegrations(c.env, c.get("db"))).find((i) => i.provider === provider);
+  if (!cur) throw notFound("Integration");
+  const allowed = new Set((cur.publicFields ?? []).map((f: { key: string }) => f.key));
+  const unknown = Object.keys(b.config).filter((k) => !allowed.has(k));
+  if (unknown.length) throw new ApiError(400, "validation_error", `Unknown setting: ${unknown.join(", ")}`, unknown.map((k) => ({ path: `config.${k}`, message: "Not a setting of this integration" })));
+  const config: Record<string, unknown> = { ...(cur.configPublic ?? {}) };
+  for (const [k, v] of Object.entries(b.config)) { if (v === null) delete config[k]; else config[k] = v; }
+  await saveIntegration(c.env, c.get("db"), provider, { enabled: cur.enabled, config }, c.get("admin")!.id);
+  await audit(c, "integration.config", "integration", provider, { keys: Object.keys(b.config) });
   const all = await listIntegrations(c.env, c.get("db"));
   return c.json(all.find((i) => i.provider === provider));
 });
