@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, ClipboardList, CornerDownLeft, FilePlus2, Mail, Megaphone, Package, PackagePlus, Search, User } from "lucide-react";
@@ -122,7 +123,9 @@ export function CommandPalette() {
         <Search size={16} className="shrink-0" /><span className="hidden truncate sm:inline">{t("search.placeholderShort")}</span>
         <kbd className="ml-auto hidden rounded border border-line px-1.5 py-0.5 font-sans text-[11px] sm:inline">{isMac ? "⌘K" : "Ctrl K"}</kbd>
       </button>
-      {open && (
+      {/* Portal to <body>: the palette button lives in the header, whose backdrop-filter makes it the containing block
+          for position:fixed descendants, which squeezed the full-screen overlay into the 56px header strip. */}
+      {open && createPortal(
         <div className="os-palette-scrim fixed inset-0 z-50 flex items-start justify-center px-4 pt-[12vh]" onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
           <div role="dialog" aria-modal="true" aria-label={t("search.title")} className="os-palette-panel w-full max-w-xl overflow-hidden rounded-2xl border border-line bg-raised text-ink shadow-[0_24px_60px_-18px_rgb(0_0_0/.38),0_0_0_1px_rgb(0_0_0/.03)]">
             <div className="flex items-center gap-2.5 border-b border-line px-4">
@@ -155,7 +158,8 @@ export function CommandPalette() {
               <span>↑↓ {t("search.hint.move")}</span><span>↵ {t("search.hint.open")}</span><span className="ml-auto">{t("search.hint.scope")}</span>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
