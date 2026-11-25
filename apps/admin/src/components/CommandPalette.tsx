@@ -123,8 +123,8 @@ export function CommandPalette() {
         <kbd className="ml-auto hidden rounded border border-line px-1.5 py-0.5 font-sans text-[11px] sm:inline">{isMac ? "⌘K" : "Ctrl K"}</kbd>
       </button>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-[var(--os-scrim)] px-4 pt-[12vh] backdrop-blur-[2px]" onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
-          <div role="dialog" aria-modal="true" aria-label={t("search.title")} className="w-full max-w-xl overflow-hidden rounded-2xl border border-line bg-raised text-ink shadow-lift">
+        <div className="os-palette-scrim fixed inset-0 z-50 flex items-start justify-center px-4 pt-[12vh]" onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
+          <div role="dialog" aria-modal="true" aria-label={t("search.title")} className="os-palette-panel w-full max-w-xl overflow-hidden rounded-2xl border border-line bg-raised text-ink shadow-[0_24px_60px_-18px_rgb(0_0_0/.38),0_0_0_1px_rgb(0_0_0/.03)]">
             <div className="flex items-center gap-2.5 border-b border-line px-4">
               <Search size={18} className="shrink-0 text-muted" aria-hidden />
               <input ref={input} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKeyDown} placeholder={t("search.placeholder")}

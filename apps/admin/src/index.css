@@ -20,6 +20,16 @@
 @keyframes os-marquee { to { transform: translateX(-50%); } }
 .os-marquee-track { display: flex; width: max-content; animation: os-marquee var(--os-marquee-dur, 20s) linear infinite; }
 .os-marquee:hover .os-marquee-track { animation-play-state: paused; }
+/* Command palette: a lighter, clearer backdrop than the modal scrim so the page stays legible behind the search,
+   fading in while the panel drops in. color-mix keeps it theme-aware (light/dark scrim, about half as dense). */
+.os-palette-scrim {
+  background: color-mix(in srgb, var(--os-scrim) 55%, transparent);
+  -webkit-backdrop-filter: blur(6px) saturate(1.15); backdrop-filter: blur(6px) saturate(1.15);
+  animation: os-fade .16s ease-out both;
+}
+.os-palette-panel { animation: os-pop .2s cubic-bezier(.2,.7,.2,1) both; }
+@keyframes os-fade { from { opacity: 0; } }
+@keyframes os-pop { from { opacity: 0; transform: translateY(-8px) scale(.985); } }
 @keyframes os-toast { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
 @keyframes os-drawer { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
 .os-drawer[open] { animation: os-drawer .22s cubic-bezier(.2,.7,.2,1); }
