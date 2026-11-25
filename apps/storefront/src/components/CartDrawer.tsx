@@ -5,6 +5,7 @@ import { useConfig } from "../store/ConfigContext";
 import { useI18n } from "../i18n";
 import { BagIcon, CheckIcon, CloseIcon, LockIcon, TruckIcon } from "../lib/Icons";
 import { CartLines } from "./CartLines";
+import { CouponField } from "./CouponField";
 import { useMoney } from "./Money";
 
 /** Free-shipping progress: nudges the shopper toward the configured threshold. */
@@ -72,6 +73,8 @@ export function CartDrawer() {
         </div>
         {!empty && (
           <div className="space-y-3 border-t border-line bg-canvas/60 p-5">
+            <CouponField />
+            {totals.discount > 0 && <div className="flex items-baseline justify-between text-sm text-success"><span>{t("cart.discount")}</span><span className="tabular-nums">−{money(totals.discount, currency)}</span></div>}
             <div className="flex items-baseline justify-between"><span className="text-sm text-muted">{t("cart.subtotal")}</span><span className="text-xl font-semibold tabular-nums">{money(totals.subtotal, currency)}</span></div>
             <Link to="/checkout" className="btn-primary w-full !min-h-12 !text-base">{t("cart.checkout")}</Link>
             <Link to="/cart" className="btn-ghost w-full">{t("cart.view")}</Link>

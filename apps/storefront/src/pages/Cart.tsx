@@ -1,8 +1,8 @@
-import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useCart } from "../cart/CartContext";
 import { CartLines } from "../components/CartLines";
 import { CheckoutSteps } from "../components/CheckoutSteps";
+import { CouponField } from "../components/CouponField";
 import { ShippingProgress } from "../components/CartDrawer";
 import { BagIcon, LockIcon } from "../lib/Icons";
 import { useMoney } from "../components/Money";
@@ -15,18 +15,10 @@ export default function CartPage() {
   const { t } = useI18n();
   const { config } = useConfig();
   const money = useMoney();
-  const { cart, totals, currency, applyCoupon, busy } = useCart();
-  const [code, setCode] = useState("");
-  const [err, setErr] = useState(false);
+  const { cart, totals, currency } = useCart();
   useHead({ title: pageTitle(config, t("cart.title")), noindex: true });
   const empty = !cart || cart.items.length === 0;
   const threshold = config.checkout.freeShippingThreshold;
-
-  const coupon = async (e: FormEvent) => {
-    e.preventDefault(); setErr(false);
-    if (!code.trim()) return;
-    try { await applyCoupon(code.trim()); setCode(""); } catch { setErr(true); }
-  };
 
   return (
     <div className="container-x py-8 sm:py-12">
@@ -46,12 +38,7 @@ export default function CartPage() {
           <div className="card px-5 sm:px-6"><CartLines /></div>
           <aside className="card h-fit space-y-5 p-6 lg:sticky lg:top-28" aria-label={t("cart.total")}>
             <ShippingProgress subtotal={totals.subtotal} />
-            <form onSubmit={(e) => void coupon(e)} className="flex gap-2">
-              <label htmlFor="coupon" className="sr-only">{t("cart.coupon")}</label>
-              <input id="coupon" className="field" placeholder={t("cart.coupon")} value={code} onChange={(e) => setCode(e.target.value)} aria-invalid={err} aria-describedby={err ? "coupon-err" : undefined} />
-              <button className="btn-ghost" disabled={busy}>{t("cart.apply")}</button>
-            </form>
-            {err && <p id="coupon-err" role="alert" className="text-sm text-danger">{t("cart.couponError")}</p>}
+            <CouponField />
             <dl className="space-y-2.5 text-sm">
               <div className="flex justify-between"><dt className="text-muted">{t("cart.subtotal")}</dt><dd className="tabular-nums">{money(totals.subtotal, currency)}</dd></div>
               {totals.discount > 0 && <div className="flex justify-between text-success"><dt>{t("cart.discount")}</dt><dd className="tabular-nums">−{money(totals.discount, currency)}</dd></div>}

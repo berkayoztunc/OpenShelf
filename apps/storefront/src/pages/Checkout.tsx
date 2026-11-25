@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api, ApiError } from "../api/client";
 import type { Address, CheckoutResponse } from "../api/types";
 import { useCart } from "../cart/CartContext";
+import { CouponField } from "../components/CouponField";
 import { TR_GEO } from "@openshelf/shared/src/trGeo";
 import { CheckoutSteps } from "../components/CheckoutSteps";
 import { Select } from "../components/Select";
@@ -198,6 +199,7 @@ export default function Checkout() {
               </li>
             ))}
           </ul>
+          <CouponField className="border-t border-line pt-5" />
           <dl className="space-y-2.5 border-t border-line pt-5 text-sm">
             <div className="flex justify-between"><dt>{t("cart.subtotal")}</dt><dd>{money(totals.subtotal, currency)}</dd></div>
             {totals.discount > 0 && <div className="flex justify-between text-success"><dt>{t("cart.discount")}</dt><dd>−{money(totals.discount, currency)}</dd></div>}
