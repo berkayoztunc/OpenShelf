@@ -17,6 +17,7 @@ interface CartCtx {
   setQuantity: (variantId: string, quantity: number) => Promise<void>;
   addItem: (variantId: string, quantity: number) => Promise<Cart | null>;
   applyCoupon: (code: string) => Promise<void>;
+  removeCoupon: () => Promise<void>;
   forget: () => void;
   refresh: () => Promise<void>;
 }
@@ -82,6 +83,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       try { return await mutate((id) => api.setItem(id, variantId, existing + quantity)); } catch { return null; }
     },
     applyCoupon: async (code) => { await mutate((id) => api.applyCoupon(id, code)); },
+    removeCoupon: async () => { await mutate((id) => api.applyCoupon(id, null)); },
     forget: () => { idRef.current = null; writeId(null); setCart(null); },
   }), [cart, config.checkout, config.general.currency, busy, error, drawerOpen, mutate, refresh]);
 

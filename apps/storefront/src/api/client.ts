@@ -87,7 +87,7 @@ export const api = {
   getCart: (id: string) => request<Wire>(`/api/store/cart/${id}`, { cartId: id }).then(cartOf),
   setItem: (id: string, variantId: string, quantity: number) =>
     request<Wire>(`/api/store/cart/${id}/items`, { method: "PUT", json: { variantId, quantity }, cartId: id }).then(cartOf),
-  applyCoupon: (id: string, code: string) =>
+  applyCoupon: (id: string, code: string | null) =>
     request<Wire>(`/api/store/cart/${id}/coupon`, { method: "POST", json: { code }, cartId: id }).then(cartOf),
   checkout: (body: CheckoutRequest) => request<CheckoutResponse>("/api/store/checkout", {
     method: "POST", cartId: body.cartId,
