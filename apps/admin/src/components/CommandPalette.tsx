@@ -22,11 +22,12 @@ export const matches = (query: string, ...hay: (string | undefined)[]) => {
   return words.length > 0 && words.every((w) => h.includes(w));
 };
 
-interface Entry { id: string; group: "pages" | "actions" | "products" | "orders" | "customers"; label: string; hint?: string; to: string; icon: LucideIcon }
+interface Entry { id: string; group: "pages" | "actions" | "products" | "orders" | "customers"; label: string; hint?: string; terms?: string; to: string; icon: LucideIcon }
 
-const SUB_PAGES: { base: string; parentKey: MessageKey; ids: readonly string[]; key: (id: string) => string; path: (id: string) => string }[] = [
+/** `terms`: extra, unshown text the search also matches (e.g. a tab's description), so "kayan yazı" or "indirim kodu" finds the right tab. */
+const SUB_PAGES: { base: string; parentKey: MessageKey; ids: readonly string[]; key: (id: string) => string; path: (id: string) => string; terms?: (id: string) => string }[] = [
   { base: "/settings", parentKey: "nav.settings", ids: ["general", "branding", "seo", "legal", "checkout", "tracking", "notifications", "system", "mcp"], key: (id) => `settings.tab.${id}`, path: (id) => `/settings/${id}` },
-  { base: "/storefront", parentKey: "nav.storefront", ids: ["home", "menu", "order"], key: (id) => `storefront.tab.${id}`, path: (id) => `/storefront/${id}` },
+  { base: "/storefront", parentKey: "nav.storefront", ids: ["home", "menu", "order", "announcement"], key: (id) => `storefront.tab.${id}`, path: (id) => `/storefront/${id}`, terms: (id) => `storefront.tab.${id}.description` },
   { base: "/trendyol", parentKey: "nav.trendyol", ids: ["sync", "products", "orders", "returns", "questions", "finance", "explorer"], key: (id) => `trendyol.tab.${id}`, path: (id) => `/trendyol/${id}` },
 ];
 const ACTIONS: { key: MessageKey; to: string; icon: LucideIcon }[] = [
@@ -85,12 +86,14 @@ export function CommandPalette() {
         if (n.mockOnly && !mock) continue;
         pages.push({ id: `page:${n.to}`, group: "pages", label: t(n.labelKey), hint: groupTitle, to: n.to, icon: n.icon });
         const sub = SUB_PAGES.find((s) => s.base === n.to);
-        if (sub) for (const id of sub.ids) pages.push({ id: `page:${sub.path(id)}`, group: "pages", label: t(sub.key(id) as MessageKey), hint: t(sub.parentKey), to: sub.path(id), icon: n.icon });
+        if (sub) for (const id of sub.ids) pages.push({ id: `page:${sub.path(id)}`, group: "pages", label: t(sub.key(id) as MessageKey), hint: t(sub.parentKey), terms: sub.terms ? t(sub.terms(id) as MessageKey) : undefined, to: sub.path(id), icon: n.icon });
       }
     }
     const actions: Entry[] = ACTIONS.map((a) => ({ id: `action:${a.to}`, group: "actions", label: t(a.key), to: a.to, icon: a.icon }));
     if (!query) return [...actions, ...pages.filter((p) => !p.to.split("/")[2]).slice(0, 8)];
-    out.push(...pages.filter((p) => matches(query, p.label, p.hint)).slice(0, 8));
+    // Label/parent matches rank first; description-only matches follow.
+    const direct = pages.filter((p) => matches(query, p.label, p.hint));
+    out.push(...[...direct, ...pages.filter((p) => !direct.includes(p) && matches(query, p.label, p.hint, p.terms))].slice(0, 8));
     out.push(...actions.filter((a) => matches(query, a.label)));
     for (const p of products.data ?? []) out.push({ id: `product:${p.id}`, group: "products", label: p.nameTr, hint: [p.variants?.[0]?.sku, enumLabel("productStatus", p.status)].filter(Boolean).join(" · "), to: `/products/${p.id}`, icon: Package });
     for (const o of orders.data ?? []) out.push({ id: `order:${o.id}`, group: "orders", label: `#${o.number}${o.customerName ? ` · ${o.customerName}` : ""}`, hint: `${money(o.total, o.currency)} · ${enumLabel("status", o.status)}`, to: `/orders/${o.id}`, icon: ClipboardList });

@@ -232,7 +232,7 @@ Tabloda her kategorinin adı, adresi ve üst kategorisi görünür; **Düzenle**
 
 ![Kuponlar sayfası](help/tr/coupons.png)
 
-Kuponlar, müşterinin sepette girdiği indirim kodlarıdır.
+Kuponlar, müşterinin sepette girdiği indirim kodlarıdır. Müşteri kodu üç yerden girebilir: **sepet sayfası**, sağdan açılan **sepet çekmecesi** ve **ödeme sayfasındaki** sipariş özeti. Uygulanan kod "Kupon: KOD" olarak görünür; yanındaki **Kaldır** ile müşteri kodu geri alabilir. Kodu herkese duyurmak için **Vitrin → Duyuru barı**nı kullanabilirsiniz.
 
 ### Kupon oluşturma
 

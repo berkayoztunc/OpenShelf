@@ -232,7 +232,7 @@ The table shows each category's name, address and parent; the **Edit** and **Del
 
 ![Coupons page](help/en/coupons.png)
 
-Coupons are discount codes that customers enter in the cart.
+Coupons are discount codes that customers enter in the cart. Shoppers can enter a code in three places: the **cart page**, the slide-out **cart drawer** and the order summary on the **checkout page**. An applied code shows as "Coupon: CODE"; **Remove** next to it takes it off. To advertise a code to everyone, use **Storefront → Announcement bar**.
 
 ### Creating a coupon {#kupon-olusturma}
 

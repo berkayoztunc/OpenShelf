@@ -101,16 +101,15 @@ describe("Storefront → Home page products", () => {
     const u = new URL(p, "http://x"); const ids = u.searchParams.get("ids"); const q = u.searchParams.get("q") ?? "";
     return { items: ids ? PRODUCTS.items.filter((x) => ids.split(",").includes(x.id)) : PRODUCTS.items.filter((x) => x.nameTr.toLowerCase().includes(q.toLowerCase())) } as never;
   });
-  it("automatic by default: limit and heading only, no picker; saves the chosen limit and headings", async () => {
+  it("automatic by default: heading only (the grid scrolls infinitely, so no count), no picker; saves the headings", async () => {
     load(); const put = vi.spyOn(api, "put").mockImplementation(async (_p, b) => b as never); const u = userEvent.setup(); wrap(<HomeProducts />);
-    expect(await screen.findByLabelText("Kaç ürün gösterilsin?")).toBeTruthy();
+    await u.type(await screen.findByLabelText("Bölüm başlığı"), "Seçtiklerimiz");
     expect(screen.queryByLabelText("Ürün ara ve ekle")).toBeNull();
-    await u.selectOptions(screen.getByLabelText("Kaç ürün gösterilsin?"), "12");
-    await u.type(screen.getByLabelText("Bölüm başlığı"), "Seçtiklerimiz");
+    expect(screen.queryByLabelText("Kaç ürün gösterilsin?")).toBeNull();
     await u.click(screen.getByRole("button", { name: "Değişiklikleri kaydet" }));
     await waitFor(() => expect(put).toHaveBeenCalled());
     expect(put.mock.calls[0]![0]).toBe("/api/admin/settings/homepage");
-    expect(put.mock.calls[0]![1]).toMatchObject({ mode: "auto", limit: 12, title: "Seçtiklerimiz" });
+    expect(put.mock.calls[0]![1]).toMatchObject({ mode: "auto", title: "Seçtiklerimiz" });
   });
   it("manual: pick products, reorder, flag inactive ones, save the ordered ids", async () => {
     load(HomepageSettings.parse({ mode: "manual", productIds: ["p3"] })); const put = vi.spyOn(api, "put").mockImplementation(async (_p, b) => b as never); const u = userEvent.setup(); wrap(<HomeProducts />);

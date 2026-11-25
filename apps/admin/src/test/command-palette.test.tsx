@@ -38,6 +38,20 @@ describe("command palette", () => {
     expect(screen.queryByRole("combobox")).toBeNull();
   });
 
+  it("finds the announcement bar tab by name and by words from its description", async () => {
+    mockApi({});
+    const u = userEvent.setup();
+    renderRoutes({ "*": page() }, "/");
+    await u.keyboard("{Control>}k{/Control}");
+    const box = await screen.findByRole("combobox", { name: "Panelde ara" });
+    await u.type(box, "duyuru");
+    expect(within(screen.getByRole("listbox")).getAllByRole("option")[0]).toHaveTextContent("Duyuru barı");
+    await u.clear(box);
+    await u.type(box, "indirim kodu");
+    await u.click(within(screen.getByRole("listbox")).getByRole("option", { name: /Duyuru barı/ }));
+    expect(screen.getByTestId("where")).toHaveTextContent("/storefront/announcement");
+  });
+
   it("searches products, orders and customers live and opens the picked order", async () => {
     const api = mockApi({
       "GET /api/admin/products": () => ({ page: 1, pageSize: 5, total: 1, items: [{ id: "p1", nameTr: "Seramik Vazo", status: "active", variants: [{ sku: "VAZ-1" }], images: [] }] }),

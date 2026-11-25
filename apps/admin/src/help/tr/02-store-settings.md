@@ -266,8 +266,10 @@ Test gönderimi saatte yönetici başına 5, bağlantı adresi başına 10 ile s
 
 Ana sayfadaki "öne çıkanlar" bölümünde hangi ürünlerin görüneceğini sol menüdeki **Vitrin → Ana sayfa** sekmesinden belirlersiniz.
 
-- **Otomatik:** Ürün sıralaması ayarına göre ilk ürünler gösterilir (örn. en yeniler ya da çok satanlar). Kaç ürün gösterileceğini (4–24) seçersiniz.
-- **Elle seçeceğim:** Ürünleri arayıp **Ekle**'ye basın; ok düğmeleriyle sıralayın. Yalnızca seçtikleriniz, seçtiğiniz sırayla görünür (en fazla 24).
+Ana sayfa düzeni yukarıdan aşağıya: banner, kategoriler, ürünler. Ürünler **kaydırdıkça yüklenir**: önce 12 ürün gelir, müşteri aşağı indikçe 12'şer ürün daha eklenir ve tüm aktif ürünler gösterilince durur. Altta "Tüm ürünleri gördünüz" yazar; footer ve yasal metin bağlantıları her zaman erişilebilir kalır.
+
+- **Otomatik:** Ürünler **Ürün sıralaması** ayarındaki sırayla gösterilir (örn. en yeniler ya da çok satanlar).
+- **Elle seçeceğim:** Ürünleri arayıp **Ekle**'ye basın; ok düğmeleriyle sıralayın (en fazla 24). Seçtikleriniz seçtiğiniz sırayla en başta görünür; müşteri kaydırdıkça diğer ürünler, aynı ürün tekrar etmeden arkasından gelir.
 - **Bölüm başlığı:** Boş bırakırsanız "Öne çıkanlar" yazar; kendi başlığınızı (ve isteğe bağlı İngilizcesini) girebilirsiniz.
 - Taslak ya da arşivdeki bir ürün seçili kalsa bile vitrinde gösterilmez; listede "Aktif değil" etiketi görürsünüz. Seçilen ürünlerin hiçbiri gösterilemiyorsa otomatik liste kullanılır, ana sayfa boş kalmaz.
 
