@@ -16,6 +16,10 @@
   .grid > * { min-width: 0; }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; } }
 }
+/* Announcement bar preview (same loop as the storefront bar). */
+@keyframes os-marquee { to { transform: translateX(-50%); } }
+.os-marquee-track { display: flex; width: max-content; animation: os-marquee var(--os-marquee-dur, 20s) linear infinite; }
+.os-marquee:hover .os-marquee-track { animation-play-state: paused; }
 @keyframes os-toast { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
 @keyframes os-drawer { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
 .os-drawer[open] { animation: os-drawer .22s cubic-bezier(.2,.7,.2,1); }

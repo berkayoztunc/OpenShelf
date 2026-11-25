@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { BrandingSettings, GeneralSettings, CheckoutSettings, SeoSettings, TrackingSettings, MenuSettings, HomepageSettings, OrderStatus, SortKey } from "@openshelf/shared";
+import type { BrandingSettings, GeneralSettings, CheckoutSettings, SeoSettings, TrackingSettings, MenuSettings, HomepageSettings, AnnouncementSettings, OrderStatus, SortKey } from "@openshelf/shared";
 
 /** Response shapes for the frozen API contract (docs/api-contract.md). Fields marked "assumed" go beyond the doc. */
 
@@ -20,6 +20,8 @@ export interface StoreConfig {
   menu?: z.infer<typeof MenuSettings>;
   /** Which products the home page "featured" section shows (auto = first N in the default order). */
   homepage?: z.infer<typeof HomepageSettings>;
+  /** Bar above the header; null/absent = off (the API only sends it while it is live). */
+  announcement?: z.infer<typeof AnnouncementSettings> | null;
   /** Storefront ordering: default sort chosen by the merchant. */
   merchandising?: { defaultSort: SortKey; pinnedCount: number; trendyolLink?: boolean };
   /** "titles only": either a string title or `{ title }` per legal key. Empty = page not available. */

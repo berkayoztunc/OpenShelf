@@ -300,6 +300,20 @@ Değişiklik kaydedildikten sonra vitrine yansıması yaklaşık bir dakika sür
 > [!NOTE]
 > Ada göre sıralama Türkçe harflere (Ç, Ö, Ş, Ü…) duyarlı değildir; bu harflerle başlayan ürünler listenin sonuna düşebilir.
 
+## Duyuru barı
+
+Sitenin her sayfasında, üst menünün hemen üstünde görünen ince şerittir. Kampanya ya da indirim kodu duyurmak için kullanılır. **Vitrin → Duyuru barı** sekmesinde bulunur.
+
+- **Metin:** En fazla 200 karakter. Örn. “SEPETTE10 koduyla sepette %10 indirim!”. İsterseniz İngilizce metin de girebilirsiniz; boş bırakırsanız İngilizce sitede de Türkçe metin görünür.
+- **Bağlantı:** İsteğe bağlı. Doluysa bara tıklayan müşteri bu adrese gider: `/` ile başlayan bir site yolu (örn. `/products`) ya da `https://` ile başlayan bir adres.
+- **Görünüm:** Kayan yazı ya da sabit (ortalanmış) metin; kayan yazı için hız; renk olarak marka rengi, koyu ya da açık. Sayfada canlı önizleme vardır.
+- **Tarihler:** İsteğe bağlı başlangıç ve bitiş. Bitiş tarihi geçince bar kendiliğinden kalkar; **Yıl sonuna kadar** düğmesi bitişi 31 Aralık 23:59'a ayarlar.
+
+> [!TIP]
+> Bir indirim kodu duyuruyorsanız önce **Kuponlar** sayfasında kodu oluşturun ve geçerlilik tarihini barın bitiş tarihiyle aynı yapın. Müşteri kodu sepette, sepet çekmecesinde ya da ödeme sayfasındaki **İndirim kodu** alanına girer.
+
+Hareketi azaltma ayarı açık olan ziyaretçiler yazıyı sabit görür; fareyle üzerine gelince kayma durur. Değişiklik kaydedildikten sonra vitrine yansıması yaklaşık bir dakika sürebilir.
+
 ## Sistem
 
 ![Sistem sekmesi](help/tr/settings-system.png)

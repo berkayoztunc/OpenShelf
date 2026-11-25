@@ -7,6 +7,7 @@ import { ConsentBanner } from "./ConsentBanner";
 import { Footer } from "./Footer";
 import { Header } from "./Header";
 import { MockBanner } from "./MockBanner";
+import { AnnouncementBar } from "./AnnouncementBar";
 
 export function usePageView() {
   const loc = useLocation();
@@ -29,6 +30,7 @@ export function Layout() {
     <>
       <a href="#main" className="sr-only z-50 rounded-xl bg-surface px-4 py-2 focus:not-sr-only focus:fixed focus:left-3 focus:top-3">{t("nav.skip")}</a>
       <MockBanner />
+      <AnnouncementBar />
       <Header />
       <main id="main" tabIndex={-1} className="outline-none"><Outlet /></main>
       <Footer />

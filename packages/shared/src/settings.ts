@@ -159,13 +159,47 @@ export const HomepageSettings = z.object({
   titleEn: z.string().max(60).default(""),
 });
 
+/** Site-wide link target: a storefront path ("/products?q=x") or an http(s) URL. */
+const announcementLink = z.string().trim().max(300).default("")
+  .refine((v) => v === "" || (v.startsWith("/") && !v.startsWith("//")) || /^https?:\/\/[^\s]+$/i.test(v), "Link must start with / or http(s)://");
+/** ISO date-time (with offset) or null. */
+const isoOrNull = z.string().datetime({ offset: true }).nullable().default(null);
+
+/** Announcement bar above the storefront header (e.g. "SEPETTE10 ile %10 indirim"). */
+export const AnnouncementSettings = z.object({
+  enabled: z.boolean().default(false),
+  /** Bar text (Turkish / default locale). */
+  text: z.string().trim().max(200).default(""),
+  /** English text; empty = the Turkish text is shown in English too. */
+  textEn: z.string().trim().max(200).default(""),
+  /** Optional: the whole bar links here. */
+  link: announcementLink,
+  /** "marquee" = scrolling text, "static" = fixed, centred text. */
+  style: z.enum(["marquee", "static"]).default("marquee"),
+  speed: z.enum(["slow", "normal", "fast"]).default("normal"),
+  /** Colours: brand colour, dark, or a soft brand tint. */
+  tone: z.enum(["brand", "dark", "soft"]).default("brand"),
+  /** Optional window; outside it the bar is hidden. */
+  startsAt: isoOrNull,
+  endsAt: isoOrNull,
+}); // no .refine: the settings PATCH route reads `.shape`. An inverted window simply never shows (see announcementActive).
+
+/** Whether the bar should show at `now` (enabled, has text, inside its window). */
+export function announcementActive(a: z.infer<typeof AnnouncementSettings>, now = Date.now()) {
+  if (!a.enabled || !a.text.trim()) return false;
+  if (a.startsAt && now < Date.parse(a.startsAt)) return false;
+  if (a.endsAt && now >= Date.parse(a.endsAt)) return false;
+  return true;
+}
+
 export const SETTING_GROUPS = {
   general: GeneralSettings, branding: BrandingSettings, seo: SeoSettings,
   legal: LegalSettings, checkout: CheckoutSettings, tracking: TrackingSettings,
   system: SystemSettings, notifications: NotificationSettings, menu: MenuSettings, merchandising: MerchandisingSettings, homepage: HomepageSettings,
+  announcement: AnnouncementSettings,
 } as const;
 export type SettingGroup = keyof typeof SETTING_GROUPS;
 export type SettingsOf<G extends SettingGroup> = z.infer<(typeof SETTING_GROUPS)[G]>;
 
 /** Subset safe to expose to storefront. */
-export const PUBLIC_GROUPS: SettingGroup[] = ["general", "branding", "seo", "checkout", "tracking", "menu", "merchandising", "homepage"];
+export const PUBLIC_GROUPS: SettingGroup[] = ["general", "branding", "seo", "checkout", "tracking", "menu", "merchandising", "homepage", "announcement"];

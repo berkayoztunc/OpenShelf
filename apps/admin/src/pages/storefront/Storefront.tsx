@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import { NavLink, Navigate, useParams } from "react-router-dom";
-import { ArrowUpDown, House, Menu as MenuIcon } from "lucide-react";
+import { ArrowUpDown, House, Megaphone, Menu as MenuIcon } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Loading, PageHeader } from "../../components/ui";
 import { useT } from "../../i18n";
@@ -8,14 +8,16 @@ import { useT } from "../../i18n";
 const HomeProducts = lazy(() => import("./HomeProducts"));
 const Menu = lazy(() => import("./Menu"));
 const Merchandising = lazy(() => import("./Merchandising"));
+const Announcement = lazy(() => import("./Announcement"));
 
 const TABS = [
   { id: "home", C: HomeProducts, guide: "ana-sayfa-urunleri", icon: House },
   { id: "menu", C: Menu, guide: "menu", icon: MenuIcon },
   { id: "order", C: Merchandising, guide: "vitrin-siralamasi", icon: ArrowUpDown },
+  { id: "announcement", C: Announcement, guide: "duyuru-bari", icon: Megaphone },
 ] as const satisfies readonly { id: string; C: unknown; guide: string; icon: LucideIcon }[];
 
-/** Everything that decides what visitors see first: home page products, top menu and product order. */
+/** Everything that decides what visitors see first: home page products, top menu, product order and the announcement bar. */
 export default function Storefront() {
   const { tab } = useParams();
   const { t } = useT();

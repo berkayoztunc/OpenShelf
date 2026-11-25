@@ -299,6 +299,20 @@ Controls the order in which products appear on the storefront (home page and pro
 > [!NOTE]
 > Sorting by name is not aware of Turkish letters (Ç, Ö, Ş, Ü…); names starting with them may end up at the end of the list.
 
+## Announcement bar {#duyuru-bari}
+
+A slim strip shown on every page, right above the top menu. Use it to promote a campaign or a discount code. Find it under **Storefront → Announcement bar**.
+
+- **Text:** Up to 200 characters, e.g. “10% off your cart with SEPETTE10!”. You can add an English text; if empty, the Turkish text is also shown on the English site.
+- **Link:** Optional. When set, a click on the bar goes there: a site path starting with `/` (e.g. `/products`) or an address starting with `https://`.
+- **Appearance:** Scrolling or fixed (centred) text; a speed for scrolling; colour: brand, dark or light. The page shows a live preview.
+- **Dates:** Optional start and end. Once the end passes, the bar switches itself off; **Until the end of the year** sets the end to 31 December 23:59.
+
+> [!TIP]
+> If you announce a discount code, first create it on the **Coupons** page and give it the same end date as the bar. Shoppers enter it in the **Discount code** field in the cart, the cart drawer or the checkout page.
+
+Visitors who prefer reduced motion see fixed text; hovering pauses the scroll. After saving, changes can take about a minute to reach the storefront.
+
 ## System {#sistem}
 
 ![System tab](help/en/settings-system.png)

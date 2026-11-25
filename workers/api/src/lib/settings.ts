@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { storeSettings } from "@openshelf/db";
-import { SETTING_GROUPS, type SettingGroup, type SettingsOf } from "@openshelf/shared";
+import { SETTING_GROUPS, announcementActive, type SettingGroup, type SettingsOf } from "@openshelf/shared";
 import type { Db } from "../env";
 
 const TTL_MS = 30_000;
@@ -51,6 +51,8 @@ export async function publicConfig(db: Db) {
     legal,
     menu: s.menu,
     homepage: s.homepage,
+    // Only a live bar is published; the window still travels so long-open tabs can hide it at endsAt.
+    announcement: announcementActive(s.announcement) ? s.announcement : null,
     merchandising: { defaultSort: s.merchandising.defaultSort, pinnedCount: s.merchandising.pinned.length, trendyolLink: s.merchandising.trendyolLink },
     locales: { default: s.general.defaultLocale, available: s.general.locales },
     mockMode: s.system.mockMode === true,
