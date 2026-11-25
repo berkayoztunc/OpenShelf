@@ -45,6 +45,12 @@ store.get("/categories", async (c) => {
 const availableSql = sql`COALESCE((SELECT SUM(MAX(0, i.total - i.reserved - i.safety_stock)) FROM inventory i JOIN product_variants v ON v.id = i.variant_id WHERE v.product_id = products.id AND v.active = 1), 0)`;
 /** Units sold since `sinceUnix` in orders that are paid or beyond. */
 const soldSql = (sinceUnix: number) => sql`COALESCE((SELECT SUM(oi.quantity) FROM order_items oi JOIN product_variants v ON v.id = oi.variant_id JOIN orders o ON o.id = oi.order_id WHERE v.product_id = products.id AND o.created_at >= ${sinceUnix} AND o.status IN ('paid','fulfilling','shipped','delivered')), 0)`;
+/**
+ * Position of products.id in `ids` (0-based), or ids.length when absent. The list travels as ONE
+ * JSON-bound parameter: D1 caps a statement at 100 bound parameters, and a CASE with a WHEN per id
+ * (two params each) broke the storefront once ~50 products were pinned.
+ */
+const positionIn = (ids: string[]) => sql`COALESCE((SELECT CAST(j.key AS INTEGER) FROM json_each(${JSON.stringify(ids)}) j WHERE j.value = ${products.id} LIMIT 1), ${ids.length})`;
 const minPriceSql = sql`(SELECT MIN(cp.price) FROM channel_prices cp JOIN product_variants v ON v.id = cp.variant_id WHERE v.product_id = products.id AND v.active = 1 AND cp.channel = 'website')`;
 
 async function localeOf(c: Context<AppEnv>) {
@@ -97,7 +103,7 @@ store.get("/products", async (c) => {
   const sort: SortKey = (SORT_KEYS as readonly string[]).includes(sortParam ?? "") ? (sortParam as SortKey) : merch.defaultSort;
   const order: SQL[] = [];
   if (merch.inStockFirst) order.push(sql`(${availableSql} > 0) DESC`);
-  if (sort === "featured" && merch.pinned.length) order.push(sql`CASE ${products.id} ${sql.join(merch.pinned.map((id, i) => sql`WHEN ${id} THEN ${i}`), sql` `)} ELSE ${merch.pinned.length} END ASC`);
+  if (sort === "featured" && merch.pinned.length) order.push(sql`${positionIn(merch.pinned)} ASC`);
   if (sort === "bestselling") order.push(sql`${soldSql(Math.floor(Date.now() / 1000) - merch.bestsellerDays * 86400)} DESC`);
   if (sort === "price_asc") order.push(sql`${minPriceSql} ASC`);
   if (sort === "price_desc") order.push(sql`${minPriceSql} DESC`);
@@ -105,7 +111,7 @@ store.get("/products", async (c) => {
   order.push(desc(products.createdAt), asc(products.id));
   // ?ids=a,b,c: exactly those products (active only), in the given order. Used by curated home page sections.
   const idList = c.req.query("ids")?.split(",").map((x) => x.trim()).filter(Boolean).slice(0, 60);
-  if (idList?.length) { conds.push(inArray(products.id, idList)); order.unshift(sql`CASE ${products.id} ${sql.join(idList.map((id, i) => sql`WHEN ${id} THEN ${i}`), sql` `)} ELSE ${idList.length} END ASC`); }
+  if (idList?.length) { conds.push(inArray(products.id, idList)); order.unshift(sql`${positionIn(idList)} ASC`); }
   const where = and(...conds);
   const rows = await db.select().from(products).where(where).orderBy(...order).limit(p.pageSize).offset(p.offset);
   const [t] = await db.select({ n: sql<number>`count(*)` }).from(products).where(where);
