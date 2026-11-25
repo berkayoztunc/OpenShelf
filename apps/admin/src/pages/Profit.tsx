@@ -21,10 +21,27 @@ function NumInput({ value, placeholder, onCommit, label, suffix }: { value: numb
   return (
     <span className="relative inline-flex">
       <input aria-label={label} inputMode="decimal" value={text} placeholder={placeholder}
-        onChange={(e) => setText(e.target.value)} onBlur={() => onCommit(parseNum(text))} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+        onFocus={(e) => e.currentTarget.select()} onChange={(e) => setText(e.target.value)} onBlur={() => onCommit(parseNum(text))} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
         className="h-8 w-24 rounded-md border border-line bg-surface pl-2 pr-7 text-right text-[13px] tabular-nums placeholder:text-faint focus:border-brand-600 focus:outline-none" />
       <span aria-hidden className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-faint">{suffix}</span>
     </span>
+  );
+}
+
+/**
+ * Parameter field that owns its text while focused, so it can be emptied and retyped.
+ * Valid numbers apply live; leaving it empty falls back to the channel default on blur.
+ */
+function ParamField({ label, hint, value, onChange }: { label: string; hint?: string; value: number; onChange: (v: number | undefined) => void }) {
+  const [text, setText] = useState(fmtNum(value));
+  const [focused, setFocused] = useState(false);
+  useEffect(() => { if (!focused) setText(fmtNum(value)); }, [value, focused]);
+  return (
+    <TextField label={label} hint={hint} inputMode="decimal" value={text}
+      onFocus={(e) => { setFocused(true); e.currentTarget.select(); }}
+      onChange={(e) => { setText(e.target.value); const n = parseNum(e.target.value); if (n !== undefined && n >= 0) onChange(n); }}
+      onBlur={() => { setFocused(false); const n = parseNum(text); if (n === undefined || n < 0) onChange(undefined); }}
+      onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
   );
 }
 
@@ -85,11 +102,11 @@ export default function Profit() {
           ))}
         </div>
         <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-5">
-          <TextField label={t("profit.param.commissionPct")} type="number" inputMode="decimal" min={0} step="0.1" value={params.commissionPct} onChange={(e) => setParam("commissionPct", parseNum(e.target.value))} />
-          <TextField label={t("profit.param.shipping")} type="number" inputMode="decimal" min={0} step="0.01" value={params.shipping / 100} onChange={(e) => { const n = parseNum(e.target.value); setParam("shipping", n === undefined ? undefined : Math.round(n * 100)); }} />
-          <TextField label={t("profit.param.vatPct")} type="number" inputMode="decimal" min={0} step="1" value={params.vatPct} onChange={(e) => setParam("vatPct", parseNum(e.target.value))} />
-          <TextField label={t("profit.param.incomeTaxPct")} type="number" inputMode="decimal" min={0} step="1" value={params.incomeTaxPct} onChange={(e) => setParam("incomeTaxPct", parseNum(e.target.value))} />
-          <TextField label={t("profit.param.withholdingPct")} hint={t("profit.param.withholdingPct.hint")} type="number" inputMode="decimal" min={0} step="0.1" value={params.withholdingPct} onChange={(e) => setParam("withholdingPct", parseNum(e.target.value))} />
+          <ParamField label={t("profit.param.commissionPct")} value={params.commissionPct} onChange={(v) => setParam("commissionPct", v)} />
+          <ParamField label={t("profit.param.shipping")} value={params.shipping / 100} onChange={(v) => setParam("shipping", v === undefined ? undefined : Math.round(v * 100))} />
+          <ParamField label={t("profit.param.vatPct")} value={params.vatPct} onChange={(v) => setParam("vatPct", v)} />
+          <ParamField label={t("profit.param.incomeTaxPct")} value={params.incomeTaxPct} onChange={(v) => setParam("incomeTaxPct", v)} />
+          <ParamField label={t("profit.param.withholdingPct")} hint={t("profit.param.withholdingPct.hint")} value={params.withholdingPct} onChange={(v) => setParam("withholdingPct", v)} />
         </div>
       </Card>
 
